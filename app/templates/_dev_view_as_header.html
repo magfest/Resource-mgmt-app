@@ -1,0 +1,18 @@
+<div style="padding: 10px 12px; background: #f3f4f6; border-bottom: 1px solid #ddd; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;">
+  <div style="display:flex; gap:12px; align-items:baseline; justify-content:space-between;">
+    <div>
+      <strong>Viewing as:</strong>
+      {% if active_user %}
+        {{ active_user.display_name }} <span style="color:#666;">({{ active_user.id }})</span>
+      {% else %}
+        <span style="color:#b00;">Unknown user ({{ active_user_id }})</span>
+      {% endif %}
+      {% if active_user_roles %}
+        <span style="color:#666;">— Roles: {{ active_user_roles|join(", ") }}</span>
+      {% endif %}
+    </div>
+    <div>
+      <a href="{{ url_for('dev_login') }}">Switch user</a>
+    </div>
+  </div>
+</div>

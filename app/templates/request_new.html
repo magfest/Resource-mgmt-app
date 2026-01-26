@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Create Request</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; }
+    label { display:block; font-weight:600; margin-top: 12px; }
+    select { width: 420px; max-width: 100%; padding: 8px; }
+    .btn { margin-top: 16px; padding: 10px 14px; border: 1px solid #ccc; background:#f6f6f6; cursor:pointer; }
+    .muted { color:#666; font-size: 14px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  {% include "_dev_view_as_header.html" %}
+
+  <h1>Create new request</h1>
+  <div class="muted">Choose the event cycle and department. You’ll add lines on the next screen.</div>
+
+  <form method="post" action="{{ url_for('new_request_post') }}">
+    <label for="event_cycle_id">Event cycle</label>
+    <select id="event_cycle_id" name="event_cycle_id" required>
+      <option value="" disabled {% if not default_cycle_id %}selected{% endif %}>Select…</option>
+      {% for c in cycles %}
+        <option value="{{ c.id }}" {% if default_cycle_id and c.id == default_cycle_id %}selected{% endif %}>
+          {{ c.name }}
+        </option>
+      {% endfor %}
+    </select>
+
+    <label for="department_id">Department</label>
+    <select id="department_id" name="department_id" required>
+      <option value="" disabled selected>Select…</option>
+      {% for d in departments %}
+        <option value="{{ d.id }}">{{ d.name }}</option>
+      {% endfor %}
+    </select>
+
+    <button class="btn" type="submit">Create request</button>
+  </form>
+</body>
+</html>

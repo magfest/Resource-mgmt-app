@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Request {{ req.id }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            margin: 24px;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+        }
+
+        h2 {
+            margin: 18px 0 10px 0;
+        }
+
+        .muted {
+            color: #666;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 999px;
+            background: #eee;
+            color: #111;
+            font-size: 12px;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .inline-form {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .inline-form textarea {
+            width: 340px;
+        }
+
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            vertical-align: top;
+        }
+
+        th {
+            text-align: left;
+            background: #f6f6f6;
+        }
+
+        td, th {
+            word-wrap: break-word;
+            overflow-wrap: anywhere;
+        }
+
+        .top-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            align-items: start;
+            margin-bottom: 10px;
+        }
+
+        .card {
+            border: 1px solid #eee;
+            border-radius: 10px;
+            padding: 12px;
+            background: #fafafa;
+        }
+
+        .card h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+        }
+
+        .summary-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            padding: 4px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .summary-row:last-child {
+            border-bottom: 0;
+        }
+
+        .summary-amount {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .callout {
+            margin: 12px 0;
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid #e6e6e6;
+            background: #fff;
+        }
+
+        .callout-danger {
+            border-color: #f0b4b4;
+            background: #fff5f5;
+        }
+
+        .callout-success {
+            border-color: #b8e5c8;
+            background: #f2fff7;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+
+        a.btn, button.btn {
+            display: inline-block;
+            padding: 6px 10px;
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            background: #f6f6f6;
+            color: #111;
+            text-decoration: none;
+            cursor: pointer;
+            font: inherit;
+        }
+
+        a.btn:hover, button.btn:hover {
+            background: #eee;
+        }
+
+        textarea {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            font: inherit;
+        }
+
+        .right {
+            text-align: right;
+        }
+
+        .nowrap {
+            white-space: nowrap;
+        }
+
+        /* Anchor highlighting: when you land on #line-123, make it obvious */
+        tr:target {
+            outline: 3px solid #cfe3ff;
+            outline-offset: -3px;
+        }
+
+        .btn-disabled,
+        button.btn:disabled {
+            background: #f0f0f0;
+            border-color: #ddd;
+            color: #999;
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        .inline-form {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+        }
+
+        .inline-form textarea {
+            width: 360px;
+        }
+
+        .btn.primary {
+            font-weight: 700;
+        }
+
+    </style>
+</head>
+
+<body>
+{% include "_dev_view_as_header.html" %}
+
+{# ---------------------------
+   Request header + summary cards
+   --------------------------- #}
+
+{% set req_status = (req.current_status or "DRAFT").upper() %}
+{% set is_finalized = (req_status == "APPROVED") %}
+
+{# Request status pill styling #}
+{% set status_pill_class =
+      "pill-approved" if req_status == "APPROVED"
+      else "pill-needs-revision" if req_status == "NEEDS_REVISION"else "pill-submitted" if req_status == "SUBMITTED"else "pill-draft" %}
+
+<h1>Request {{ req.id }}</h1>
+
+<div class="top-grid">
+    <div class="card">
+        <h3>Request</h3>
+
+        <div class="summary-row">
+            <div class="muted">Event cycle</div>
+            <div class="summary-amount">{{ req.event_cycle }}</div>
+        </div>
+
+        <div class="summary-row">
+            <div class="muted">Department</div>
+            <div class="summary-amount">{{ req.requesting_department }}</div>
+        </div>
+
+        <div class="summary-row">
+            <div class="muted">Status</div>
+            <div class="summary-amount">
+                <span class="pill {{ status_pill_class }}">{{ req_status }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Current revision</h3>
+
+        {% if current_revision %}
+            <div class="summary-row">
+                <div class="muted">Revision</div>
+                <div class="summary-amount">
+                    Rev {{ current_revision.revision_number }}
+                    · <a href="{{ url_for('revision_snapshot', revision_id=current_revision.id) }}">view snapshot</a>
+                </div>
+            </div>
+
+            <div class="summary-row">
+                <div class="muted">Total</div>
+                <div class="summary-amount">${{ current_total }}</div>
+            </div>
+
+            {% if review_summary %}
+                {# A small, consistent status pill for the revision review state #}
+                <div class="summary-row">
+                    <div class="muted">Line review status</div>
+                    <div class="summary-amount">
+                        {% if is_finalized %}
+                            <span class="pill success">Finalized</span>
+                        {% elif ready_for_final_approval %}
+                            <span class="pill success">Ready to finalize</span>
+                        {% else %}
+                            <span class="pill muted">In review</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="muted" style="margin-top: 8px; line-height: 1.6;">
+                    Pending: <strong>{{ review_summary["pending"] }}</strong> ·
+                    Needs info: <strong>{{ review_summary["needs_info"] }}</strong> ·
+                    Approved: <strong>{{ review_summary["approved"] }}</strong> ·
+                    Rejected: <strong>{{ review_summary["rejected"] }}</strong>
+                </div>
+                <div class="muted" style="margin-top:4px;">
+                    Debug: ready={{ ready_for_final_approval }},
+                    no_reviews={{ lines_without_any_reviews }},
+                    pending={{ review_summary["pending"] if review_summary else "?" }},
+                    needs={{ review_summary["needs_info"] if review_summary else "?" }}
+                </div>
+            {% endif %}
+
+            {# Actions row #}
+            <div class="btn-row" style="margin-top: 12px;">
+                {% if can_admin_edit %}
+
+                    {# Edit Draft / Admin Edit only when not finalized #}
+                    {% if not is_finalized %}
+                        <a class="btn" href="{{ url_for('edit_request_draft', request_id=req.id) }}">
+                            {% if req_status == "SUBMITTED" %}
+                                Add Items / Admin Edit
+                            {% else %}
+                                Edit Draft
+                            {% endif %}
+                        </a>
+                    {% else %}
+                        <span class="muted" style="align-self: center;">Request is finalized.</span>
+                    {% endif %}
+
+                    {# Finalize form only when ready AND not finalized #}
+                    {% if ready_for_final_approval and not is_finalized %}
+                        <form method="post"
+                              action="{{ url_for('approve_request', request_id=req.id) }}"
+                              class="inline-form">
+              <textarea
+                      id="final_approval_note"
+                      name="final_approval_note"
+                      rows="2"
+                      placeholder="Finalization note (required)"
+                      required
+              ></textarea>
+                            <button type="submit" class="btn primary">Finalize request</button>
+                        </form>
+                    {% endif %}
+
+                    {# Dashboard is always useful, even after finalized #}
+                    <a class="btn" href="{{ url_for('approvals_dashboard') }}">Approvals Dashboard</a>
+
+                {% else %}
+
+                    {% if req_status == "SUBMITTED" %}
+                        <div class="muted" style="align-self: center;">
+                            This request is currently under review.
+                        </div>
+                    {% endif %}
+
+                {% endif %}
+            </div>
+
+        {% else %}
+            <div class="muted">None yet</div>
+        {% endif %}
+    </div>
+</div>
+
+{# Single unified status callout #}
+{% if req.current_status == "APPROVED" %}
+    <div class="callout callout-success">
+        <strong>Approved</strong><br>
+        Approved revision:
+        {% if req.approved_revision %}
+            <a href="{{ url_for('revision_snapshot', revision_id=req.approved_revision.id) }}">
+                Rev {{ req.approved_revision.revision_number }}
+            </a>
+        {% else %}
+            (missing revision record)
+        {% endif %}
+        <br>
+        Approved at: {{ req.approved_at }}<br>
+        Approved by: {{ req.approved_by_user_id }}<br>
+        Final note: {{ request.final_approval_note }}<br>
+        Final notea: {{ req.final_approval_note }}
+    </div>
+{% elif req.current_status == "NEEDS_REVISION" %}
+    <div class="callout callout-danger">
+        <strong>Needs revision</strong>
+        <div class="muted" style="margin-top:6px;">Finance feedback</div>
+        <div style="white-space:pre-wrap; margin-top:6px;">
+            {{ kickback_reason or "No reason provided." }}
+        </div>
+        <div class="muted" style="margin-top:6px;">Last updated: {{ req.updated_at }}</div>
+
+        <div class="btn-row" style="margin-top:10px;">
+            <a class="btn" href="{{ url_for('edit_request_draft', request_id=req.id) }}">Revise now</a>
+            {% if req.current_revision %}
+                <a class="btn" href="{{ url_for('revision_snapshot', revision_id=current_revision.id) }}">View current
+                    snapshot</a>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
+
+{# Kickback form shown for demo: on SUBMITTED only (your existing behavior) #}
+{% if req.current_status == "SUBMITTED" and can_admin_edit %}
+    <div class="callout">
+        <strong>Kick Back the Full Budget Request for redo - Why?</strong>
+        <form method="post" action="{{ url_for('kickback_request', request_id=req.id) }}" style="margin-top:10px;">
+            <label for="kickback_reason"><strong>Reason</strong></label>
+            <textarea id="kickback_reason"
+                      name="kickback_reason"
+                      rows="4"
+                      required
+                      placeholder="Explain what needs to change before this request can be approved..."></textarea>
+            <div class="btn-row">
+                <button class="btn" type="submit">Kick back to requester</button>
+            </div>
+        </form>
+    </div>
+{% endif %}
+
+{# Current revision lines (supports dashboard anchors #line-<id>) #}
+<h2>Current revision lines</h2>
+
+{% if current_revision %}
+    {% if current_lines %}
+        <table>
+            <thead>
+            <tr>
+                <th style="width: 90px;">Line</th>
+                <th>Item type + item name</th>
+                <th style="width: 140px;" class="right">Amount</th>
+                <th style="width: 220px;">Review status</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for line in current_lines %}
+                <tr id="line-{{ line.id }}">
+                    <td class="nowrap">
+                        #{{ line.public_line_number or loop.index }}
+                    </td>
+                    <td>
+                        {# If you have budget_item_type joined on the line, show it. Otherwise fall back gracefully. #}
+                        <div>
+                            <strong>{{ line.budget_item_type.item_name if line.budget_item_type else "Uncategorized" }}</strong>
+                        </div>
+                        {% if line.item_name %}
+                            <div class="muted">{{ line.item_name }}</div>
+                        {% endif %}
+                        {% if line.priority %}
+                            <div class="muted">Priority: <strong>{{ line.priority }}</strong></div>
+                        {% endif %}
+
+                        {% if line.reason %}
+                            <div class="muted" style="margin-top:6px;">{{ line.reason }}</div>
+                        {% elif line.description %}
+                            {# fallback for old data #}
+                            <div class="muted" style="margin-top:6px;">{{ line.description }}</div>
+                        {% endif %}
+
+                    </td>
+                    <td class="right">${{ "{:,}".format(line.requested_amount or 0) }}</td>
+                    <td>
+                        {% set reviews = (line_reviews_by_line_id.get(line.id) if line_reviews_by_line_id else None) %}
+                        {% if reviews %}
+                            {# reviews can be a single LineReview or a list; support both #}
+                            {% if reviews is sequence and reviews is not string %}
+                                {% for lr in reviews %}
+                                    <div class="muted">
+                                        {{ lr.approval_group.code if lr.approval_group else "GROUP" }}:
+                                        <strong>{{ lr.status }}</strong>
+                                        {% if lr.updated_at %} · {{ lr.updated_at }}{% endif %}
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <div class="muted">
+                                    {{ reviews.approval_group.code if reviews.approval_group else "GROUP" }}:
+                                    <strong>{{ reviews.status }}</strong>
+                                    {% if reviews.updated_at %} · {{ reviews.updated_at }}{% endif %}
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <span class="muted">No reviews loaded.</span>
+                        {% endif %}
+                        <a href="{{ url_for('line_detail', request_id=req.id, line_id=line.id) }}">Open</a>
+
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="muted">No lines found for the current revision.</p>
+    {% endif %}
+{% else %}
+    <p class="muted">No current revision yet.</p>
+{% endif %}
+
+<h2>Revisions</h2>
+
+{% if revisions %}
+    <table>
+        <thead>
+        <tr>
+            <th style="width: 110px;">Revision</th>
+            <th style="width: 210px;">Submitted</th>
+            <th class="right" style="width: 160px;">Total requested</th>
+            <th>Link</th>
+            <th style="width: 140px;">Status</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for rev in revisions %}
+            <tr>
+                <td>Rev {{ rev.revision_number }}</td>
+                <td class="muted">{{ rev.submitted_at }}</td>
+                <td class="right">${{ "{:,}".format(totals_by_revision_id.get(rev.id, 0) ) }}</td>
+                <td><a href="{{ url_for('revision_snapshot', revision_id=rev.id) }}">view snapshot</a></td>
+                <td>
+                    {% if req.approved_revision_id == rev.id %}
+                        <strong>APPROVED</strong>
+                    {% else %}
+                        <span class="muted">—</span>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p class="muted">No revisions submitted yet.</p>
+{% endif %}
+
+</body>
+</html>
