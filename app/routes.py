@@ -3,6 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Callable, Any
+from dataclasses import dataclass
+from typing import Optional, Set
+
 
 from flask import Flask, session, render_template, abort, request, redirect, url_for
 from . import db
@@ -24,6 +27,77 @@ class RouteHelpers:
 
 
 h: RouteHelpers | None = None
+
+@dataclass(frozen=True)
+class UserContext:
+    user_id: str
+    user: object | None
+    roles: tuple[str, ...]
+    is_admin: bool
+    is_finance: bool
+    approval_group_ids: Set[int]
+
+@dataclass(frozen=True)
+class RequestPerms:
+    can_view: bool
+    can_edit: bool
+    can_submit: bool
+    can_finalize: bool
+
+    # convenience flags
+    is_owner: bool
+    is_admin: bool
+    is_finance: bool
+    is_finalized: bool
+
+def get_user_ctx() -> UserContext:
+    _require_helpers()
+    uid = h.get_active_user_id()
+    u = h.get_active_user()
+    roles = tuple(h.active_user_roles() or [])
+    return UserContext(
+        user_id=uid,
+        user=u,
+        roles=roles,
+        is_admin=h.is_admin(),
+        is_finance=h.is_finance(),
+        approval_group_ids=set(h.active_user_approval_group_ids() or []),
+    )
+
+def build_request_perms(req, *, user_ctx: UserContext, review_summary: dict | None = None) -> RequestPerms:
+    status = (req.current_status or "").upper()
+    is_finalized = (status == "APPROVED")  # your current “finalized” meaning
+
+    is_owner = (user_ctx.user_id == req.created_by_user_id)
+
+    # view rules (tighten later if needed)
+    can_view = user_ctx.is_admin or user_ctx.is_finance or is_owner
+
+    # edit rules must match enforced route rules (owner draft/revision, admin until finalized)
+    can_edit = (not is_finalized) and (
+        user_ctx.is_admin or (is_owner and status in ("DRAFT", "NEEDS_REVISION"))
+    )
+
+    # submit rules should mirror your submit route rules
+    can_submit = (not is_finalized) and (
+        (user_ctx.is_admin and status in ("DRAFT", "NEEDS_REVISION", "SUBMITTED")) or
+        (is_owner and status in ("DRAFT", "NEEDS_REVISION"))
+    )
+
+    ready = bool(review_summary and review_summary.get("ready_to_finalize"))
+    can_finalize = (not is_finalized) and (status == "SUBMITTED") and ready and (user_ctx.is_admin or user_ctx.is_finance)
+
+    return RequestPerms(
+        can_view=can_view,
+        can_edit=can_edit,
+        can_submit=can_submit,
+        can_finalize=can_finalize,
+        is_owner=is_owner,
+        is_admin=user_ctx.is_admin,
+        is_finance=user_ctx.is_finance,
+        is_finalized=is_finalized,
+    )
+
 
 """
 Non Specific Helpers, that can be used by all routes
@@ -180,12 +254,32 @@ def register_routes(app: Flask, helpers: RouteHelpers) -> None:
     # ---Routes
 
     @app.get("/")
-    def index():
-        return {
-            "ok": True,
-            "app": "magfest-budget",
-            "db": app.config["SQLALCHEMY_DATABASE_URI"],
-        }
+    def home():
+        from .models import Request
+
+        uid = h.get_active_user_id()
+        if not uid:
+            return redirect(url_for("dev_login"))
+
+        q = db.session.query(Request)
+
+        # Admin/finance see all requests; everyone else sees only their own
+        if not (h.is_admin() or h.is_finance()):
+            q = q.filter(Request.created_by_user_id == uid)
+
+        requests = (
+            q.order_by(Request.id.desc())
+            .limit(200)  # bump for demo; adjust as needed
+            .all()
+        )
+
+        is_admin = h.is_admin() or h.is_finance()
+
+        return render_template("home.html",
+                               my_requests=requests,
+                               is_admin=is_admin
+                               )
+
 
     @app.get("/dev/login")
     def dev_login():
@@ -1838,6 +1932,23 @@ def register_routes(app: Flask, helpers: RouteHelpers) -> None:
         if not dept or not dept.is_active:
             return "Unknown or inactive department.", 400
 
+        approved_existing = (
+            db.session.query(Request)
+            .filter(Request.current_status == "APPROVED")
+            .filter(Request.event_cycle_id == cycle.id)
+            .filter(Request.department_id == dept.id)
+            .order_by(Request.id.desc())
+            .first()
+        )
+
+        if approved_existing:
+            return render_template(
+                "request_new_blocked.html",
+                cycle=cycle,
+                dept=dept,
+                approved_request=approved_existing,
+            ), 409
+
         # Create request
         r = Request(
             created_by_user_id=uid,
@@ -2006,4 +2117,305 @@ def register_routes(app: Flask, helpers: RouteHelpers) -> None:
             "revisions": revision_summaries,
             "invariants": invariants,
         }
+
+    @app.get("/admin/demo/approval-summary")
+    def admin_demo_approval_summary():
+        from sqlalchemy import func, case
+        from .models import ApprovalGroup, LineReview, RequestLine, RequestRevision, Request
+
+        # Demo guard: admin OR finance only
+        if (not h.is_admin()) and (not h.is_finance()):
+            return "Forbidden", 403
+
+        # Base joins scoped to "current revision lines"
+        base = (
+            db.session.query(
+                ApprovalGroup.id.label("group_id"),
+                ApprovalGroup.name.label("group_name"),
+
+                # counts
+                func.sum(case((LineReview.status == "PENDING", 1), else_=0)).label("pending_count"),
+                func.sum(case((LineReview.status == "NEEDS_INFO", 1), else_=0)).label("needs_info_count"),
+                func.sum(case((LineReview.status == "APPROVED", 1), else_=0)).label("approved_count"),
+                func.sum(case((LineReview.status == "REJECTED", 1), else_=0)).label("rejected_count"),
+
+                # dollars (requested_amount on RequestLine) :contentReference[oaicite:1]{index=1}
+                func.sum(case((LineReview.status == "PENDING", RequestLine.requested_amount), else_=0)).label(
+                    "pending_amount"),
+                func.sum(case((LineReview.status == "NEEDS_INFO", RequestLine.requested_amount), else_=0)).label(
+                    "needs_info_amount"),
+                func.sum(case((LineReview.status == "APPROVED", RequestLine.requested_amount), else_=0)).label(
+                    "approved_amount"),
+                func.sum(case((LineReview.status == "REJECTED", RequestLine.requested_amount), else_=0)).label(
+                    "rejected_amount"),
+
+                # number of distinct requests represented in this group (current rev only)
+                func.count(func.distinct(Request.id)).label("request_count"),
+            )
+            .select_from(ApprovalGroup)
+            .join(LineReview, LineReview.approval_group_id == ApprovalGroup.id)
+            .join(RequestLine, LineReview.request_line_id == RequestLine.id)
+            .join(RequestRevision, RequestLine.revision_id == RequestRevision.id)
+            .join(Request, RequestRevision.request_id == Request.id)
+            .filter(ApprovalGroup.is_active == True)  # noqa: E712
+            .filter(Request.current_revision_id == RequestLine.revision_id)
+            .group_by(ApprovalGroup.id, ApprovalGroup.name, ApprovalGroup.sort_order)
+            .order_by(ApprovalGroup.sort_order.asc(), ApprovalGroup.name.asc())
+        )
+
+        rows = []
+        for r in base.all():
+            # normalize None -> 0 (sqlite sometimes returns None for empty sums)
+            def nz(x): return int(x or 0)
+
+            rows.append({
+                "group_id": r.group_id,
+                "group_name": r.group_name,
+                "request_count": nz(r.request_count),
+
+                "pending_count": nz(r.pending_count),
+                "needs_info_count": nz(r.needs_info_count),
+                "approved_count": nz(r.approved_count),
+                "rejected_count": nz(r.rejected_count),
+
+                "pending_amount": nz(r.pending_amount),
+                "needs_info_amount": nz(r.needs_info_amount),
+                "approved_amount": nz(r.approved_amount),
+                "rejected_amount": nz(r.rejected_amount),
+            })
+
+        # Totals row
+        totals = {
+            "request_count": sum(x["request_count"] for x in rows),
+            "pending_count": sum(x["pending_count"] for x in rows),
+            "needs_info_count": sum(x["needs_info_count"] for x in rows),
+            "approved_count": sum(x["approved_count"] for x in rows),
+            "rejected_count": sum(x["rejected_count"] for x in rows),
+            "pending_amount": sum(x["pending_amount"] for x in rows),
+            "needs_info_amount": sum(x["needs_info_amount"] for x in rows),
+            "approved_amount": sum(x["approved_amount"] for x in rows),
+            "rejected_amount": sum(x["rejected_amount"] for x in rows),
+        }
+
+        return render_template(
+            "admin_demo_approval_summary.html",
+            rows=rows,
+            totals=totals,
+        )
+
+    @app.get("/admin/demo/spend-summary")
+    def admin_demo_spend_summary():
+        from sqlalchemy import func, case
+        from .models import Request, RequestRevision, RequestLine, BudgetItemType
+
+        # Finance/admin only
+        if (not h.is_admin()) and (not h.is_finance()):
+            return "Forbidden", 403
+
+        # Which request statuses to include (override via query param if you want)
+        include_statuses = ("SUBMITTED", "NEEDS_REVISION", "APPROVED")
+
+        # spend_type bucket (outer join because budget_item_type_id can be NULL)
+        spend_type_expr = func.coalesce(BudgetItemType.spend_type, "Unassigned").label("spend_type")
+
+        q = (
+            db.session.query(
+                spend_type_expr,
+                func.count(RequestLine.id).label("line_count"),
+                func.sum(RequestLine.requested_amount).label("total_amount"),
+            )
+            .select_from(RequestLine)
+            .join(RequestRevision, RequestLine.revision_id == RequestRevision.id)
+            .join(Request, RequestRevision.request_id == Request.id)
+            .outerjoin(BudgetItemType, RequestLine.budget_item_type_id == BudgetItemType.id)
+            .filter(Request.current_status.in_(include_statuses))
+            .filter(Request.current_revision_id == RequestLine.revision_id)
+            .group_by(spend_type_expr)
+            .order_by(func.sum(RequestLine.requested_amount).desc())
+        )
+
+        rows = []
+        for r in q.all():
+            total = int(r.total_amount or 0)
+            rows.append(
+                {
+                    "spend_type": r.spend_type,
+                    "line_count": int(r.line_count or 0),
+                    "total_amount": total,
+                }
+            )
+
+        grand_total = sum(x["total_amount"] for x in rows)
+        max_total = max([x["total_amount"] for x in rows], default=0)
+
+        return render_template(
+            "admin_demo_spend_summary.html",
+            rows=rows,
+            grand_total=grand_total,
+            max_total=max_total,
+            include_statuses=list(include_statuses),
+        )
+
+    def _require_admin_or_finance():
+        if (not h.is_admin()) and (not h.is_finance()):
+            abort(403)
+
+    @app.get("/admin/budget-items")
+    def admin_budget_items():
+        from .models import BudgetItemType, ApprovalGroup
+
+        _require_admin_or_finance()
+
+        q = (request.args.get("q") or "").strip()
+        show_inactive = (request.args.get("show_inactive") == "1")
+
+        query = db.session.query(BudgetItemType).join(ApprovalGroup)
+        if not show_inactive:
+            query = query.filter(BudgetItemType.is_active == True)  # noqa: E712
+
+        if q:
+            like = f"%{q}%"
+            query = query.filter(
+                (BudgetItemType.item_id.ilike(like))
+                | (BudgetItemType.item_name.ilike(like))
+                | (BudgetItemType.spend_type.ilike(like))
+            )
+
+        items = query.order_by(BudgetItemType.item_id.asc()).all()
+
+        return render_template(
+            "admin_budget_items.html",
+            items=items,
+            q=q,
+            show_inactive=show_inactive,
+        )
+
+    @app.get("/admin/budget-items/new")
+    def admin_budget_items_new():
+        from .models import ApprovalGroup
+        _require_admin_or_finance()
+
+        groups = (
+            db.session.query(ApprovalGroup)
+            .filter(ApprovalGroup.is_active == True)  # noqa: E712
+            .order_by(ApprovalGroup.sort_order.asc(), ApprovalGroup.name.asc())
+            .all()
+        )
+        return render_template("admin_budget_item_form.html", item=None, groups=groups)
+
+    @app.post("/admin/budget-items/new")
+    def admin_budget_items_new_post():
+        from .models import BudgetItemType, ApprovalGroup
+        _require_admin_or_finance()
+
+        item_id = (request.form.get("item_id") or "").strip()
+        item_name = (request.form.get("item_name") or "").strip()
+        item_description = (request.form.get("item_description") or "").strip() or None
+        spend_type = (request.form.get("spend_type") or "").strip()
+        spend_group = (request.form.get("spend_group") or "").strip() or None
+        approval_group_id = request.form.get("approval_group_id")
+        is_active = (request.form.get("is_active") == "1")
+
+        if not item_id or not item_name or not spend_type or not approval_group_id:
+            return "Missing required fields.", 400
+
+        if db.session.query(BudgetItemType).filter(BudgetItemType.item_id == item_id).first():
+            return f"item_id already exists: {item_id}", 400
+
+        group = db.session.get(ApprovalGroup, int(approval_group_id))
+        if not group or not group.is_active:
+            return "Invalid approval group.", 400
+
+        item = BudgetItemType(
+            item_id=item_id,
+            item_name=item_name,
+            item_description=item_description,
+            spend_type=spend_type,
+            spend_group=spend_group,
+            approval_group_id=group.id,
+            is_active=is_active,
+        )
+        db.session.add(item)
+        db.session.commit()
+        return redirect(url_for("admin_budget_items"))
+
+    @app.get("/admin/budget-items/<int:item_type_id>/edit")
+    def admin_budget_items_edit(item_type_id: int):
+        from .models import BudgetItemType, ApprovalGroup
+        _require_admin_or_finance()
+
+        item = db.session.get(BudgetItemType, item_type_id)
+        if not item:
+            abort(404)
+
+        groups = (
+            db.session.query(ApprovalGroup)
+            .filter(ApprovalGroup.is_active == True)  # noqa: E712
+            .order_by(ApprovalGroup.sort_order.asc(), ApprovalGroup.name.asc())
+            .all()
+        )
+        return render_template("admin_budget_item_form.html", item=item, groups=groups)
+
+    @app.post("/admin/budget-items/<int:item_type_id>/edit")
+    def admin_budget_items_edit_post(item_type_id: int):
+        from .models import BudgetItemType, ApprovalGroup
+        _require_admin_or_finance()
+
+        item = db.session.get(BudgetItemType, item_type_id)
+        if not item:
+            abort(404)
+
+        item_id = (request.form.get("item_id") or "").strip()
+        item_name = (request.form.get("item_name") or "").strip()
+        item_description = (request.form.get("item_description") or "").strip() or None
+        spend_type = (request.form.get("spend_type") or "").strip()
+        spend_group = (request.form.get("spend_group") or "").strip() or None
+        approval_group_id = request.form.get("approval_group_id")
+        is_active = (request.form.get("is_active") == "1")
+
+        if not item_id or not item_name or not spend_type or not approval_group_id:
+            return "Missing required fields.", 400
+
+        # enforce unique item_id if changed
+        existing = (
+            db.session.query(BudgetItemType)
+            .filter(BudgetItemType.item_id == item_id, BudgetItemType.id != item.id)
+            .first()
+        )
+        if existing:
+            return f"item_id already exists: {item_id}", 400
+
+        group = db.session.get(ApprovalGroup, int(approval_group_id))
+        if not group or not group.is_active:
+            return "Invalid approval group.", 400
+
+        item.item_id = item_id
+        item.item_name = item_name
+        item.item_description = item_description
+        item.spend_type = spend_type
+        item.spend_group = spend_group
+        item.approval_group_id = group.id
+        item.is_active = is_active
+
+        db.session.commit()
+        return redirect(url_for("admin_budget_items"))
+
+@app.context_processor
+def inject_user_context():
+    u = get_active_user()
+    roles = active_user_roles()
+    ctx = {
+        # Canonical names
+        "current_user": u,
+        "current_user_id": get_active_user_id(),
+        "current_user_roles": roles,
+        "is_admin": is_admin(),
+        "is_finance": is_finance(),
+
+        # Back-compat aliases (delete later)
+        "active_user": u,
+        "active_user_id": get_active_user_id(),
+        "active_user_roles": roles,
+    }
+    return ctx
 
