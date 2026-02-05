@@ -1,0 +1,66 @@
+<div style="padding: 10px 12px; background: #f3f4f6; border-bottom: 1px solid #ddd; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;">
+  <div style="display:flex; gap:12px; align-items:flex-start; justify-content:space-between;">
+    <div style="line-height:1.4;">
+      <strong>Viewing as:</strong>
+      {% if active_user %}
+        <div>
+          {{ active_user.display_name }}
+          <span style="color:#666;">({{ active_user.id }})</span>
+        </div>
+
+        <div style="color:#444; font-size:0.9em;">
+          Email: <code>{{ active_user.email }}</code>
+        </div>
+
+        {% if active_user.auth_subject %}
+          <div style="color:#666; font-size:0.85em;">
+            Auth subject: <code>{{ active_user.auth_subject }}</code>
+          </div>
+        {% endif %}
+
+        {% if active_user_roles %}
+          <div style="color:#444; font-size:0.9em; margin-top:2px;">
+            Roles: {{ active_user_roles|join(", ") }}
+          </div>
+        {% endif %}
+
+        {% if active_user.department_memberships %}
+          <div style="margin-top:6px; font-size:0.9em;">
+            <strong>Department memberships:</strong>
+            <ul style="margin:4px 0 0 18px; padding:0;">
+              {% for m in active_user.department_memberships %}
+                <li>
+                  {{ m.department.name }}
+                  {% if m.event_cycle %}
+                    <span style="color:#666;">({{ m.event_cycle.code }})</span>
+                  {% endif %}
+                  —
+                  {% if m.is_department_head %}
+                    <strong>DH</strong>,
+                  {% endif %}
+                  {% if m.can_edit %}
+                    edit
+                  {% elif m.can_view %}
+                    view
+                  {% else %}
+                    no access
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% else %}
+          <div style="color:#666; font-size:0.85em; margin-top:4px;">
+            No department memberships
+          </div>
+        {% endif %}
+      {% else %}
+        <span style="color:#b00;">Unknown user ({{ active_user_id }})</span>
+      {% endif %}
+    </div>
+
+    <div style="white-space:nowrap;">
+      <a href="{{ url_for('dev.dev_login') }}">Switch user</a>
+    </div>
+  </div>
+</div>

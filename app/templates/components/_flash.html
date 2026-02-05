@@ -1,0 +1,19 @@
+{# templates/components/_flash.html #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div style="margin: 12px 0;">
+      {% for category, message in messages %}
+        {% set cat = (category or 'info')|lower %}
+        <div class="callout
+            {% if cat in ['error', 'danger'] %} callout-danger
+            {% elif cat in ['success'] %} callout-success
+            {% elif cat in ['warning'] %} callout-warning
+            {% else %} callout-info
+            {% endif %}">
+          <strong>{{ category|default('Info')|capitalize }}</strong>
+          <div class="small muted">{{ message }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}

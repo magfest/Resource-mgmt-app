@@ -1,0 +1,49 @@
+{# templates/components/_request_header.html #}
+{% set status = (req.current_status or "DRAFT")|upper %}
+{% set is_finalized = (perms is defined and perms.is_finalized) %}
+
+<section class="card req-header">
+  <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start;">
+    <div>
+      <h1 style="margin:0;">
+        Request #{{ req.id }}
+      </h1>
+
+      <div class="muted" style="margin-top:4px; line-height:1.5;">
+        {% if req.event_code %}<span><strong>Event:</strong> {{ req.event_code }}</span>{% endif %}
+        {% if req.department_name %}
+          <span>{% if req.event_code %} · {% endif %}<strong>Department:</strong> {{ req.department_name }}</span>
+        {% endif %}
+        <span> · <strong>Status:</strong> {{ status }}</span>
+      </div>
+
+      {% if req.updated_at %}
+        <div class="muted" style="margin-top:4px;">
+          Updated {{ req.updated_at }}
+        </div>
+      {% endif %}
+    </div>
+
+    <div style="text-align:right;">
+      <div class="pill {% if status in ['APPROVED'] %}pill-approved{% elif status in ['SUBMITTED'] %}pill-submitted{% elif status in ['NEEDS_REVISION'] %}pill-warning{% else %}pill-draft{% endif %}">
+        {{ status }}
+      </div>
+
+      {% if is_finalized %}
+        <div class="muted" style="margin-top:6px;">
+          Editing is locked.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if status == "NEEDS_REVISION" and req.kickback_reason %}
+    <div class="banner" style="margin-top:12px;">
+      <strong>Needs revision</strong>
+      <div class="muted" style="margin-top:4px;">Finance feedback</div>
+      <div class="reason" style="white-space:pre-wrap; margin-top:8px;">
+        {{ req.kickback_reason }}
+      </div>
+    </div>
+  {% endif %}
+</section>

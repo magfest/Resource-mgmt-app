@@ -91,33 +91,59 @@ def create_app() -> Flask:
             return
 
         groups_by_code = {g.code: g for g in db.session.query(ApprovalGroup).all()}
-        tech_group_id = groups_by_code["TECH"].id
-        hotel_group_id = groups_by_code["HOTEL"].id
+        tech = groups_by_code.get("TECH")
+        hotel = groups_by_code.get("HOTEL")
+        if not tech or not hotel:
+            raise RuntimeError("Demo ApprovalGroups missing: expected TECH and HOTEL to exist.")
+        tech_group_id = tech.id
+        hotel_group_id = hotel.id
 
         demo_users = [
-            ("dev:requester", "Requester (Demo)", True, [("REQUESTER", None)]),
-            ("dev:tech_approver", "Tech Approver (Demo)", True, [("APPROVER", tech_group_id)]),
-            ("dev:hotel_approver", "Hotel Approver (Demo)", True, [("APPROVER", hotel_group_id)]),
-            ("dev:admin", "Admin (Demo)", True, [("ADMIN", None)]),
-            ("dev:finance", "Finance (Demo)", True, [("FINANCE", None)]),
-            ("dev:alex", "Alex (Demo)", True, [("REQUESTER", None)]),
+            # Plain users
+            ("dev:pat", "pat@dev.local", "dev:pat", "Pat (No Dept)", True, [("REQUESTER", None)]),
+
+            # Arcades
+            ("dev:alex", "alex@dev.local", "dev:alex", "Alex (Arcades DH)", True, [("REQUESTER", None)]),
+            ("dev:riley", "riley@dev.local", "dev:riley", "Riley (Arcades Editor)", True, [("REQUESTER", None)]),
+            ("dev:sam", "sam@dev.local", "dev:sam", "Sam (Arcades Viewer)", True, [("REQUESTER", None)]),
+
+            # Guests
+            ("dev:jordan", "jordan@dev.local", "dev:jordan", "Jordan (Guests DH)", True, [("REQUESTER", None)]),
+            ("dev:casey", "casey@dev.local", "dev:casey", "Casey (Guests Editor)", True, [("REQUESTER", None)]),
+
+            # Mixed membership
+            ("dev:morgan", "morgan@dev.local", "dev:morgan", "Morgan (Arcades View / Guests Edit)", True,
+             [("REQUESTER", None)]),
+
+            # Approvers
+            ("dev:tech_approver", "tech.approver@dev.local", "dev:tech_approver", "Tech Approver (Demo)", True,
+             [("APPROVER", tech_group_id)]),
+            ("dev:hotel_approver", "hotel.approver@dev.local", "dev:hotel_approver", "Hotel Approver (Demo)", True,
+             [("APPROVER", hotel_group_id)]),
+
+            # Elevated
+            ("dev:admin", "admin@dev.local", "dev:admin", "Admin (Demo)", True, [("ADMIN", None)]),
+            ("dev:finance", "finance@dev.local", "dev:finance", "Finance (Demo)", True, [("FINANCE", None)]),
         ]
 
-        for user_id, display_name, is_active, roles in demo_users:
-            u = User(id=user_id, display_name=display_name, is_active=is_active)
-            db.session.add(u)
-            db.session.flush()
+        for user_id, email, auth_subject, display_name, is_active, roles in demo_users:
+            u = db.session.get(User, user_id)
+            if not u:
+                u = User(id=user_id)
+                db.session.add(u)
 
+            u.email = email
+            u.auth_subject = auth_subject
+            u.display_name = display_name
+            u.is_active = is_active
+
+            # roles: easiest is clear then recreate for demo users
+            db.session.query(UserRole).filter_by(user_id=user_id).delete()
             for role_code, group_id in roles:
-                db.session.add(
-                    UserRole(
-                        user_id=u.id,
-                        role_code=role_code,
-                        approval_group_id=group_id
-                    )
-                )
+                db.session.add(UserRole(user_id=user_id, role_code=role_code, approval_group_id=group_id))
 
         db.session.commit()
+        ensure_demo_department_memberships()
 
     def ensure_demo_org_data():
         # Requires Department + EventCycle models to exist in models.py
@@ -167,6 +193,97 @@ def create_app() -> Flask:
                         sort_order=sort,
                     )
                 )
+
+        db.session.commit()
+
+    def ensure_demo_department_memberships():
+        from .models import (
+            User,
+            Department,
+            EventCycle,
+            DepartmentMembership,
+        )
+
+        # Ensure org data exists (departments + cycles)
+        ensure_demo_org_data()
+
+        # --- fetch the event cycle we want to test ---
+        cycle = (
+            db.session.query(EventCycle)
+            .filter(EventCycle.code == "SMF2026")
+            .one()
+        )
+
+        # --- fetch departments we want to test ---
+        dept_by_code = {
+            d.code: d
+            for d in db.session.query(Department)
+            .filter(Department.code.in_(["ARCADE", "GUEST"]))
+            .all()
+        }
+
+        missing = [c for c in ["ARCADE", "GUEST"] if c not in dept_by_code]
+        if missing:
+            raise RuntimeError(f"Missing demo departments: {missing}")
+
+        def upsert_membership(
+                *, user_id: str, dept_code: str,
+                can_view: bool, can_edit: bool, is_department_head: bool
+        ):
+            dept = dept_by_code[dept_code]
+
+            row = (
+                db.session.query(DepartmentMembership)
+                .filter(DepartmentMembership.user_id == user_id)
+                .filter(DepartmentMembership.department_id == dept.id)
+                .filter(DepartmentMembership.event_cycle_id == cycle.id)
+                .one_or_none()
+            )
+
+            if not row:
+                row = DepartmentMembership(
+                    user_id=user_id,
+                    department_id=dept.id,
+                    event_cycle_id=cycle.id,
+                )
+                db.session.add(row)
+
+            row.can_view = bool(can_view)
+            row.can_edit = bool(can_edit)
+            row.is_department_head = bool(is_department_head)
+
+        # --- membership plan (truth table) ---
+        membership_plan = [
+            # Arcades
+            ("dev:alex", "ARCADE", True, True, True),  # DH
+            ("dev:riley", "ARCADE", True, True, False),  # editor
+            ("dev:sam", "ARCADE", True, False, False),  # viewer
+
+            # Guests
+            ("dev:jordan", "GUEST", True, True, True),  # DH
+            ("dev:casey", "GUEST", True, True, False),  # editor
+
+            # Mixed: Arcades view + Guests edit
+            ("dev:morgan", "ARCADE", True, False, False),
+            ("dev:morgan", "GUEST", True, True, False),
+        ]
+
+        # Validate users exist (fail loudly if demo users aren’t seeded)
+        user_ids = [u[0] for u in membership_plan]
+        found = {u.id for u in db.session.query(User.id).filter(User.id.in_(user_ids)).all()}
+        missing_users = [uid for uid in user_ids if uid not in found]
+        if missing_users:
+            raise RuntimeError(f"Missing demo users for memberships: {missing_users}")
+
+        # Apply plan
+        for user_id, dept_code, can_view, can_edit, is_dh in membership_plan:
+            upsert_membership(
+                user_id=user_id,
+                dept_code=dept_code,
+                can_view=can_view,
+                can_edit=can_edit,
+                is_department_head=is_dh,
+            )
 
         db.session.commit()
 
@@ -254,9 +371,9 @@ def create_app() -> Flask:
         # Under review state; line status detail is expressed in the UI
         req.current_status = "SUBMITTED"
 
-    from .routes import register_routes, RouteHelpers
+    from .routes import register_all_routes, RouteHelpers
 
-    register_routes(
+    register_all_routes(
         app,
         RouteHelpers(
             ensure_demo_users=ensure_demo_users,

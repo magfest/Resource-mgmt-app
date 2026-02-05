@@ -1,0 +1,45 @@
+{# templates/components/_request_actions.html #}
+{% set status = (req.current_status or "DRAFT")|upper %}
+{% set locked = (perms is defined and (perms.is_finalized or (not perms.can_edit))) %}
+{% set ready = (review_summary is defined and review_summary and review_summary.get('ready_to_finalize')) %}
+
+<div class="btn-row" style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+  {# Edit Draft #}
+  {% if perms is defined and perms.can_edit %}
+    <a class="btn" href="{{ url_for('requests.edit_request_draft', request_id=req.id) }}">
+      Edit Draft
+    </a>
+  {% else %}
+    <button class="btn" disabled title="Editing is not available for this request.">
+      Edit Draft
+    </button>
+  {% endif %}
+
+  {# Submit Draft / New Revision #}
+  {% if perms is defined and perms.can_submit %}
+    <form method="post" action="{{ url_for('requests.submit_request_draft', request_id=req.id) }}" style="display:inline;">
+      <button class="btn btn-primary" type="submit"
+              onclick="return confirm('Submit this draft as a new immutable revision?');">
+        Submit Draft
+      </button>
+    </form>
+  {% endif %}
+
+  {# Finalize Approval (admin/finance only, and only when ready) #}
+  {% if perms is defined and perms.can_finalize %}
+    <form method="post" action="{{ url_for('requests.approve_request', request_id=req.id) }}" style="display:inline;">
+      <button class="btn btn-primary" type="submit"
+              {% if not ready %}disabled title="Not ready: some lines still need review."{% endif %}>
+        Finalize Approval
+      </button>
+    </form>
+  {% elif perms is defined and (perms.is_admin or perms.is_finance) and status == "SUBMITTED" %}
+    {# Show disabled finalize button for admins so they understand why it's missing #}
+    <button class="btn" disabled title="Not ready: some lines still need review.">
+      Finalize Approval
+    </button>
+  {% endif %}
+
+  {# Back link #}
+  <a class="btn" href="{{ url_for('requests.request_detail', request_id=req.id) }}">Back to Snapshot</a>
+</div>

@@ -3,19 +3,18 @@ from __future__ import annotations
 from datetime import datetime
 from app import db
 
-
 # -----------------------------
 # Constants / helpers
 # -----------------------------
 
 COMMENT_VISIBILITY_PUBLIC = "PUBLIC"
-COMMENT_VISIBILITY_ADMIN = "ADMIN"   # admin/approvers/finance only (not requester)
+COMMENT_VISIBILITY_ADMIN = "ADMIN"  # admin/approvers/finance only (not requester)
 
 # Line workflow states (Chunk A only; we can refine later)
 LINE_STATUS_PENDING = "PENDING"
 LINE_STATUS_NEEDS_INFO = "NEEDS_INFO"
 LINE_STATUS_APPROVED = "APPROVED"
-LINE_STATUS_REJECTED = "REJECTED"   # optional later
+LINE_STATUS_REJECTED = "REJECTED"  # optional later
 
 
 # -----------------------------
@@ -28,7 +27,7 @@ class Request(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     public_id = db.Column(db.String(32), unique=True, nullable=True)
 
-    event_cycle = db.Column(db.String(64), nullable=False) #old should be removed after MVP
+    event_cycle = db.Column(db.String(64), nullable=False)  # old should be removed after MVP
     requesting_department = db.Column(db.String(64), nullable=False)
 
     event_cycle_id = db.Column(
@@ -378,7 +377,8 @@ class LineComment(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     created_by_user_id = db.Column(db.String(64), nullable=False)
 
-    request_line = db.relationship("RequestLine", backref=db.backref("comments", lazy=True, cascade="all, delete-orphan"))
+    request_line = db.relationship("RequestLine",
+                                   backref=db.backref("comments", lazy=True, cascade="all, delete-orphan"))
 
 
 # -----------------------------
@@ -429,17 +429,21 @@ class LineAuditEvent(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     created_by_user_id = db.Column(db.String(64), nullable=False)
 
-    request_line = db.relationship("RequestLine", backref=db.backref("audit_events", lazy=True, cascade="all, delete-orphan"))
+    request_line = db.relationship("RequestLine",
+                                   backref=db.backref("audit_events", lazy=True, cascade="all, delete-orphan"))
 
 
 # -----------------------------
-# Users / roles
+# Users / roles / Membership
 # -----------------------------
 
 class User(db.Model):
     __tablename__ = "users"
 
-    id = db.Column(db.String(64), primary_key=True)  # e.g. dev:alex
+    id = db.Column(db.String(64), primary_key=True)  # keep for now (internal key)
+    email = db.Column(db.String(256), nullable=False, unique=True, index=True)  # NEW
+    auth_subject = db.Column(db.String(255), nullable=True, unique=True, index=True)  # NEW
+
     display_name = db.Column(db.String(128), nullable=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
 
@@ -477,6 +481,57 @@ class UserRole(db.Model):
         db.UniqueConstraint("user_id", "role_code", name="uq_user_role_once"),
     )
 
+
+class DepartmentMembership(db.Model):
+    __tablename__ = "department_memberships"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(
+        db.String(64),
+        db.ForeignKey("users.id", name="fk_dept_memberships_user_id"),
+        nullable=False,
+        index=True,
+    )
+
+    department_id = db.Column(
+        db.Integer,
+        db.ForeignKey("departments.id", name="fk_dept_memberships_department_id"),
+        nullable=False,
+        index=True,
+    )
+
+    event_cycle_id = db.Column(
+        db.Integer,
+        db.ForeignKey("event_cycles.id", name="fk_dept_memberships_event_cycle_id"),
+        nullable=True,
+        index=True,
+    )
+
+    can_view = db.Column(db.Boolean, nullable=False, default=True)
+    can_edit = db.Column(db.Boolean, nullable=False, default=False)
+    is_department_head = db.Column(db.Boolean, nullable=False, default=False)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )
+
+    user = db.relationship("User", backref=db.backref("department_memberships", lazy=True))
+    department = db.relationship("Department")
+    event_cycle = db.relationship("EventCycle")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id", "department_id", "event_cycle_id",
+            name="uq_dept_membership_user_dept_cycle",
+        ),
+    )
+
+
 # -----------------------------
 # Departments / Events
 # -----------------------------
@@ -485,7 +540,7 @@ class Department(db.Model):
     __tablename__ = "departments"
 
     id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(32), unique=True, nullable=False)   # TECHOPS, HOTELS, etc.
+    code = db.Column(db.String(32), unique=True, nullable=False)  # TECHOPS, HOTELS, etc.
     name = db.Column(db.String(128), nullable=False)
 
     description = db.Column(db.Text, nullable=True)
@@ -500,8 +555,8 @@ class EventCycle(db.Model):
     __tablename__ = "event_cycles"
 
     id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(32), unique=True, nullable=False)   # SMF2026
-    name = db.Column(db.String(128), nullable=False)              # Super MAGFest 2026
+    code = db.Column(db.String(32), unique=True, nullable=False)  # SMF2026
+    name = db.Column(db.String(128), nullable=False)  # Super MAGFest 2026
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     is_default = db.Column(db.Boolean, nullable=False, default=False)
