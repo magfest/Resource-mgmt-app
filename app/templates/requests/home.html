@@ -17,7 +17,7 @@
       <div class="btn-row" style="flex-wrap:wrap; justify-content:flex-end;">
         <a class="btn btn-primary" href="{{ url_for('requests.new_request') }}">New request</a>
 
-        {% if is_admin %}
+        {% if user_ctx and (user_ctx.is_admin or user_ctx.is_finance) %}
           <a class="btn" href="{{ url_for('admin.admin_demo_spend_summary') }}">Spend summary</a>
           <a class="btn" href="{{ url_for('admin.admin_demo_approval_summary') }}">Approval summary</a>
           <a class="btn" href="{{ url_for('admin.admin_budget_items') }}">Budget items</a>
@@ -154,7 +154,7 @@
   {% endif %}
 
   <div class="card" style="margin-top:12px;">
-    {% if is_admin %}
+    {% if perms and perms.can_edit %}
       <h2 style="margin:0 0 6px 0;">All requests</h2>
       <div class="muted small">Showing the most recent requests.</div>
     {% else %}
@@ -238,7 +238,7 @@
                     {% endif %}
 
                     {# Debug: keep it admin-only so demos stay clean #}
-                    {% if is_admin %}
+                    {% if user_ctx and (user_ctx.is_admin or user_ctx.is_finance) %}
                       <a class="btn btn-muted" href="{{ url_for('dev.dev_request_debug', request_id=r.id) }}">Debug</a>
                     {% endif %}
                   </div>
