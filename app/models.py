@@ -69,6 +69,12 @@ NOTIF_STATUS_SENT = "SENT"
 NOTIF_STATUS_FAILED = "FAILED"
 NOTIF_STATUS_SUPPRESSED = "SUPPRESSED"
 
+# Config audit actions
+CONFIG_AUDIT_CREATE = "CREATE"
+CONFIG_AUDIT_UPDATE = "UPDATE"
+CONFIG_AUDIT_ARCHIVE = "ARCHIVE"
+CONFIG_AUDIT_RESTORE = "RESTORE"
+
 
 # ============================================================
 # Core org models: Events, Departments, Users, Membership
@@ -85,6 +91,11 @@ class EventCycle(db.Model):
     is_default = db.Column(db.Boolean, nullable=False, default=False)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
 
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_by_user_id = db.Column(db.String(64), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by_user_id = db.Column(db.String(64), nullable=True)
+
 
 class Department(db.Model):
     __tablename__ = "departments"
@@ -99,6 +110,11 @@ class Department(db.Model):
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_by_user_id = db.Column(db.String(64), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by_user_id = db.Column(db.String(64), nullable=True)
 
 
 class User(db.Model):
@@ -174,9 +190,15 @@ class ApprovalGroup(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(32), unique=True, nullable=False, index=True)  # TECH, HOTEL, etc.
     name = db.Column(db.String(128), nullable=False)
+    description = db.Column(db.Text, nullable=True)
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_by_user_id = db.Column(db.String(64), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by_user_id = db.Column(db.String(64), nullable=True)
 
 
 class WorkType(db.Model):
@@ -287,6 +309,16 @@ class UserRole(db.Model):
     approval_group = db.relationship("ApprovalGroup", foreign_keys=[approval_group_id])
 
     __table_args__ = (
+        # NOTE: This unique constraint has NULL semantics issue - SQL treats NULL != NULL.
+        # A user could technically have duplicate (user_id, role_code) rows if work_type_id
+        # and/or approval_group_id are NULL. In production PostgreSQL, add partial unique indexes:
+        #   CREATE UNIQUE INDEX ix_user_roles_global_unique ON user_roles (user_id, role_code)
+        #       WHERE work_type_id IS NULL AND approval_group_id IS NULL;
+        #   CREATE UNIQUE INDEX ix_user_roles_worktype_unique ON user_roles (user_id, role_code, work_type_id)
+        #       WHERE work_type_id IS NOT NULL AND approval_group_id IS NULL;
+        #   CREATE UNIQUE INDEX ix_user_roles_approvalgroup_unique ON user_roles (user_id, role_code, approval_group_id)
+        #       WHERE work_type_id IS NULL AND approval_group_id IS NOT NULL;
+        # For SQLite dev, enforce uniqueness at application layer.
         db.UniqueConstraint(
             "user_id", "role_code", "work_type_id", "approval_group_id",
             name="uq_user_role_scoped_once",
@@ -361,6 +393,8 @@ class WorkItem(db.Model):
 
     __table_args__ = (
         db.Index("ix_work_items_portfolio_kind", "portfolio_id", "request_kind"),
+        # Composite index for portfolio landing pages filtering by status
+        db.Index("ix_work_items_portfolio_status", "portfolio_id", "status"),
     )
 
 class WorkLine(db.Model):
@@ -395,11 +429,14 @@ class WorkLine(db.Model):
     # Optional: helps list views (e.g., approval group vs admin final)
     current_review_stage = db.Column(db.String(32), nullable=True, index=True)
 
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
     updated_by_user_id = db.Column(db.String(64), nullable=True, index=True)
 
     __table_args__ = (
         db.UniqueConstraint("work_item_id", "line_number", name="uq_work_line_number_per_item"),
+        # Composite index for dashboard queries filtering by status and review stage
+        db.Index("ix_work_lines_status_review_stage", "status", "current_review_stage"),
     )
 
     audit_events = db.relationship(
@@ -510,7 +547,15 @@ class WorkLineReview(db.Model):
     approval_group = db.relationship("ApprovalGroup", foreign_keys=[approval_group_id])
 
     __table_args__ = (
+        # NOTE: This unique constraint has NULL semantics issue - SQL treats NULL != NULL.
+        # For ADMIN_FINAL stage where approval_group_id is NULL, duplicates are technically possible.
+        # In production PostgreSQL, add partial unique indexes:
+        #   CREATE UNIQUE INDEX ix_wlr_admin_final_unique ON work_line_reviews (work_line_id, stage)
+        #   WHERE approval_group_id IS NULL;
+        # For SQLite dev, enforce uniqueness at application layer.
         db.UniqueConstraint("work_line_id", "stage", "approval_group_id", name="uq_work_line_review_per_stage"),
+        # Composite index for approval queue queries
+        db.Index("ix_work_line_reviews_stage_status", "stage", "status"),
     )
 
 
@@ -566,6 +611,11 @@ class ActivityEvent(db.Model):
     work_item = db.relationship("WorkItem")
     work_line = db.relationship("WorkLine")
 
+    __table_args__ = (
+        # Composite index for time-series analytics queries
+        db.Index("ix_activity_events_occurred_type", "occurred_at", "event_type"),
+    )
+
 
 class NotificationLog(db.Model):
     """Proof of notifications sent (email now, other channels later)."""
@@ -601,6 +651,11 @@ class NotificationLog(db.Model):
 
     work_item = db.relationship("WorkItem")
 
+    __table_args__ = (
+        # Composite index for queue processing (find pending notifications)
+        db.Index("ix_notification_logs_status_created", "status", "created_at"),
+    )
+
 
 # ============================================================
 # Budget configuration + per-event overrides + budget line details
@@ -617,6 +672,11 @@ class SpendType(db.Model):
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
 
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_by_user_id = db.Column(db.String(64), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by_user_id = db.Column(db.String(64), nullable=True)
+
 
 class FrequencyOption(db.Model):
     __tablename__ = "frequency_options"
@@ -628,6 +688,11 @@ class FrequencyOption(db.Model):
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_by_user_id = db.Column(db.String(64), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by_user_id = db.Column(db.String(64), nullable=True)
 
 
 class ConfidenceLevel(db.Model):
@@ -641,6 +706,11 @@ class ConfidenceLevel(db.Model):
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
 
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_by_user_id = db.Column(db.String(64), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by_user_id = db.Column(db.String(64), nullable=True)
+
 
 class PriorityLevel(db.Model):
     __tablename__ = "priority_levels"
@@ -652,6 +722,11 @@ class PriorityLevel(db.Model):
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_by_user_id = db.Column(db.String(64), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by_user_id = db.Column(db.String(64), nullable=True)
 
 
 class ExpenseAccount(db.Model):
@@ -711,6 +786,11 @@ class ExpenseAccount(db.Model):
 
     sort_order = db.Column(db.Integer, nullable=False, default=0)
 
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_by_user_id = db.Column(db.String(64), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by_user_id = db.Column(db.String(64), nullable=True)
+
     default_spend_type = db.relationship("SpendType", foreign_keys=[default_spend_type_id])
     default_frequency = db.relationship("FrequencyOption", foreign_keys=[default_frequency_id])
     approval_group = db.relationship("ApprovalGroup", foreign_keys=[approval_group_id])
@@ -764,6 +844,26 @@ class ExpenseAccountDepartment(db.Model):
         db.Integer,
         db.ForeignKey("departments.id", name="fk_ead_department_id"),
         primary_key=True,
+    )
+
+
+class ConfigAuditEvent(db.Model):
+    """Audit log for configuration changes (expense accounts, approval groups, etc.)."""
+    __tablename__ = "config_audit_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    entity_type = db.Column(db.String(64), nullable=False, index=True)  # expense_account, approval_group, etc.
+    entity_id = db.Column(db.Integer, nullable=False, index=True)
+
+    action = db.Column(db.String(32), nullable=False, index=True)  # CREATE, UPDATE, ARCHIVE, RESTORE
+    changes_json = db.Column(db.Text, nullable=True)  # JSON diff of changed fields
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_by_user_id = db.Column(db.String(64), nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index("ix_config_audit_entity", "entity_type", "entity_id"),
     )
 
 
@@ -887,3 +987,8 @@ class BudgetLineDetail(db.Model):
     confidence_level = db.relationship("ConfidenceLevel")
     frequency = db.relationship("FrequencyOption")
     priority = db.relationship("PriorityLevel")
+
+    __table_args__ = (
+        # Composite index for approval group workload queries
+        db.Index("ix_budget_line_details_approval_routing", "routed_approval_group_id", "expense_account_id"),
+    )

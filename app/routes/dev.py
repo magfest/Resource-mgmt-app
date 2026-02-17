@@ -11,7 +11,7 @@ dev_bp = Blueprint('dev', __name__)
 
 @dev_bp.get("/dev/login")
 def dev_login():
-    from ..models_old import User
+    from ..models import User
 
     h.ensure_demo_users()
 
@@ -31,7 +31,7 @@ def dev_login():
 
 @dev_bp.post("/dev/login")
 def dev_login_post():
-    from ..models_old import User
+    from ..models import User
 
     h.ensure_demo_users()
 
@@ -49,7 +49,7 @@ def dev_login_post():
 
 @dev_bp.post("/dev/create-sample-request")
 def dev_create_sample_request():
-    from ..models_old import Request
+    from ..models import Request
 
     r = Request(
         event_cycle="Super MAGFest 2026",

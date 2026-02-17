@@ -28,18 +28,25 @@ def create_app() -> Flask:
     migrate.init_app(app, db)
 
     # Import models so migrations can detect them
-    from . import models_old  # noqa: F401
+    from . import models  # noqa: F401
 
     # -----------------------------
     # Helpers (demo auth + scoping)
     # -----------------------------
 
-    def ensure_demo_budget_data():
-        from .models_old import ApprovalGroup, BudgetItemType
+    def ensure_demo_reference_data():
+        """Seed all reference/lookup tables needed for the budget workflow."""
+        from .models import (
+            ApprovalGroup,
+            WorkType,
+            SpendType,
+            FrequencyOption,
+            ConfidenceLevel,
+            PriorityLevel,
+        )
 
-        any_group = db.session.query(ApprovalGroup).first()
-
-        if not any_group:
+        # ApprovalGroups
+        if not db.session.query(ApprovalGroup).first():
             groups = [
                 ("TECH", "Tech", True, 10),
                 ("HOTEL", "Hotel", True, 20),
@@ -51,37 +58,128 @@ def create_app() -> Flask:
                 )
             db.session.flush()
 
-        any_type = db.session.query(BudgetItemType).first()
-        if any_type:
-            db.session.commit()
+        # WorkTypes
+        if not db.session.query(WorkType).first():
+            work_types = [
+                ("BUDGET", "Budget Request", True, 10),
+            ]
+            for code, name, active, sort in work_types:
+                db.session.add(
+                    WorkType(code=code, name=name, is_active=active, sort_order=sort)
+                )
+            db.session.flush()
+
+        # SpendTypes
+        if not db.session.query(SpendType).first():
+            spend_types = [
+                ("DIVVY", "Divvy", "Corporate card purchases", True, 10),
+                ("BANK", "Bank", "Direct bank transfers / checks", True, 20),
+                ("HOTEL_FEE", "Hotel Fee", "Fees paid directly to hotel", True, 30),
+            ]
+            for code, name, desc, active, sort in spend_types:
+                db.session.add(
+                    SpendType(code=code, name=name, description=desc, is_active=active, sort_order=sort)
+                )
+            db.session.flush()
+
+        # FrequencyOptions
+        if not db.session.query(FrequencyOption).first():
+            frequencies = [
+                ("ONE_TIME", "One Time", "Single purchase", True, 10),
+                ("RECURRING", "Recurring", "Recurring expense across events", True, 20),
+            ]
+            for code, name, desc, active, sort in frequencies:
+                db.session.add(
+                    FrequencyOption(code=code, name=name, description=desc, is_active=active, sort_order=sort)
+                )
+            db.session.flush()
+
+        # ConfidenceLevels
+        if not db.session.query(ConfidenceLevel).first():
+            confidence_levels = [
+                ("CONFIRMED", "Confirmed", "Price is confirmed/quoted", True, 10),
+                ("ESTIMATED", "Estimated", "Price is estimated", True, 20),
+                ("PLACEHOLDER", "Placeholder", "Rough placeholder amount", True, 30),
+            ]
+            for code, name, desc, active, sort in confidence_levels:
+                db.session.add(
+                    ConfidenceLevel(code=code, name=name, description=desc, is_active=active, sort_order=sort)
+                )
+            db.session.flush()
+
+        # PriorityLevels
+        if not db.session.query(PriorityLevel).first():
+            priority_levels = [
+                ("CRITICAL", "Critical", "Essential for event operations", True, 10),
+                ("HIGH", "High", "Important but event can proceed without", True, 20),
+                ("MEDIUM", "Medium", "Nice to have", True, 30),
+                ("LOW", "Low", "Optional / stretch goal", True, 40),
+            ]
+            for code, name, desc, active, sort in priority_levels:
+                db.session.add(
+                    PriorityLevel(code=code, name=name, description=desc, is_active=active, sort_order=sort)
+                )
+            db.session.flush()
+
+        db.session.commit()
+
+    def ensure_demo_expense_accounts():
+        """Seed expense accounts (replaces old BudgetItemType)."""
+        from .models import (
+            ExpenseAccount,
+            ApprovalGroup,
+            SpendType,
+            SPEND_TYPE_MODE_SINGLE_LOCKED,
+            SPEND_TYPE_MODE_ALLOW_LIST,
+        )
+
+        if db.session.query(ExpenseAccount).first():
             return
 
         groups_by_code = {g.code: g for g in db.session.query(ApprovalGroup).all()}
+        spend_by_code = {s.code: s for s in db.session.query(SpendType).all()}
 
-        demo_types = [
-            ("ITM-TECH-001", "Radios (Rental)", "Divvy", "TECH", "Handheld radios rental for operations"),
-            ("ITM-TECH-002", "iPads / Laptops (Rental)", "Divvy", "TECH", "Hartford rental computing devices"),
-            ("ITM-HOTEL-001", "Ethernet Drops", "Hotel Fee", "HOTEL", "Hardline internet drops from venue"),
-            ("ITM-OTH-001", "Office Supplies", "Bank", "OTHER", "General office supplies"),
+        # Demo expense accounts
+        demo_accounts = [
+            # code, name, desc, approval_group, default_spend_type, spend_mode, is_fixed, unit_price_cents
+            ("RADIO_RENTAL", "Radios (Rental)", "Handheld radios rental for operations",
+             "TECH", "DIVVY", SPEND_TYPE_MODE_SINGLE_LOCKED, True, 5000),
+            ("LAPTOP_RENTAL", "iPads / Laptops (Rental)", "Hartford rental computing devices",
+             "TECH", "DIVVY", SPEND_TYPE_MODE_SINGLE_LOCKED, True, 15000),
+            ("ETHERNET_DROPS", "Ethernet Drops", "Hardline internet drops from venue",
+             "HOTEL", "HOTEL_FEE", SPEND_TYPE_MODE_SINGLE_LOCKED, True, 7500),
+            ("OFFICE_SUPPLIES", "Office Supplies", "General office supplies",
+             "OTHER", "BANK", SPEND_TYPE_MODE_ALLOW_LIST, False, None),
         ]
 
-        for item_id, name, spend, group_code, desc in demo_types:
-            g = groups_by_code[group_code]
+        for code, name, desc, group_code, spend_code, spend_mode, is_fixed, unit_price in demo_accounts:
+            group = groups_by_code.get(group_code)
+            spend_type = spend_by_code.get(spend_code)
+
             db.session.add(
-                BudgetItemType(
-                    item_id=item_id,
-                    item_name=name,
-                    item_description=desc,
-                    spend_type=spend,
-                    approval_group_id=g.id,
+                ExpenseAccount(
+                    code=code,
+                    name=name,
+                    description=desc,
+                    approval_group_id=group.id if group else None,
+                    default_spend_type_id=spend_type.id if spend_type else None,
+                    spend_type_mode=spend_mode,
+                    is_fixed_cost=is_fixed,
+                    default_unit_price_cents=unit_price,
+                    unit_price_locked=is_fixed,
                     is_active=True,
                 )
             )
 
         db.session.commit()
 
+    def ensure_demo_budget_data():
+        """Combined seeder for all budget reference data."""
+        ensure_demo_reference_data()
+        ensure_demo_expense_accounts()
+
     def ensure_demo_users():
-        from .models_old import User, UserRole, ApprovalGroup
+        from .models import User, UserRole, ApprovalGroup, ROLE_SUPER_ADMIN, ROLE_APPROVER
 
         ensure_demo_budget_data()
         ensure_demo_org_data()
@@ -98,32 +196,31 @@ def create_app() -> Flask:
         tech_group_id = tech.id
         hotel_group_id = hotel.id
 
+        # role format: (role_code, work_type_id, approval_group_id)
         demo_users = [
-            # Plain users
-            ("dev:pat", "pat@dev.local", "dev:pat", "Pat (No Dept)", True, [("REQUESTER", None)]),
+            # Plain users (no special role)
+            ("dev:pat", "pat@dev.local", "dev:pat", "Pat (No Dept)", True, []),
 
             # Arcades
-            ("dev:alex", "alex@dev.local", "dev:alex", "Alex (Arcades DH)", True, [("REQUESTER", None)]),
-            ("dev:riley", "riley@dev.local", "dev:riley", "Riley (Arcades Editor)", True, [("REQUESTER", None)]),
-            ("dev:sam", "sam@dev.local", "dev:sam", "Sam (Arcades Viewer)", True, [("REQUESTER", None)]),
+            ("dev:alex", "alex@dev.local", "dev:alex", "Alex (Arcades DH)", True, []),
+            ("dev:riley", "riley@dev.local", "dev:riley", "Riley (Arcades Editor)", True, []),
+            ("dev:sam", "sam@dev.local", "dev:sam", "Sam (Arcades Viewer)", True, []),
 
             # Guests
-            ("dev:jordan", "jordan@dev.local", "dev:jordan", "Jordan (Guests DH)", True, [("REQUESTER", None)]),
-            ("dev:casey", "casey@dev.local", "dev:casey", "Casey (Guests Editor)", True, [("REQUESTER", None)]),
+            ("dev:jordan", "jordan@dev.local", "dev:jordan", "Jordan (Guests DH)", True, []),
+            ("dev:casey", "casey@dev.local", "dev:casey", "Casey (Guests Editor)", True, []),
 
             # Mixed membership
-            ("dev:morgan", "morgan@dev.local", "dev:morgan", "Morgan (Arcades View / Guests Edit)", True,
-             [("REQUESTER", None)]),
+            ("dev:morgan", "morgan@dev.local", "dev:morgan", "Morgan (Arcades View / Guests Edit)", True, []),
 
-            # Approvers
+            # Approvers (scoped to approval group)
             ("dev:tech_approver", "tech.approver@dev.local", "dev:tech_approver", "Tech Approver (Demo)", True,
-             [("APPROVER", tech_group_id)]),
+             [(ROLE_APPROVER, None, tech_group_id)]),
             ("dev:hotel_approver", "hotel.approver@dev.local", "dev:hotel_approver", "Hotel Approver (Demo)", True,
-             [("APPROVER", hotel_group_id)]),
+             [(ROLE_APPROVER, None, hotel_group_id)]),
 
             # Elevated
-            ("dev:admin", "admin@dev.local", "dev:admin", "Admin (Demo)", True, [("ADMIN", None)]),
-            ("dev:finance", "finance@dev.local", "dev:finance", "Finance (Demo)", True, [("FINANCE", None)]),
+            ("dev:admin", "admin@dev.local", "dev:admin", "Admin (Demo)", True, [(ROLE_SUPER_ADMIN, None, None)]),
         ]
 
         for user_id, email, auth_subject, display_name, is_active, roles in demo_users:
@@ -139,15 +236,19 @@ def create_app() -> Flask:
 
             # roles: easiest is clear then recreate for demo users
             db.session.query(UserRole).filter_by(user_id=user_id).delete()
-            for role_code, group_id in roles:
-                db.session.add(UserRole(user_id=user_id, role_code=role_code, approval_group_id=group_id))
+            for role_code, work_type_id, approval_group_id in roles:
+                db.session.add(UserRole(
+                    user_id=user_id,
+                    role_code=role_code,
+                    work_type_id=work_type_id,
+                    approval_group_id=approval_group_id,
+                ))
 
         db.session.commit()
         ensure_demo_department_memberships()
 
     def ensure_demo_org_data():
-        # Requires Department + EventCycle models to exist in models_old.py
-        from .models_old import Department, EventCycle
+        from .models import Department, EventCycle
 
         # Seed EventCycles if empty
         any_cycle = db.session.query(EventCycle).first()
@@ -197,7 +298,7 @@ def create_app() -> Flask:
         db.session.commit()
 
     def ensure_demo_department_memberships():
-        from .models_old import (
+        from .models import (
             User,
             Department,
             EventCycle,
@@ -268,7 +369,7 @@ def create_app() -> Flask:
             ("dev:morgan", "GUEST", True, True, False),
         ]
 
-        # Validate users exist (fail loudly if demo users aren’t seeded)
+        # Validate users exist (fail loudly if demo users aren't seeded)
         user_ids = [u[0] for u in membership_plan]
         found = {u.id for u in db.session.query(User.id).filter(User.id.in_(user_ids)).all()}
         missing_users = [uid for uid in user_ids if uid not in found]
@@ -291,11 +392,11 @@ def create_app() -> Flask:
         return session.get("active_user_id") or "dev:alex"
 
     def get_active_user():
-        from .models_old import User
+        from .models import User
         return db.session.get(User, get_active_user_id())
 
     def active_user_roles() -> list[str]:
-        from .models_old import UserRole
+        from .models import UserRole
         uid = get_active_user_id()
         rows = db.session.query(UserRole.role_code).filter(UserRole.user_id == uid).all()
         return [r[0] for r in rows]
@@ -304,18 +405,21 @@ def create_app() -> Flask:
         return role_code in set(active_user_roles())
 
     def is_admin() -> bool:
-        return has_role("ADMIN")
+        from .models import ROLE_SUPER_ADMIN, ROLE_WORKTYPE_ADMIN
+        roles = set(active_user_roles())
+        return ROLE_SUPER_ADMIN in roles or ROLE_WORKTYPE_ADMIN in roles
 
     def is_finance() -> bool:
-        return has_role("FINANCE")
+        # Finance role removed in new schema; super admin covers this
+        return is_admin()
 
     def active_user_approval_group_ids() -> set[int]:
-        from .models_old import UserRole
+        from .models import UserRole, ROLE_APPROVER
         uid = get_active_user_id()
         rows = (
             db.session.query(UserRole.approval_group_id)
             .filter(UserRole.user_id == uid)
-            .filter(UserRole.role_code == "APPROVER")
+            .filter(UserRole.role_code == ROLE_APPROVER)
             .filter(UserRole.approval_group_id.isnot(None))
             .all()
         )
@@ -336,40 +440,13 @@ def create_app() -> Flask:
             "is_finance": is_finance(),
         }
 
-    def _recalculate_request_status_from_lines(revision):
+    # Placeholder for legacy route helper - will be removed when routes are updated
+    def _recalculate_work_item_status(work_item):
         """
-        Derive request.current_status from line review statuses for a revision.
-
-        Rules:
-        - NEEDS_REVISION is request-level only; do not overwrite it here.
-        - Do not auto-promote to APPROVED. Final approval is explicit via /requests/<id>/approve.
-        - Do not auto-downgrade APPROVED.
-        - Otherwise, request stays SUBMITTED while any line review exists (regardless of mix).
+        Placeholder for work item status recalculation.
+        Will be implemented when routes are updated to use new models.
         """
-        from .models_old import LineReview, Request
-
-        reviews = (
-            db.session.query(LineReview.status)
-            .join(LineReview.request_line)
-            .filter(LineReview.request_line.has(revision_id=revision.id))
-            .all()
-        )
-
-        if not reviews:
-            return
-
-        req = db.session.get(Request, revision.request_id)
-        if not req:
-            return
-
-        cur = (req.current_status or "").upper()
-        if cur == "NEEDS_REVISION":
-            return
-        if cur == "APPROVED":
-            return
-
-        # Under review state; line status detail is expressed in the UI
-        req.current_status = "SUBMITTED"
+        pass
 
     from .routes import register_all_routes, RouteHelpers
 
@@ -386,7 +463,7 @@ def create_app() -> Flask:
             is_finance=is_finance,
             active_user_approval_group_ids=active_user_approval_group_ids,
             can_review_group=can_review_group,
-            recalc_request_status_from_lines=_recalculate_request_status_from_lines,
+            recalc_request_status_from_lines=_recalculate_work_item_status,
         ),
     )
 
