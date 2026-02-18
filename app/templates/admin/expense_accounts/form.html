@@ -32,9 +32,10 @@
         <label for="code" style="display: block; font-weight: 600; margin-bottom: 6px;">Code</label>
         <input id="code" name="code" type="text" required
                value="{{ account.code if account else '' }}"
-               placeholder="e.g. HOTEL_GAYLORD"
+               placeholder="e.g. HTL_ROOM_REG"
+               maxlength="16"
                {% if not can_modify %}disabled{% endif %} />
-        <div class="muted small" style="margin-top: 4px;">Unique identifier. Will be uppercased.</div>
+        <div class="muted small" style="margin-top: 4px;">Unique identifier. Max 16 chars. Use prefixes: HTL, VEN, EVT, EQUIP, MERCH, WH.</div>
       </div>
 
       <div>

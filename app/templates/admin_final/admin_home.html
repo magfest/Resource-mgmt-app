@@ -142,7 +142,19 @@
   {# Configuration Links #}
   <section class="card">
     <h3 style="margin:0 0 16px 0;">Configuration</h3>
-    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+      <a href="{{ url_for('admin_config.users.list_users') }}" class="card" style="text-align: center; text-decoration: none; color: inherit; padding: 16px;">
+        <div style="font-size: 24px; margin-bottom: 8px;">U</div>
+        <div style="font-weight: 600;">Users</div>
+      </a>
+      <a href="{{ url_for('admin_config.divisions.list_divisions') }}" class="card" style="text-align: center; text-decoration: none; color: inherit; padding: 16px;">
+        <div style="font-size: 24px; margin-bottom: 8px;">V</div>
+        <div style="font-weight: 600;">Divisions</div>
+      </a>
+      <a href="{{ url_for('admin_config.departments.list_departments') }}" class="card" style="text-align: center; text-decoration: none; color: inherit; padding: 16px;">
+        <div style="font-size: 24px; margin-bottom: 8px;">D</div>
+        <div style="font-weight: 600;">Departments</div>
+      </a>
       <a href="{{ url_for('admin_config.expense_accounts.list_expense_accounts') }}" class="card" style="text-align: center; text-decoration: none; color: inherit; padding: 16px;">
         <div style="font-size: 24px; margin-bottom: 8px;">$</div>
         <div style="font-weight: 600;">Expense Accounts</div>
@@ -150,10 +162,6 @@
       <a href="{{ url_for('admin_config.approval_groups.list_approval_groups') }}" class="card" style="text-align: center; text-decoration: none; color: inherit; padding: 16px;">
         <div style="font-size: 24px; margin-bottom: 8px;">G</div>
         <div style="font-weight: 600;">Approval Groups</div>
-      </a>
-      <a href="{{ url_for('admin_config.departments.list_departments') }}" class="card" style="text-align: center; text-decoration: none; color: inherit; padding: 16px;">
-        <div style="font-size: 24px; margin-bottom: 8px;">D</div>
-        <div style="font-weight: 600;">Departments</div>
       </a>
       <a href="{{ url_for('admin_config.event_cycles.list_event_cycles') }}" class="card" style="text-align: center; text-decoration: none; color: inherit; padding: 16px;">
         <div style="font-size: 24px; margin-bottom: 8px;">E</div>

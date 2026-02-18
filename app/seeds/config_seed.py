@@ -22,6 +22,7 @@ from app.models import (
     ApprovalGroup,
     ConfidenceLevel,
     Department,
+    Division,
     EventCycle,
     ExpenseAccount,
     FrequencyOption,
@@ -150,44 +151,149 @@ def seed_reference_data():
         print("  Created priority levels")
 
 
-def seed_departments() -> dict[str, Department]:
-    """Seed departments including OFFICE for admin-restricted items."""
-    print("Seeding departments...")
+def seed_divisions() -> dict[str, Division]:
+    """Seed divisions from CSV data."""
+    print("Seeding divisions...")
 
-    depts_data = [
-        ("OFFICE", "Office/Admin", "Administrative and office operations", 5),
-        ("TECHOPS", "TechOps", "Technical operations", 10),
-        ("HOTELS", "Hotels", "Hotel and venue coordination", 20),
-        ("BROADCAST", "BroadcastOps", "Broadcasting and streaming", 30),
-        ("FESTOPS", "FestOps", "Festival operations", 40),
-        ("SUPPLY", "SupplyOps", "Supply chain and logistics", 50),
-        ("REG", "Registration", "Registration and check-in", 60),
-        ("PANEL", "Panels", "Panel programming", 70),
-        ("GUEST", "Guests", "Guest relations", 80),
-        ("ARCADE", "Arcades", "Arcade gaming", 90),
-        ("CONSOLE", "Console", "Console gaming", 100),
-        ("TABLETOP", "Tabletop", "Tabletop gaming", 110),
-        ("MUSIC", "Music", "Music programming", 120),
-        ("SECURITY", "Security", "Security operations", 130),
-        ("MERCH", "Merchandise", "Merchandise sales", 140),
+    divisions_data = [
+        ("ADMIN", "Admin/Support", "Administrative and support departments", 10),
+        ("COMMS", "Communications Division", "Communications, media, and promotional departments", 20),
+        ("GAMING", "Gaming Division", "Gaming departments including arcade, console, tabletop, and more", 30),
+        ("MUSIC", "Music Division", "Music performance and venue departments", 40),
+        ("FESTOPS", "Fest Ops Division", "Festival operations and logistics departments", 50),
+        ("PROGRAMMING", "Programming Division", "Programming and event content departments", 60),
+        ("STAFF_SERVICES", "Staff Services Division", "Staff support and services departments", 70),
     ]
 
-    departments = {}
-    for code, name, description, sort_order in depts_data:
-        existing = db.session.query(Department).filter_by(code=code).first()
+    divisions = {}
+    for code, name, description, sort_order in divisions_data:
+        existing = db.session.query(Division).filter_by(code=code).first()
         if existing:
-            departments[code] = existing
+            divisions[code] = existing
             continue
 
-        dept = Department(
+        division = Division(
             code=code,
             name=name,
             description=description,
             is_active=True,
             sort_order=sort_order,
         )
-        db.session.add(dept)
-        departments[code] = dept
+        db.session.add(division)
+        divisions[code] = division
+
+    db.session.flush()
+    print(f"  Created {len(divisions)} divisions")
+    return divisions
+
+
+def seed_departments(divisions: dict[str, Division] = None) -> dict[str, Department]:
+    """Seed departments from CSV, linking to divisions."""
+    print("Seeding departments...")
+
+    import csv
+
+    # Map division names from CSV to division codes
+    division_name_to_code = {
+        "Admin/Support": "ADMIN",
+        "Communications Division": "COMMS",
+        "Gaming Division": "GAMING",
+        "Music Division": "MUSIC",
+        "Fest Ops Division": "FESTOPS",
+        "Programming Division": "PROGRAMMING",
+        "Staff Services Division": "STAFF_SERVICES",
+    }
+
+    # Find the CSV file
+    project_root = Path(__file__).parent.parent.parent
+    csv_path = project_root / "Demo_Data" / "Super_MAGFest_Department_Contacts_Clean_with_Division.csv"
+
+    departments = {}
+    sort_order = 10
+
+    if csv_path.exists() and divisions:
+        print(f"  Reading departments from {csv_path.name}...")
+        with open(csv_path, newline='', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                division_name = row.get('Division', '').strip()
+                dept_name = row.get('Department/Team', '').strip()
+                description = row.get('Description', '').strip() or None
+                mailing_list = row.get('Department Mailing List', '').strip() or None
+                slack_channel = row.get('Public Slack', '').strip() or None
+
+                # Skip rows without department name
+                if not dept_name:
+                    continue
+
+                # Generate code from department name
+                code = slugify(dept_name)
+
+                # Skip if already processed (duplicate rows)
+                if code in departments:
+                    continue
+
+                # Look up division
+                division_code = division_name_to_code.get(division_name)
+                division = divisions.get(division_code) if division_code else None
+
+                existing = db.session.query(Department).filter_by(code=code).first()
+                if existing:
+                    # Update existing department with division if not set
+                    if division and not existing.division_id:
+                        existing.division_id = division.id
+                    departments[code] = existing
+                    continue
+
+                dept = Department(
+                    code=code,
+                    name=dept_name,
+                    description=description,
+                    mailing_list=mailing_list,
+                    slack_channel=slack_channel,
+                    division_id=division.id if division else None,
+                    is_active=True,
+                    sort_order=sort_order,
+                )
+                db.session.add(dept)
+                departments[code] = dept
+                sort_order += 10
+    else:
+        # Fallback to hardcoded data if CSV not found or no divisions
+        print("  CSV not found, using fallback department data...")
+        depts_data = [
+            ("OFFICE", "Office/Admin", "Administrative and office operations", 5),
+            ("TECHOPS", "TechOps", "Technical operations", 10),
+            ("HOTELS", "Hotels", "Hotel and venue coordination", 20),
+            ("BROADCAST", "BroadcastOps", "Broadcasting and streaming", 30),
+            ("FESTOPS", "FestOps", "Festival operations", 40),
+            ("SUPPLY", "SupplyOps", "Supply chain and logistics", 50),
+            ("REG", "Registration", "Registration and check-in", 60),
+            ("PANEL", "Panels", "Panel programming", 70),
+            ("GUEST", "Guests", "Guest relations", 80),
+            ("ARCADE", "Arcades", "Arcade gaming", 90),
+            ("CONSOLE", "Console", "Console gaming", 100),
+            ("TABLETOP", "Tabletop", "Tabletop gaming", 110),
+            ("MUSIC", "Music", "Music programming", 120),
+            ("SECURITY", "Security", "Security operations", 130),
+            ("MERCH", "Merchandise", "Merchandise sales", 140),
+        ]
+
+        for code, name, description, sort_order in depts_data:
+            existing = db.session.query(Department).filter_by(code=code).first()
+            if existing:
+                departments[code] = existing
+                continue
+
+            dept = Department(
+                code=code,
+                name=name,
+                description=description,
+                is_active=True,
+                sort_order=sort_order,
+            )
+            db.session.add(dept)
+            departments[code] = dept
 
     db.session.flush()
     print(f"  Created {len(departments)} departments")
@@ -349,12 +455,13 @@ def seed_expense_accounts_from_spreadsheet(
 
         # Check if this is Hotel Rooms (needs expansion into variants)
         if name == 'Hotel Rooms' and has_fixed_cost:
-            # Create multiple accounts for hotel room variants
+            # Create multiple accounts for hotel room variants (MAGFest-paid)
+            # Codes abbreviated: HTL=Hotel, ATR=Atrium, EXEC=Executive, HOSP=Hospitality, REG=Regular
             hotel_variants = [
-                ("HOTEL_ROOM_REGULAR", "Hotel Room - Regular", 24400, "Regular sleeping room (king/double-double)"),
-                ("HOTEL_ROOM_ATRIUM", "Hotel Room - Atrium", 28900, "Atrium sleeping room (king/double-double)"),
-                ("HOTEL_ROOM_EXEC_SUITE", "Hotel Room - Executive Suite", 50910, "Executive suite"),
-                ("HOTEL_ROOM_HOSP_SUITE", "Hotel Room - Hospitality Suite", 69950, "Hospitality suite"),
+                ("HTL_ROOM_REG", "Hotel Room - Regular", 24400, "Regular sleeping room (king/double-double)"),
+                ("HTL_ROOM_ATR", "Hotel Room - Atrium", 28900, "Atrium sleeping room (king/double-double)"),
+                ("HTL_ROOM_EXEC", "Hotel Room - Executive Suite", 50910, "Executive suite"),
+                ("HTL_ROOM_HOSP", "Hotel Room - Hospitality Suite", 69950, "Hospitality suite"),
             ]
 
             for code, variant_name, price_cents, desc in hotel_variants:
@@ -371,6 +478,33 @@ def seed_expense_accounts_from_spreadsheet(
                     default_unit_price_cents=price_cents,
                     office_dept=office_dept,
                     sort_order=sort_order,
+                )
+                sort_order += 10
+                accounts_created += 1
+
+            # Create held room variants (not MAGFest-paid, $0 cost, informational only)
+            held_room_variants = [
+                ("HTL_HELD_REG", "Hotel Held Room - Regular", "Regular room held for participant (not MAGFest-paid)"),
+                ("HTL_HELD_ATR", "Hotel Held Room - Atrium", "Atrium room held for participant (not MAGFest-paid)"),
+                ("HTL_HELD_EXEC", "Hotel Held Room - Executive Suite", "Executive suite held for participant (not MAGFest-paid)"),
+                ("HTL_HELD_HOSP", "Hotel Held Room - Hospitality Suite", "Hospitality suite held for participant (not MAGFest-paid)"),
+            ]
+
+            for code, variant_name, desc in held_room_variants:
+                account = create_expense_account(
+                    code=code,
+                    name=variant_name,
+                    description=desc,
+                    spend_type_codes=['BANK'],  # Still use BANK spend type for consistency
+                    spend_types=spend_types,
+                    approval_group=approval_groups.get('HOTEL'),
+                    is_admin_only=False,
+                    is_contract_eligible=False,  # Not contract eligible since no cost
+                    is_fixed_cost=True,  # Fixed at $0
+                    default_unit_price_cents=0,  # No budget impact
+                    office_dept=office_dept,
+                    sort_order=sort_order,
+                    prompt_mode_override=PROMPT_MODE_NONE,  # Don't prompt - these are optional
                 )
                 sort_order += 10
                 accounts_created += 1
@@ -397,9 +531,9 @@ def seed_expense_accounts_from_spreadsheet(
             sort_order += 10
             accounts_created += 1
 
-            # Create Gaylord parking variant
+            # Create Gaylord parking variant (GNH = Gaylord National Harbor)
             account = create_expense_account(
-                code="PARKING_GAYLORD",
+                code="PARKING_GNH",
                 name="Parking - Gaylord",
                 description="Gaylord hotel parking",
                 spend_type_codes=['DIVVY'],
@@ -466,6 +600,7 @@ def create_expense_account(
     default_unit_price_cents: Optional[int],
     office_dept: Optional[Department],
     sort_order: int,
+    prompt_mode_override: Optional[str] = None,
 ) -> ExpenseAccount:
     """Create an expense account with proper settings."""
 
@@ -480,8 +615,11 @@ def create_expense_account(
     # Determine visibility mode
     visibility_mode = VISIBILITY_MODE_RESTRICTED if is_admin_only else VISIBILITY_MODE_ALL
 
-    # Determine prompt mode for fixed-cost items
-    prompt_mode = PROMPT_MODE_REQUIRE_EXPLICIT_NA if is_fixed_cost else PROMPT_MODE_NONE
+    # Determine prompt mode for fixed-cost items (use override if provided)
+    if prompt_mode_override is not None:
+        prompt_mode = prompt_mode_override
+    else:
+        prompt_mode = PROMPT_MODE_REQUIRE_EXPLICIT_NA if is_fixed_cost else PROMPT_MODE_NONE
 
     # Determine UI group
     ui_display_group = UI_GROUP_KNOWN_COSTS if is_fixed_cost else None
@@ -528,7 +666,8 @@ def run_all_seeds():
     approval_groups = seed_approval_groups()
     spend_types = seed_spend_types()
     seed_reference_data()
-    departments = seed_departments()
+    divisions = seed_divisions()
+    departments = seed_departments(divisions)
     event_cycles = seed_event_cycles()
     seed_expense_accounts_from_spreadsheet(approval_groups, spend_types, departments)
 

@@ -28,6 +28,7 @@
     <tr>
       <th style="width: 100px;">Code</th>
       <th style="width: 180px;">Name</th>
+      <th style="width: 140px;">Division</th>
       <th>Description</th>
       <th style="width: 150px;">Mailing List</th>
       <th style="width: 120px;">Slack</th>
@@ -42,10 +43,13 @@
       <tr>
         <td class="num">{{ dept.code }}</td>
         <td>{{ dept.name }}</td>
+        <td class="muted small">{{ dept.division.name if dept.division else '—' }}</td>
         <td class="muted small">{{ dept.description or '—' }}</td>
         <td class="muted small">{{ dept.mailing_list or '—' }}</td>
         <td class="muted small">{{ dept.slack_channel or '—' }}</td>
-        <td class="num">{{ member_counts.get(dept.id, 0) }}</td>
+        <td class="num">
+          <a href="{{ url_for('admin_config.departments.list_members', dept_id=dept.id) }}">{{ member_counts.get(dept.id, 0) }}</a>
+        </td>
         <td class="num">{{ dept.sort_order }}</td>
         <td>
           {% if dept.is_active %}
@@ -60,7 +64,7 @@
       </tr>
     {% else %}
       <tr>
-        <td colspan="9" class="muted">No departments found.</td>
+        <td colspan="10" class="muted">No departments found.</td>
       </tr>
     {% endfor %}
   </tbody>

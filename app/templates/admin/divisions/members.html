@@ -1,0 +1,89 @@
+{% extends "layout/base.html" %}
+
+{% block title %}{{ division.name }} - Members - Admin{% endblock %}
+
+{% block content %}
+<h1>{{ division.name }} - Division Members</h1>
+<div class="muted" style="margin-bottom: 16px;">
+  Manage users who have division-level access to all departments in this division.
+  Division heads can view and edit budget requests for any department in the division.
+</div>
+
+<div class="row" style="margin-bottom: 16px;">
+  <a class="btn btn-primary" href="{{ url_for('admin_config.divisions.add_member_form', division_id=division.id) }}">+ Add Member</a>
+  <a class="btn" href="{{ url_for('admin_config.divisions.edit_division', division_id=division.id) }}">Back to Division</a>
+</div>
+
+{% if memberships %}
+<table>
+  <thead>
+    <tr>
+      <th style="width: 200px;">User</th>
+      <th style="width: 120px;">Event Cycle</th>
+      <th style="width: 80px;">Can View</th>
+      <th style="width: 80px;">Can Edit</th>
+      <th style="width: 100px;">Division Head</th>
+      <th style="width: 150px;">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for m in memberships %}
+      <tr>
+        <td>
+          <strong>{{ m.user.display_name }}</strong>
+          <div class="muted small">{{ m.user.email }}</div>
+        </td>
+        <td>{{ m.event_cycle.code }}</td>
+        <td>
+          {% if m.can_view %}
+            <span class="pill" style="background: #e9f7ef;">Yes</span>
+          {% else %}
+            <span class="pill" style="background: #fbeaea;">No</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if m.can_edit %}
+            <span class="pill" style="background: #e9f7ef;">Yes</span>
+          {% else %}
+            <span class="pill" style="background: #fbeaea;">No</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if m.is_division_head %}
+            <span class="pill" style="background: #dbeafe; color: #1e40af;">Division Head</span>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="btn-row">
+            <a class="btn" href="{{ url_for('admin_config.divisions.edit_member', division_id=division.id, membership_id=m.id) }}">Edit</a>
+            <form method="post" action="{{ url_for('admin_config.divisions.delete_member', division_id=division.id, membership_id=m.id) }}" style="display: inline;">
+              <button class="btn" type="submit" onclick="return confirm('Remove this member?')">Remove</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="muted small" style="margin-top: 16px;">
+  {{ memberships|length }} member(s) in this division
+</div>
+{% else %}
+<div class="card" style="text-align: center; padding: 32px;">
+  <div class="muted">No members assigned to this division yet.</div>
+  <a class="btn btn-primary" style="margin-top: 16px;" href="{{ url_for('admin_config.divisions.add_member_form', division_id=division.id) }}">Add First Member</a>
+</div>
+{% endif %}
+
+<div class="callout" style="margin-top: 24px;">
+  <strong>Permission Levels</strong>
+  <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+    <li><strong>Can View</strong>: User can view budget requests for all departments in this division</li>
+    <li><strong>Can Edit</strong>: User can create, edit, and submit budget requests for all departments in this division</li>
+    <li><strong>Division Head</strong>: Informational flag to identify division leadership (enables Can View + Can Edit)</li>
+  </ul>
+</div>
+{% endblock %}

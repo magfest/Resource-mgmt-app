@@ -23,10 +23,10 @@
 
       <div>
         <label for="code" style="display: block; font-weight: 600; margin-bottom: 6px;">Code</label>
-        <input id="code" name="code" type="text" required
+        <input id="code" name="code" type="text" required maxlength="16"
                value="{{ cycle.code if cycle else '' }}"
                placeholder="e.g. SMF2026" />
-        <div class="muted small" style="margin-top: 4px;">Unique identifier. Will be uppercased.</div>
+        <div class="muted small" style="margin-top: 4px;">Unique identifier (max 16 chars). Will be uppercased.</div>
       </div>
 
       <div>

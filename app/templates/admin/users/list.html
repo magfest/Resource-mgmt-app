@@ -1,0 +1,82 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Users - Admin{% endblock %}
+
+{% block content %}
+<h1>Users</h1>
+<div class="muted" style="margin-bottom: 16px;">
+  Manage user accounts and their system roles.
+</div>
+
+<div class="row" style="margin-bottom: 16px;">
+  <a class="btn btn-primary" href="{{ url_for('admin_config.users.new_user') }}">+ New User</a>
+
+  <form method="get" action="{{ url_for('admin_config.users.list_users') }}" class="row" style="margin: 0; gap: 8px;">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search by name or email..." style="width: 200px;" />
+    <label class="muted" style="display: flex; gap: 6px; align-items: center;">
+      <input type="checkbox" name="show_inactive" value="1" {% if show_inactive %}checked{% endif %}>
+      show inactive
+    </label>
+    <button class="btn" type="submit">Search</button>
+    {% if q or show_inactive %}
+      <a class="btn" href="{{ url_for('admin_config.users.list_users') }}">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 200px;">Name</th>
+      <th style="width: 250px;">Email</th>
+      <th>Roles</th>
+      <th style="width: 70px;">Status</th>
+      <th style="width: 80px;">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for user in users %}
+      <tr>
+        <td>
+          <strong>{{ user.display_name }}</strong>
+          {% if user.auth_subject %}
+            <span class="muted small" title="Google account linked">G</span>
+          {% endif %}
+        </td>
+        <td class="muted">{{ user.email }}</td>
+        <td>
+          {% for role in user.roles %}
+            {% if role.role_code == 'SUPER_ADMIN' %}
+              <span class="pill" style="background: #fef3c7; color: #92400e;">Super Admin</span>
+            {% elif role.role_code == 'WORKTYPE_ADMIN' %}
+              <span class="pill" style="background: #dbeafe; color: #1e40af;">{{ role.work_type.code }} Admin</span>
+            {% elif role.role_code == 'APPROVER' %}
+              <span class="pill" style="background: #e9f7ef;">{{ role.approval_group.code }}</span>
+            {% endif %}
+          {% else %}
+            <span class="muted">—</span>
+          {% endfor %}
+        </td>
+        <td>
+          {% if user.is_active %}
+            <span class="pill" style="background: #e9f7ef;">Active</span>
+          {% else %}
+            <span class="pill" style="background: #fbeaea;">Inactive</span>
+          {% endif %}
+        </td>
+        <td>
+          <a class="btn" href="{{ url_for('admin_config.users.edit_user', user_id=user.id) }}">Edit</a>
+        </td>
+      </tr>
+    {% else %}
+      <tr>
+        <td colspan="5" class="muted">No users found.</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="muted small" style="margin-top: 16px;">
+  {{ users|length }} user(s) shown
+</div>
+{% endblock %}

@@ -16,6 +16,7 @@ from app.models import (
     EventCycle,
     Department,
     DepartmentMembership,
+    DivisionMembership,
     WorkType,
     WorkPortfolio,
     WorkItem,
@@ -68,6 +69,7 @@ class PortfolioContext:
     work_type: WorkType
     user_ctx: UserContext
     membership: DepartmentMembership | None
+    division_membership: DivisionMembership | None  # Division-level access
 
 
 @dataclass(frozen=True)
@@ -165,6 +167,15 @@ def get_portfolio_context(event_code: str, dept_code: str) -> PortfolioContext:
         event_cycle_id=event_cycle.id,
     ).first()
 
+    # Get user's division membership (if department has a division)
+    division_membership = None
+    if department.division_id:
+        division_membership = DivisionMembership.query.filter_by(
+            user_id=user_ctx.user_id,
+            division_id=department.division_id,
+            event_cycle_id=event_cycle.id,
+        ).first()
+
     return PortfolioContext(
         event_cycle=event_cycle,
         department=department,
@@ -172,6 +183,7 @@ def get_portfolio_context(event_code: str, dept_code: str) -> PortfolioContext:
         work_type=work_type,
         user_ctx=user_ctx,
         membership=membership,
+        division_membership=division_membership,
     )
 
 
@@ -202,15 +214,20 @@ def build_portfolio_perms(ctx: PortfolioContext) -> PortfolioPerms:
     """Build permission flags for a portfolio."""
     is_admin = is_budget_admin(ctx.user_ctx, ctx.work_type.id)
 
-    # Membership permissions
+    # Department membership permissions
     m_can_view = bool(ctx.membership and ctx.membership.can_view)
     m_can_edit = bool(ctx.membership and ctx.membership.can_edit)
 
-    # View: admin or membership.can_view
-    can_view = is_admin or m_can_view
+    # Division membership permissions (division heads get access to all depts in division)
+    dm = ctx.division_membership
+    dm_can_view = bool(dm and dm.can_view)
+    dm_can_edit = bool(dm and dm.can_edit)
 
-    # Edit: admin or membership.can_edit
-    can_edit = is_admin or m_can_edit
+    # View: admin OR department membership OR division membership
+    can_view = is_admin or m_can_view or dm_can_view
+
+    # Edit: admin OR department membership OR division membership
+    can_edit = is_admin or m_can_edit or dm_can_edit
 
     # Check for existing PRIMARY
     existing_primary = WorkItem.query.filter_by(

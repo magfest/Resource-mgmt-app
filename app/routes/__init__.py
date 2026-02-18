@@ -380,7 +380,9 @@ def register_all_routes(app: Flask, helpers: RouteHelpers) -> None:
     from .budget import budget_bp
     from .approvals import approvals_bp
     from .admin_final import admin_final_bp
+    from .home import home_bp
 
+    app.register_blueprint(home_bp)
     app.register_blueprint(dev_bp)
     app.register_blueprint(requests_bp)
     app.register_blueprint(lines_bp)

@@ -20,6 +20,8 @@ from .helpers import (
     render_admin_config_page,
     log_config_change,
     track_changes,
+    validate_code_length,
+    CODE_MAX_LENGTH,
 )
 
 event_cycles_bp = Blueprint('event_cycles', __name__, url_prefix='/event-cycles')
@@ -95,6 +97,10 @@ def create_event_cycle():
         flash("Code and name are required", "error")
         return redirect(url_for(".new_event_cycle"))
 
+    # Validate code length
+    if not validate_code_length(code, "Code"):
+        return redirect(url_for(".new_event_cycle"))
+
     # Check for duplicate code
     existing = db.session.query(EventCycle).filter_by(code=code).first()
     if existing:
@@ -160,6 +166,10 @@ def update_event_cycle(cycle_id: int):
 
     if not code or not name:
         flash("Code and name are required", "error")
+        return redirect(url_for(".edit_event_cycle", cycle_id=cycle_id))
+
+    # Validate code length
+    if not validate_code_length(code, "Code"):
         return redirect(url_for(".edit_event_cycle", cycle_id=cycle_id))
 
     # Check for duplicate code

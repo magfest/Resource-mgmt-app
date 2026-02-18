@@ -1,0 +1,203 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Home - MAGFest Budget{% endblock %}
+
+{% block content %}
+
+{# Welcome Header #}
+<div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap: wrap; margin-bottom: 24px;">
+  <div>
+    <h1 style="margin:0;">Welcome, {{ user.display_name }}</h1>
+    <div class="muted" style="margin-top:4px;">
+      {% if default_cycle %}
+        {{ default_cycle.name }}
+      {% else %}
+        No active event cycle
+      {% endif %}
+    </div>
+  </div>
+  {% if is_super_admin %}
+    <span class="pill" style="background: #fef3c7; color: #92400e;">Super Admin</span>
+  {% endif %}
+</div>
+
+{% if not has_any_access %}
+{# No Access State #}
+<div class="card" style="text-align: center; padding: 48px; max-width: 600px; margin: 48px auto;">
+  <div style="font-size: 48px; margin-bottom: 16px;">?</div>
+  <h2 style="margin: 0 0 16px 0;">No Access Yet</h2>
+  <p class="muted" style="margin: 0;">
+    You don't currently have access to any departments or approval groups.
+    Contact an administrator to be added to a department or division.
+  </p>
+</div>
+
+{% else %}
+
+{# Super Admin Section #}
+{% if is_super_admin %}
+<section class="card" style="margin-bottom: 24px; background: #f0fdf4; border: 1px solid #059669;">
+  <h3 style="margin:0 0 16px 0;">Admin Quick Actions</h3>
+  <div class="btn-row" style="margin-bottom: 16px;">
+    <a class="btn btn-primary" href="{{ url_for('admin_final.admin_home') }}">
+      Admin Dashboard
+    </a>
+    <a class="btn" href="{{ url_for('admin_final.dashboard') }}">
+      Final Review
+    </a>
+    <a class="btn" href="{{ url_for('approvals.dashboard_home') }}">
+      Approval Groups
+    </a>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+    <div style="text-align: center; padding: 16px; background: white; border-radius: 6px;">
+      <div style="font-size: 28px; font-weight: 700; color: #0a66c2;">{{ submitted_count or 0 }}</div>
+      <div class="muted small">Submitted Requests</div>
+    </div>
+    <div style="text-align: center; padding: 16px; background: white; border-radius: 6px;">
+      <div style="font-size: 28px; font-weight: 700; color: #d97706;">{{ pending_lines or 0 }}</div>
+      <div class="muted small">Pending Lines</div>
+    </div>
+    <div style="text-align: center; padding: 16px; background: white; border-radius: 6px;">
+      <div style="font-size: 28px; font-weight: 700; color: #059669;">{{ approval_groups|length }}</div>
+      <div class="muted small">Approval Groups</div>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{# Approver Section #}
+{% if approval_groups %}
+<section class="card" style="margin-bottom: 24px; background: #eff6ff; border: 1px solid #3b82f6;">
+  <h3 style="margin:0 0 16px 0;">Your Approval Groups</h3>
+
+  {% if pending_for_approver %}
+  <div class="callout" style="background: #fef3c7; border-color: #f59e0b; margin-bottom: 16px;">
+    <strong>{{ pending_for_approver }} line(s)</strong> pending your review
+  </div>
+  {% endif %}
+
+  <div class="btn-row">
+    {% for group in approval_groups %}
+      <a class="btn" href="{{ url_for('approvals.dashboard_group', group_code=group.code) }}">
+        {{ group.name }}
+      </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{# Division Access Section #}
+{% if div_memberships %}
+<section class="card" style="margin-bottom: 24px;">
+  <h3 style="margin:0 0 16px 0;">Your Divisions</h3>
+  <p class="muted" style="margin-bottom: 16px;">
+    You have division-level access to all departments in these divisions.
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Division</th>
+        <th style="width: 100px;">Access</th>
+        <th style="width: 120px;">Role</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for dm in div_memberships %}
+        <tr>
+          <td>
+            <strong>{{ dm.division.name }}</strong>
+            <span class="muted small">({{ dm.division.code }})</span>
+          </td>
+          <td>
+            {% if dm.can_edit %}
+              <span class="pill" style="background: #e9f7ef;">Edit</span>
+            {% elif dm.can_view %}
+              <span class="pill" style="background: #dbeafe;">View</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if dm.is_division_head %}
+              <span class="pill" style="background: #fef3c7; color: #92400e;">Division Head</span>
+            {% else %}
+              <span class="muted">Member</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{# Department Access Section #}
+{% if dept_memberships %}
+<section class="card" style="margin-bottom: 24px;">
+  <h3 style="margin:0 0 16px 0;">Your Departments</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Department</th>
+        <th style="width: 120px;">Division</th>
+        <th style="width: 100px;">Access</th>
+        <th style="width: 120px;">Role</th>
+        <th style="width: 120px;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for dm in dept_memberships %}
+        <tr>
+          <td>
+            <strong>{{ dm.department.name }}</strong>
+            <span class="muted small">({{ dm.department.code }})</span>
+          </td>
+          <td class="muted small">
+            {{ dm.department.division.name if dm.department.division else '-' }}
+          </td>
+          <td>
+            {% if dm.can_edit %}
+              <span class="pill" style="background: #e9f7ef;">Edit</span>
+            {% elif dm.can_view %}
+              <span class="pill" style="background: #dbeafe;">View</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if dm.is_department_head %}
+              <span class="pill" style="background: #fef3c7; color: #92400e;">Dept Head</span>
+            {% else %}
+              <span class="muted">Member</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if default_cycle %}
+              <a class="btn" href="{{ url_for('budget.portfolio', event=default_cycle.code, dept=dm.department.code) }}">
+                View Budget
+              </a>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{# Quick Links #}
+<section class="card">
+  <h3 style="margin:0 0 16px 0;">Quick Links</h3>
+  <div class="btn-row">
+    {% if is_super_admin %}
+      <a class="btn" href="{{ url_for('admin_config.departments.list_departments') }}">Manage Departments</a>
+      <a class="btn" href="{{ url_for('admin_config.divisions.list_divisions') }}">Manage Divisions</a>
+      <a class="btn" href="{{ url_for('admin_config.users.list_users') }}">Manage Users</a>
+    {% endif %}
+    <a class="btn" href="{{ url_for('dev.dev_login') }}">Switch User (Dev)</a>
+  </div>
+</section>
+
+{% endif %}
+
+{% endblock %}

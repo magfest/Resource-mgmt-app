@@ -9,6 +9,9 @@ from app import db
 from app.models import (
     Department,
     DepartmentMembership,
+    Division,
+    EventCycle,
+    User,
     CONFIG_AUDIT_CREATE,
     CONFIG_AUDIT_UPDATE,
     CONFIG_AUDIT_ARCHIVE,
@@ -20,6 +23,8 @@ from .helpers import (
     render_admin_config_page,
     log_config_change,
     track_changes,
+    validate_code_length,
+    CODE_MAX_LENGTH,
 )
 
 departments_bp = Blueprint('departments', __name__, url_prefix='/departments')
@@ -38,12 +43,23 @@ def _dept_to_dict(dept: Department) -> dict:
     return {
         "code": dept.code,
         "name": dept.name,
+        "division_id": dept.division_id,
         "description": dept.description,
         "mailing_list": dept.mailing_list,
         "slack_channel": dept.slack_channel,
         "is_active": dept.is_active,
         "sort_order": dept.sort_order,
     }
+
+
+def _get_active_divisions():
+    """Get all active divisions for dropdown."""
+    return (
+        db.session.query(Division)
+        .filter(Division.is_active == True)
+        .order_by(Division.sort_order, Division.name)
+        .all()
+    )
 
 
 @departments_bp.get("/")
@@ -83,6 +99,7 @@ def new_department():
     return render_admin_config_page(
         "admin/departments/form.html",
         department=None,
+        divisions=_get_active_divisions(),
     )
 
 
@@ -97,15 +114,24 @@ def create_department():
         flash("Code and name are required", "error")
         return redirect(url_for(".new_department"))
 
+    # Validate code length
+    if not validate_code_length(code, "Code"):
+        return redirect(url_for(".new_department"))
+
     # Check for duplicate code
     existing = db.session.query(Department).filter_by(code=code).first()
     if existing:
         flash(f"A department with code '{code}' already exists", "error")
         return redirect(url_for(".new_department"))
 
+    # Parse division_id
+    division_id_str = request.form.get("division_id") or ""
+    division_id = int(division_id_str) if division_id_str.strip() else None
+
     dept = Department(
         code=code,
         name=name,
+        division_id=division_id,
         description=(request.form.get("description") or "").strip() or None,
         mailing_list=(request.form.get("mailing_list") or "").strip() or None,
         slack_channel=(request.form.get("slack_channel") or "").strip() or None,
@@ -142,6 +168,7 @@ def edit_department(dept_id: int):
         "admin/departments/form.html",
         department=dept,
         member_count=member_count,
+        divisions=_get_active_divisions(),
     )
 
 
@@ -160,6 +187,10 @@ def update_department(dept_id: int):
         flash("Code and name are required", "error")
         return redirect(url_for(".edit_department", dept_id=dept_id))
 
+    # Validate code length
+    if not validate_code_length(code, "Code"):
+        return redirect(url_for(".edit_department", dept_id=dept_id))
+
     # Check for duplicate code
     existing = db.session.query(Department).filter(
         Department.code == code,
@@ -169,8 +200,13 @@ def update_department(dept_id: int):
         flash(f"A department with code '{code}' already exists", "error")
         return redirect(url_for(".edit_department", dept_id=dept_id))
 
+    # Parse division_id
+    division_id_str = request.form.get("division_id") or ""
+    division_id = int(division_id_str) if division_id_str.strip() else None
+
     dept.code = code
     dept.name = name
+    dept.division_id = division_id
     dept.description = (request.form.get("description") or "").strip() or None
     dept.mailing_list = (request.form.get("mailing_list") or "").strip() or None
     dept.slack_channel = (request.form.get("slack_channel") or "").strip() or None
@@ -226,3 +262,168 @@ def restore_department(dept_id: int):
     db.session.commit()
     flash(f"Restored department: {dept.name}", "success")
     return redirect(url_for(".list_departments"))
+
+
+# ============================================================
+# Department Membership Management
+# ============================================================
+
+@departments_bp.get("/<int:dept_id>/members")
+@require_super_admin
+def list_members(dept_id: int):
+    """List all members of a department."""
+    dept = _get_department_or_404(dept_id)
+
+    # Get all memberships for this department
+    memberships = (
+        db.session.query(DepartmentMembership)
+        .filter(DepartmentMembership.department_id == dept_id)
+        .join(User)
+        .join(EventCycle)
+        .order_by(EventCycle.sort_order, User.display_name)
+        .all()
+    )
+
+    # Get available event cycles for adding new members
+    event_cycles = (
+        db.session.query(EventCycle)
+        .filter(EventCycle.is_active == True)
+        .order_by(EventCycle.sort_order)
+        .all()
+    )
+
+    return render_admin_config_page(
+        "admin/departments/members.html",
+        department=dept,
+        memberships=memberships,
+        event_cycles=event_cycles,
+    )
+
+
+@departments_bp.get("/<int:dept_id>/members/add")
+@require_super_admin
+def add_member_form(dept_id: int):
+    """Show form to add a department member."""
+    dept = _get_department_or_404(dept_id)
+
+    # Get available users (all active users)
+    users = (
+        db.session.query(User)
+        .filter(User.is_active == True)
+        .order_by(User.display_name)
+        .all()
+    )
+
+    # Get available event cycles
+    event_cycles = (
+        db.session.query(EventCycle)
+        .filter(EventCycle.is_active == True)
+        .order_by(EventCycle.sort_order)
+        .all()
+    )
+
+    return render_admin_config_page(
+        "admin/departments/member_form.html",
+        department=dept,
+        membership=None,
+        users=users,
+        event_cycles=event_cycles,
+    )
+
+
+@departments_bp.post("/<int:dept_id>/members")
+@require_super_admin
+def add_member(dept_id: int):
+    """Add a member to the department."""
+    dept = _get_department_or_404(dept_id)
+
+    user_id = request.form.get("user_id")
+    event_cycle_id = request.form.get("event_cycle_id")
+
+    if not user_id or not event_cycle_id:
+        flash("User and event cycle are required", "error")
+        return redirect(url_for(".add_member_form", dept_id=dept_id))
+
+    # Check for existing membership
+    existing = db.session.query(DepartmentMembership).filter_by(
+        user_id=user_id,
+        department_id=dept_id,
+        event_cycle_id=int(event_cycle_id),
+    ).first()
+
+    if existing:
+        flash("This user is already a member of this department for this event cycle", "error")
+        return redirect(url_for(".add_member_form", dept_id=dept_id))
+
+    membership = DepartmentMembership(
+        user_id=user_id,
+        department_id=dept_id,
+        event_cycle_id=int(event_cycle_id),
+        can_view=request.form.get("can_view") == "1",
+        can_edit=request.form.get("can_edit") == "1",
+        is_department_head=request.form.get("is_department_head") == "1",
+    )
+
+    db.session.add(membership)
+    db.session.commit()
+
+    user = db.session.get(User, user_id)
+    flash(f"Added {user.display_name} to {dept.name}", "success")
+    return redirect(url_for(".list_members", dept_id=dept_id))
+
+
+@departments_bp.get("/<int:dept_id>/members/<int:membership_id>")
+@require_super_admin
+def edit_member(dept_id: int, membership_id: int):
+    """Show form to edit a department membership."""
+    dept = _get_department_or_404(dept_id)
+
+    membership = db.session.get(DepartmentMembership, membership_id)
+    if not membership or membership.department_id != dept_id:
+        abort(404, "Membership not found")
+
+    return render_admin_config_page(
+        "admin/departments/member_form.html",
+        department=dept,
+        membership=membership,
+        users=None,  # Can't change user on edit
+        event_cycles=None,  # Can't change event cycle on edit
+    )
+
+
+@departments_bp.post("/<int:dept_id>/members/<int:membership_id>")
+@require_super_admin
+def update_member(dept_id: int, membership_id: int):
+    """Update a department membership."""
+    dept = _get_department_or_404(dept_id)
+
+    membership = db.session.get(DepartmentMembership, membership_id)
+    if not membership or membership.department_id != dept_id:
+        abort(404, "Membership not found")
+
+    membership.can_view = request.form.get("can_view") == "1"
+    membership.can_edit = request.form.get("can_edit") == "1"
+    membership.is_department_head = request.form.get("is_department_head") == "1"
+
+    db.session.commit()
+
+    flash(f"Updated membership for {membership.user.display_name}", "success")
+    return redirect(url_for(".list_members", dept_id=dept_id))
+
+
+@departments_bp.post("/<int:dept_id>/members/<int:membership_id>/delete")
+@require_super_admin
+def delete_member(dept_id: int, membership_id: int):
+    """Remove a member from the department."""
+    dept = _get_department_or_404(dept_id)
+
+    membership = db.session.get(DepartmentMembership, membership_id)
+    if not membership or membership.department_id != dept_id:
+        abort(404, "Membership not found")
+
+    user_name = membership.user.display_name
+    db.session.delete(membership)
+    db.session.commit()
+
+    flash(f"Removed {user_name} from {dept.name}", "success")
+    return redirect(url_for(".list_members", dept_id=dept_id))

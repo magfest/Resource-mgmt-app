@@ -118,12 +118,85 @@ class EventCycle(db.Model):
     updated_by_user_id = db.Column(db.String(64), nullable=True)
 
 
+class Division(db.Model):
+    __tablename__ = "divisions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(32), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(128), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    departments = db.relationship("Department", backref="division", lazy=True)
+    memberships = db.relationship("DivisionMembership", backref="division", lazy=True)
+
+
+class DivisionMembership(db.Model):
+    """
+    Division-level membership grants permissions across ALL departments in a division.
+    Division heads can view/edit/submit requests for any department in their division.
+    """
+    __tablename__ = "division_memberships"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(
+        db.String(64),
+        db.ForeignKey("users.id", name="fk_division_memberships_user_id"),
+        nullable=False,
+        index=True,
+    )
+
+    division_id = db.Column(
+        db.Integer,
+        db.ForeignKey("divisions.id", name="fk_division_memberships_division_id"),
+        nullable=False,
+        index=True,
+    )
+
+    event_cycle_id = db.Column(
+        db.Integer,
+        db.ForeignKey("event_cycles.id", name="fk_division_memberships_event_cycle_id"),
+        nullable=False,
+        index=True,
+    )
+
+    can_view = db.Column(db.Boolean, nullable=False, default=True)
+    can_edit = db.Column(db.Boolean, nullable=False, default=False)
+    is_division_head = db.Column(db.Boolean, nullable=False, default=False)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship("User", backref=db.backref("division_memberships", lazy=True))
+    event_cycle = db.relationship("EventCycle")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "user_id", "division_id", "event_cycle_id",
+            name="uq_division_membership_user_div_cycle",
+        ),
+    )
+
+
 class Department(db.Model):
     __tablename__ = "departments"
 
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(32), unique=True, nullable=False, index=True)  # TECHOPS, HOTELS, etc.
     name = db.Column(db.String(128), nullable=False)
+
+    division_id = db.Column(
+        db.Integer,
+        db.ForeignKey("divisions.id", name="fk_departments_division_id"),
+        nullable=True,  # Nullable for backwards compat
+        index=True,
+    )
 
     description = db.Column(db.Text, nullable=True)
     mailing_list = db.Column(db.String(256), nullable=True)

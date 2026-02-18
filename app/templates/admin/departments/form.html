@@ -23,10 +23,10 @@
 
       <div>
         <label for="code" style="display: block; font-weight: 600; margin-bottom: 6px;">Code</label>
-        <input id="code" name="code" type="text" required
+        <input id="code" name="code" type="text" required maxlength="16"
                value="{{ department.code if department else '' }}"
                placeholder="e.g. PANELS" />
-        <div class="muted small" style="margin-top: 4px;">Unique identifier. Will be uppercased.</div>
+        <div class="muted small" style="margin-top: 4px;">Unique identifier (max 16 chars). Will be uppercased.</div>
       </div>
 
       <div>
@@ -34,6 +34,20 @@
         <input id="name" name="name" type="text" required
                value="{{ department.name if department else '' }}"
                placeholder="e.g. Panels Department" />
+      </div>
+
+      <div style="grid-column: 1 / -1;">
+        <label for="division_id" style="display: block; font-weight: 600; margin-bottom: 6px;">Division</label>
+        <select id="division_id" name="division_id">
+          <option value="">— No Division —</option>
+          {% for div in divisions %}
+            <option value="{{ div.id }}"
+              {% if department and department.division_id == div.id %}selected{% endif %}>
+              {{ div.name }}
+            </option>
+          {% endfor %}
+        </select>
+        <div class="muted small" style="margin-top: 4px;">Optional organizational grouping for reporting.</div>
       </div>
 
       <div style="grid-column: 1 / -1;">
@@ -89,4 +103,18 @@
     </div>
   </form>
 </div>
+
+{% if department %}
+<div class="card" style="max-width: 700px; margin-top: 24px;">
+  <h3 style="margin: 0 0 12px 0;">Department Members</h3>
+  <p class="muted" style="margin-bottom: 16px;">
+    Manage which users can view and edit budget requests for this department.
+  </p>
+  <div class="btn-row">
+    <a class="btn btn-primary" href="{{ url_for('admin_config.departments.list_members', dept_id=department.id) }}">
+      Manage Members ({{ member_count or 0 }})
+    </a>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

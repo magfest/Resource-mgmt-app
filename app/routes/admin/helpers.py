@@ -10,6 +10,9 @@ from typing import Any
 
 from flask import abort, render_template, flash, request
 
+# Maximum length for entity codes (departments, divisions, approval groups, etc.)
+CODE_MAX_LENGTH = 16
+
 from app import db
 from app.models import (
     ROLE_SUPER_ADMIN,
@@ -104,3 +107,23 @@ def flash_errors(form_errors: dict[str, list[str]]):
     for field, errors in form_errors.items():
         for error in errors:
             flash(f"{field}: {error}", "error")
+
+
+def validate_code_length(code: str, entity_name: str = "Code") -> bool:
+    """
+    Validate that a code doesn't exceed the maximum length.
+
+    Args:
+        code: The code to validate
+        entity_name: Name to use in error message (e.g., "Department code")
+
+    Returns:
+        True if valid, False if too long (and flashes an error message)
+    """
+    if len(code) > CODE_MAX_LENGTH:
+        flash(
+            f"{entity_name} must be {CODE_MAX_LENGTH} characters or less (currently {len(code)})",
+            "error"
+        )
+        return False
+    return True

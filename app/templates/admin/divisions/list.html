@@ -1,0 +1,73 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Divisions - Admin{% endblock %}
+
+{% block content %}
+<h1>Divisions</h1>
+<div class="muted" style="margin-bottom: 16px;">
+  Manage organizational divisions that group departments for reporting.
+</div>
+
+<div class="row" style="margin-bottom: 16px;">
+  <a class="btn btn-primary" href="{{ url_for('admin_config.divisions.new_division') }}">+ New Division</a>
+
+  <form method="get" action="{{ url_for('admin_config.divisions.list_divisions') }}" class="row" style="margin: 0; gap: 8px;">
+    <label class="muted" style="display: flex; gap: 6px; align-items: center;">
+      <input type="checkbox" name="show_inactive" value="1" {% if show_inactive %}checked{% endif %}>
+      show inactive
+    </label>
+    <button class="btn" type="submit">Filter</button>
+    {% if show_inactive %}
+      <a class="btn" href="{{ url_for('admin_config.divisions.list_divisions') }}">Clear</a>
+    {% endif %}
+  </form>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 120px;">Code</th>
+      <th style="width: 220px;">Name</th>
+      <th>Description</th>
+      <th style="width: 100px;">Departments</th>
+      <th style="width: 80px;">Members</th>
+      <th style="width: 80px;">Order</th>
+      <th style="width: 70px;">Status</th>
+      <th style="width: 120px;">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for div in divisions %}
+      <tr>
+        <td class="num">{{ div.code }}</td>
+        <td>{{ div.name }}</td>
+        <td class="muted small">{{ div.description or '—' }}</td>
+        <td class="num">{{ dept_counts.get(div.id, 0) }}</td>
+        <td class="num">{{ member_counts.get(div.id, 0) }}</td>
+        <td class="num">{{ div.sort_order }}</td>
+        <td>
+          {% if div.is_active %}
+            <span class="pill" style="background: #e9f7ef;">Active</span>
+          {% else %}
+            <span class="pill" style="background: #fbeaea;">Inactive</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="btn-row">
+            <a class="btn" href="{{ url_for('admin_config.divisions.edit_division', division_id=div.id) }}">Edit</a>
+            <a class="btn" href="{{ url_for('admin_config.divisions.list_members', division_id=div.id) }}">Members</a>
+          </div>
+        </td>
+      </tr>
+    {% else %}
+      <tr>
+        <td colspan="8" class="muted">No divisions found.</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="muted small" style="margin-top: 16px;">
+  {{ divisions|length }} division(s) shown
+</div>
+{% endblock %}

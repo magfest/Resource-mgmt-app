@@ -1,0 +1,149 @@
+{% extends "layout/base.html" %}
+
+{% block title %}{% if user %}Edit User{% else %}New User{% endif %} - Admin{% endblock %}
+
+{% block content %}
+<h1>{% if user %}Edit User{% else %}New User{% endif %}</h1>
+<div class="muted" style="margin: 8px 0 16px;">
+  {% if user %}
+    Editing user: <strong>{{ user.display_name }}</strong>
+    {% if user.auth_subject %}
+      <span class="pill" style="margin-left: 8px; background: #dbeafe;">Google Linked</span>
+    {% else %}
+      <span class="pill" style="margin-left: 8px; background: #fef3c7;">Not Yet Linked</span>
+    {% endif %}
+  {% else %}
+    Create a new user account. They will be able to sign in once their Google account is linked.
+  {% endif %}
+</div>
+
+<div class="card" style="max-width: 800px;">
+  <form method="post"
+    action="{% if user %}{{ url_for('admin_config.users.update_user', user_id=user.id) }}{% else %}{{ url_for('admin_config.users.create_user') }}{% endif %}"
+  >
+    <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+
+      <div>
+        <label for="display_name" style="display: block; font-weight: 600; margin-bottom: 6px;">Display Name</label>
+        <input id="display_name" name="display_name" type="text" required
+               value="{{ user.display_name if user else '' }}"
+               placeholder="e.g. John Smith" />
+      </div>
+
+      <div>
+        <label for="email" style="display: block; font-weight: 600; margin-bottom: 6px;">Email</label>
+        <input id="email" name="email" type="email" required
+               value="{{ user.email if user else '' }}"
+               placeholder="e.g. john@magfest.org" />
+        <div class="muted small" style="margin-top: 4px;">Must match their Google account email to sign in.</div>
+      </div>
+
+      <div style="grid-column: 1 / -1;">
+        <label style="display: flex; gap: 8px; align-items: center; font-weight: normal;">
+          <input type="checkbox" name="is_active" value="1"
+                 {% if not user or user.is_active %}checked{% endif %} />
+          Active (can sign in)
+        </label>
+      </div>
+
+    </div>
+
+    {# Roles Section #}
+    <div style="border-top: 1px solid #eee; padding-top: 16px; margin-top: 16px;">
+      <strong style="display: block; margin-bottom: 12px;">System Roles</strong>
+
+      {# Super Admin #}
+      <div style="margin-bottom: 16px;">
+        <label style="display: flex; gap: 8px; align-items: flex-start; font-weight: normal;">
+          <input type="checkbox" name="role_super_admin" value="1"
+                 {% if user %}{% for r in user.roles %}{% if r.role_code == 'SUPER_ADMIN' %}checked{% endif %}{% endfor %}{% endif %}
+                 style="margin-top: 3px;" />
+          <div>
+            <strong style="color: #92400e;">Super Admin</strong>
+            <div class="muted small">Full access to all system features, all departments, all approvals.</div>
+          </div>
+        </label>
+      </div>
+
+      {# Work Type Admin #}
+      {% if work_types %}
+      <div style="margin-bottom: 16px;">
+        <div style="font-weight: 600; margin-bottom: 8px;">Work Type Admin</div>
+        <div class="muted small" style="margin-bottom: 8px;">Admin privileges for specific work types.</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+          {% for wt in work_types %}
+            <label style="display: flex; gap: 6px; align-items: center; font-weight: normal;">
+              <input type="checkbox" name="role_worktype_admin_{{ wt.id }}" value="1"
+                     {% if user %}{% for r in user.roles %}{% if r.role_code == 'WORKTYPE_ADMIN' and r.work_type_id == wt.id %}checked{% endif %}{% endfor %}{% endif %} />
+              {{ wt.name }}
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {# Approver Roles #}
+      {% if approval_groups %}
+      <div style="margin-bottom: 8px;">
+        <div style="font-weight: 600; margin-bottom: 8px;">Approver</div>
+        <div class="muted small" style="margin-bottom: 8px;">Can review and approve budget lines routed to these groups.</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+          {% for ag in approval_groups %}
+            <label style="display: flex; gap: 6px; align-items: center; font-weight: normal;">
+              <input type="checkbox" name="role_approver_{{ ag.id }}" value="1"
+                     {% if user %}{% for r in user.roles %}{% if r.role_code == 'APPROVER' and r.approval_group_id == ag.id %}checked{% endif %}{% endfor %}{% endif %} />
+              {{ ag.name }} ({{ ag.code }})
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+
+    <div class="btn-row" style="margin-top: 20px;">
+      <button class="btn btn-primary" type="submit">{% if user %}Save Changes{% else %}Create User{% endif %}</button>
+      <a class="btn" href="{{ url_for('admin_config.users.list_users') }}">Cancel</a>
+      {% if user %}
+        {% if user.is_active %}
+          <form method="post" action="{{ url_for('admin_config.users.archive_user', user_id=user.id) }}" style="display: inline;">
+            <button class="btn" type="submit" onclick="return confirm('Deactivate this user?')">Deactivate</button>
+          </form>
+        {% else %}
+          <form method="post" action="{{ url_for('admin_config.users.restore_user', user_id=user.id) }}" style="display: inline;">
+            <button class="btn" type="submit">Reactivate</button>
+          </form>
+        {% endif %}
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+{% if user %}
+<div class="card" style="max-width: 800px; margin-top: 24px;">
+  <h3 style="margin: 0 0 12px 0;">Memberships</h3>
+  <p class="muted" style="margin-bottom: 16px;">
+    This user's department and division memberships are managed from the respective department and division admin pages.
+  </p>
+  <table style="margin-bottom: 0;">
+    <tr>
+      <td style="width: 200px;">Department Memberships</td>
+      <td><strong>{{ dept_membership_count or 0 }}</strong></td>
+    </tr>
+    <tr>
+      <td>Division Memberships</td>
+      <td><strong>{{ div_membership_count or 0 }}</strong></td>
+    </tr>
+  </table>
+</div>
+
+{% if user.auth_subject %}
+<div class="callout" style="max-width: 800px; margin-top: 24px;">
+  <strong>Google Account Linked</strong>
+  <div class="muted small" style="margin-top: 4px;">
+    Auth Subject: <code>{{ user.auth_subject }}</code>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

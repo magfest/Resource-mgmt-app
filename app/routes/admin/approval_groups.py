@@ -20,6 +20,8 @@ from .helpers import (
     render_admin_config_page,
     log_config_change,
     track_changes,
+    validate_code_length,
+    CODE_MAX_LENGTH,
 )
 
 approval_groups_bp = Blueprint('approval_groups', __name__, url_prefix='/approval-groups')
@@ -96,6 +98,10 @@ def create_approval_group():
         flash("Code and name are required", "error")
         return redirect(url_for(".new_approval_group"))
 
+    # Validate code length
+    if not validate_code_length(code, "Code"):
+        return redirect(url_for(".new_approval_group"))
+
     # Check for duplicate code
     existing = db.session.query(ApprovalGroup).filter_by(code=code).first()
     if existing:
@@ -155,6 +161,10 @@ def update_approval_group(group_id: int):
 
     if not code or not name:
         flash("Code and name are required", "error")
+        return redirect(url_for(".edit_approval_group", group_id=group_id))
+
+    # Validate code length
+    if not validate_code_length(code, "Code"):
         return redirect(url_for(".edit_approval_group", group_id=group_id))
 
     # Check for duplicate code
