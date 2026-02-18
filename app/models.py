@@ -20,6 +20,7 @@ WORK_ITEM_STATUS_UNDER_REVIEW = "UNDER_REVIEW"
 WORK_ITEM_STATUS_FINALIZED = "FINALIZED"
 WORK_ITEM_STATUS_UNAPPROVED = "UNAPPROVED"  # reopened after finalize
 WORK_ITEM_STATUS_NEEDS_INFO = "NEEDS_INFO"  # awaiting requester response
+WORK_ITEM_STATUS_PAUSED = "PAUSED"  # supplementary blocked while primary is unfinalized
 
 # Work line statuses (overall current state)
 WORK_LINE_STATUS_PENDING = "PENDING"
@@ -75,6 +76,25 @@ CONFIG_AUDIT_CREATE = "CREATE"
 CONFIG_AUDIT_UPDATE = "UPDATE"
 CONFIG_AUDIT_ARCHIVE = "ARCHIVE"
 CONFIG_AUDIT_RESTORE = "RESTORE"
+
+# Line audit event types
+AUDIT_EVENT_STATUS_CHANGE = "STATUS_CHANGE"
+AUDIT_EVENT_REVIEW_DECISION = "REVIEW_DECISION"
+AUDIT_EVENT_REQUESTER_RESPONSE = "REQUESTER_RESPONSE"
+AUDIT_EVENT_ADMIN_FINAL = "ADMIN_FINAL"
+AUDIT_EVENT_AMOUNT_OVERRIDE = "AMOUNT_OVERRIDE"
+
+# Work item audit event types
+AUDIT_EVENT_FINALIZE = "FINALIZE"
+AUDIT_EVENT_UNFINALIZE = "UNFINALIZE"
+
+# Review actions
+REVIEW_ACTION_APPROVE = "APPROVE"
+REVIEW_ACTION_REJECT = "REJECT"
+REVIEW_ACTION_NEEDS_INFO = "NEEDS_INFO"
+REVIEW_ACTION_NEEDS_ADJUSTMENT = "NEEDS_ADJUSTMENT"
+REVIEW_ACTION_RESET = "RESET"
+REVIEW_ACTION_RESPOND = "RESPOND"
 
 
 # ============================================================
@@ -396,6 +416,22 @@ class WorkItem(db.Model):
         lazy=True,
     )
 
+    comments = db.relationship(
+        "WorkItemComment",
+        backref="work_item",
+        cascade="all, delete-orphan",
+        order_by="WorkItemComment.created_at.asc()",
+        lazy=True,
+    )
+
+    audit_events = db.relationship(
+        "WorkItemAuditEvent",
+        backref="work_item",
+        cascade="all, delete-orphan",
+        order_by="WorkItemAuditEvent.created_at.asc()",
+        lazy=True,
+    )
+
     __table_args__ = (
         db.Index("ix_work_items_portfolio_kind", "portfolio_id", "request_kind"),
         # Composite index for portfolio landing pages filtering by status
@@ -491,6 +527,28 @@ class WorkLineAuditEvent(db.Model):
     created_by_user_id = db.Column(db.String(64), nullable=False, index=True)
 
 
+class WorkItemAuditEvent(db.Model):
+    """Audit event for work item level actions (finalize, unfinalize, etc.)."""
+    __tablename__ = "work_item_audit_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    work_item_id = db.Column(
+        db.Integer,
+        db.ForeignKey("work_items.id", name="fk_work_item_audit_work_item_id"),
+        nullable=False,
+        index=True,
+    )
+
+    event_type = db.Column(db.String(64), nullable=False, index=True)  # FINALIZE, UNFINALIZE, STATUS_CHANGE
+    old_value = db.Column(db.Text, nullable=True)
+    new_value = db.Column(db.Text, nullable=True)
+    reason = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_by_user_id = db.Column(db.String(64), nullable=False, index=True)
+
+
 class WorkLineComment(db.Model):
     __tablename__ = "work_line_comments"
 
@@ -499,6 +557,26 @@ class WorkLineComment(db.Model):
     work_line_id = db.Column(
         db.Integer,
         db.ForeignKey("work_lines.id", name="fk_work_line_comments_work_line_id"),
+        nullable=False,
+        index=True,
+    )
+
+    visibility = db.Column(db.String(16), nullable=False, default=COMMENT_VISIBILITY_PUBLIC, index=True)
+    body = db.Column(db.Text, nullable=False)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    created_by_user_id = db.Column(db.String(64), nullable=False, index=True)
+
+
+class WorkItemComment(db.Model):
+    """Comment on a work item (request-level, not line-level)."""
+    __tablename__ = "work_item_comments"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    work_item_id = db.Column(
+        db.Integer,
+        db.ForeignKey("work_items.id", name="fk_work_item_comments_work_item_id"),
         nullable=False,
         index=True,
     )

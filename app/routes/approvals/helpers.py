@@ -1,0 +1,471 @@
+"""
+Approval workflow helpers - review-specific helper functions.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Set, Tuple, List, Optional
+
+from flask import abort
+
+from app import db
+from app.models import (
+    WorkLine,
+    WorkLineReview,
+    WorkLineAuditEvent,
+    WorkItem,
+    ApprovalGroup,
+    EventCycle,
+    Department,
+    BudgetLineDetail,
+    User,
+    REVIEW_STAGE_APPROVAL_GROUP,
+    REVIEW_STATUS_PENDING,
+    REVIEW_STATUS_NEEDS_INFO,
+    REVIEW_STATUS_NEEDS_ADJUSTMENT,
+    REVIEW_STATUS_APPROVED,
+    REVIEW_STATUS_REJECTED,
+    WORK_LINE_STATUS_PENDING,
+    WORK_LINE_STATUS_NEEDS_INFO,
+    WORK_LINE_STATUS_NEEDS_ADJUSTMENT,
+    WORK_LINE_STATUS_APPROVED,
+    WORK_LINE_STATUS_REJECTED,
+    REVIEW_ACTION_APPROVE,
+    REVIEW_ACTION_REJECT,
+    REVIEW_ACTION_NEEDS_INFO,
+    REVIEW_ACTION_NEEDS_ADJUSTMENT,
+    REVIEW_ACTION_RESET,
+    REVIEW_ACTION_RESPOND,
+    AUDIT_EVENT_REVIEW_DECISION,
+    AUDIT_EVENT_REQUESTER_RESPONSE,
+    ROLE_APPROVER,
+)
+from app.routes import get_user_ctx, UserContext
+
+
+# ============================================================
+# Valid Transitions Table
+# ============================================================
+
+# Maps (current_status, action) -> (new_status, note_required, allowed_roles)
+# allowed_roles: "APPROVER" = approvers for the group, "REQUESTER" = requester, "ADMIN" = admin only
+VALID_TRANSITIONS = {
+    # From PENDING
+    (REVIEW_STATUS_PENDING, REVIEW_ACTION_APPROVE): (REVIEW_STATUS_APPROVED, False, "APPROVER"),
+    (REVIEW_STATUS_PENDING, REVIEW_ACTION_REJECT): (REVIEW_STATUS_REJECTED, True, "APPROVER"),
+    (REVIEW_STATUS_PENDING, REVIEW_ACTION_NEEDS_INFO): (REVIEW_STATUS_NEEDS_INFO, True, "APPROVER"),
+    (REVIEW_STATUS_PENDING, REVIEW_ACTION_NEEDS_ADJUSTMENT): (REVIEW_STATUS_NEEDS_ADJUSTMENT, True, "APPROVER"),
+
+    # From NEEDS_INFO
+    (REVIEW_STATUS_NEEDS_INFO, REVIEW_ACTION_RESPOND): (REVIEW_STATUS_PENDING, True, "REQUESTER"),
+
+    # From NEEDS_ADJUSTMENT
+    (REVIEW_STATUS_NEEDS_ADJUSTMENT, REVIEW_ACTION_RESPOND): (REVIEW_STATUS_PENDING, True, "REQUESTER"),
+
+    # Admin reset from terminal states
+    (REVIEW_STATUS_APPROVED, REVIEW_ACTION_RESET): (REVIEW_STATUS_PENDING, False, "ADMIN"),
+    (REVIEW_STATUS_REJECTED, REVIEW_ACTION_RESET): (REVIEW_STATUS_PENDING, False, "ADMIN"),
+}
+
+
+@dataclass(frozen=True)
+class ReviewQueueItem:
+    """A line item in the review queue."""
+    work_item: WorkItem
+    work_line: WorkLine
+    review: WorkLineReview
+    budget_detail: BudgetLineDetail
+    line_total_cents: int
+
+
+@dataclass(frozen=True)
+class ApprovalQueues:
+    """Queues for the approval dashboard."""
+    pending: List[ReviewQueueItem]
+    kicked_back: List[ReviewQueueItem]
+    recently_decided: List[ReviewQueueItem]
+    pending_count: int
+    kicked_back_count: int
+    recently_decided_count: int
+
+
+# ============================================================
+# Permission Checks
+# ============================================================
+
+def is_reviewer_for_line(line: WorkLine, user_ctx: UserContext) -> bool:
+    """
+    Check if user can review this line.
+
+    User can review if:
+    - They are an admin, OR
+    - They have APPROVER role for the approval group this line is routed to
+    """
+    if user_ctx.is_admin:
+        return True
+
+    if not line.budget_detail:
+        return False
+
+    routed_group_id = line.budget_detail.routed_approval_group_id
+    if not routed_group_id:
+        return False
+
+    return routed_group_id in user_ctx.approval_group_ids
+
+
+def get_reviewable_groups(user_ctx: UserContext) -> List[ApprovalGroup]:
+    """
+    Get approval groups the user can review.
+
+    Admins can review all groups. Approvers can review their assigned groups.
+    """
+    if user_ctx.is_admin:
+        return ApprovalGroup.query.filter_by(is_active=True).order_by(
+            ApprovalGroup.sort_order.asc(),
+            ApprovalGroup.name.asc()
+        ).all()
+
+    if not user_ctx.approval_group_ids:
+        return []
+
+    return ApprovalGroup.query.filter(
+        ApprovalGroup.id.in_(user_ctx.approval_group_ids),
+        ApprovalGroup.is_active == True
+    ).order_by(
+        ApprovalGroup.sort_order.asc(),
+        ApprovalGroup.name.asc()
+    ).all()
+
+
+def require_reviewer_for_line(line: WorkLine, user_ctx: UserContext) -> None:
+    """Abort 403 if user cannot review this line."""
+    if not is_reviewer_for_line(line, user_ctx):
+        abort(403, "You do not have permission to review this line.")
+
+
+def require_checkout_for_review(work_item: WorkItem, user_ctx: UserContext) -> None:
+    """Abort 403 if user does not have checkout on this work item."""
+    if work_item.checked_out_by_user_id != user_ctx.user_id:
+        abort(403, "You must checkout this work item before making review decisions.")
+
+
+# ============================================================
+# Review Record Management
+# ============================================================
+
+def get_or_create_review(line: WorkLine, user_ctx: UserContext) -> Tuple[WorkLineReview, bool]:
+    """
+    Get or create a WorkLineReview for the APPROVAL_GROUP stage.
+
+    Returns (review, created) tuple.
+    """
+    if not line.budget_detail:
+        abort(400, "Line has no budget detail.")
+
+    routed_group_id = line.budget_detail.routed_approval_group_id
+
+    # Look for existing review at APPROVAL_GROUP stage
+    review = WorkLineReview.query.filter_by(
+        work_line_id=line.id,
+        stage=REVIEW_STAGE_APPROVAL_GROUP,
+        approval_group_id=routed_group_id,
+    ).first()
+
+    if review:
+        return review, False
+
+    # Create new review
+    review = WorkLineReview(
+        work_line_id=line.id,
+        stage=REVIEW_STAGE_APPROVAL_GROUP,
+        approval_group_id=routed_group_id,
+        status=REVIEW_STATUS_PENDING,
+        created_by_user_id=user_ctx.user_id,
+    )
+    db.session.add(review)
+    db.session.flush()
+
+    return review, True
+
+
+def get_review_for_line(line: WorkLine) -> Optional[WorkLineReview]:
+    """Get the APPROVAL_GROUP stage review for a line, if it exists."""
+    if not line.budget_detail:
+        return None
+
+    return WorkLineReview.query.filter_by(
+        work_line_id=line.id,
+        stage=REVIEW_STAGE_APPROVAL_GROUP,
+        approval_group_id=line.budget_detail.routed_approval_group_id,
+    ).first()
+
+
+# ============================================================
+# Transition Validation
+# ============================================================
+
+def validate_review_transition(
+    current_status: str,
+    action: str,
+    note: Optional[str],
+    user_ctx: UserContext,
+    review: WorkLineReview,
+    line: WorkLine,
+) -> Tuple[str, Optional[str]]:
+    """
+    Validate a review status transition.
+
+    Returns (new_status, error_message) tuple.
+    error_message is None if transition is valid.
+    """
+    key = (current_status, action)
+
+    if key not in VALID_TRANSITIONS:
+        return "", f"Invalid transition: {current_status} -> {action}"
+
+    new_status, note_required, allowed_role = VALID_TRANSITIONS[key]
+
+    # Check note requirement
+    if note_required and not (note or "").strip():
+        return "", "A note is required for this action."
+
+    # Check role permission
+    if allowed_role == "APPROVER":
+        if not is_reviewer_for_line(line, user_ctx):
+            return "", "You do not have permission to perform this action."
+    elif allowed_role == "REQUESTER":
+        # Requester must be owner or have edit rights
+        if not line.needs_requester_action:
+            return "", "This line is not awaiting your response."
+        # Verify user is actually the requester (owner or editor)
+        work_item = line.work_item
+        is_owner = work_item.created_by_user_id == user_ctx.user_id
+        # Check portfolio membership for edit rights
+        has_edit_membership = False
+        if work_item.portfolio:
+            from app.models import PortfolioMembership
+            membership = PortfolioMembership.query.filter_by(
+                portfolio_id=work_item.portfolio_id,
+                user_id=user_ctx.user_id,
+            ).first()
+            has_edit_membership = membership and membership.can_edit
+        if not (is_owner or has_edit_membership or user_ctx.is_admin):
+            return "", "You do not have permission to respond to this line."
+    elif allowed_role == "ADMIN":
+        if not user_ctx.is_admin:
+            return "", "Only admins can perform this action."
+
+    return new_status, None
+
+
+# ============================================================
+# Status Sync
+# ============================================================
+
+def sync_line_status(line: WorkLine, review: WorkLineReview) -> None:
+    """
+    Update WorkLine status and flags based on its WorkLineReview.
+    """
+    # Map review status to line status
+    status_map = {
+        REVIEW_STATUS_PENDING: WORK_LINE_STATUS_PENDING,
+        REVIEW_STATUS_NEEDS_INFO: WORK_LINE_STATUS_NEEDS_INFO,
+        REVIEW_STATUS_NEEDS_ADJUSTMENT: WORK_LINE_STATUS_NEEDS_ADJUSTMENT,
+        REVIEW_STATUS_APPROVED: WORK_LINE_STATUS_APPROVED,
+        REVIEW_STATUS_REJECTED: WORK_LINE_STATUS_REJECTED,
+    }
+
+    new_status = status_map.get(review.status, WORK_LINE_STATUS_PENDING)
+
+    line.status = new_status
+    line.status_changed_at = datetime.utcnow()
+
+    # Set needs_requester_action flag
+    line.needs_requester_action = review.status in (
+        REVIEW_STATUS_NEEDS_INFO,
+        REVIEW_STATUS_NEEDS_ADJUSTMENT,
+    )
+
+
+# ============================================================
+# Audit Events
+# ============================================================
+
+def create_line_audit_event(
+    line: WorkLine,
+    event_type: str,
+    old_value: Optional[str],
+    new_value: str,
+    note: Optional[str],
+    user_ctx: UserContext,
+) -> WorkLineAuditEvent:
+    """Create an audit event for a line."""
+    event = WorkLineAuditEvent(
+        work_line_id=line.id,
+        event_type=event_type,
+        field_name="status",
+        old_value=old_value,
+        new_value=new_value,
+        note=note,
+        created_by_user_id=user_ctx.user_id,
+    )
+    db.session.add(event)
+    return event
+
+
+# ============================================================
+# Apply Review Decision
+# ============================================================
+
+def apply_review_decision(
+    review: WorkLineReview,
+    line: WorkLine,
+    work_item: WorkItem,
+    action: str,
+    note: Optional[str],
+    amount_cents: Optional[int],
+    user_ctx: UserContext,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Apply a review decision atomically.
+
+    Returns (success, error_message) tuple.
+    """
+    # 1. Verify checkout (except for requester responses)
+    if action != REVIEW_ACTION_RESPOND:
+        if work_item.checked_out_by_user_id != user_ctx.user_id:
+            return False, "You must checkout this work item before making review decisions."
+
+    # 2. Validate transition
+    old_status = review.status
+    new_status, error = validate_review_transition(
+        old_status, action, note, user_ctx, review, line
+    )
+    if error:
+        return False, error
+
+    # 3. Apply changes
+    review.status = new_status
+    review.decided_at = datetime.utcnow()
+    review.decided_by_user_id = user_ctx.user_id
+    review.note = (note or "").strip() or None
+
+    if amount_cents is not None and action == REVIEW_ACTION_APPROVE:
+        review.approved_amount_cents = amount_cents
+
+    # 4. Sync line status
+    sync_line_status(line, review)
+    line.status_changed_by_user_id = user_ctx.user_id
+
+    # 5. Create audit event
+    create_line_audit_event(
+        line,
+        AUDIT_EVENT_REVIEW_DECISION if action != REVIEW_ACTION_RESPOND else AUDIT_EVENT_REQUESTER_RESPONSE,
+        old_status,
+        new_status,
+        note,
+        user_ctx,
+    )
+
+    return True, None
+
+
+# ============================================================
+# Dashboard Queues
+# ============================================================
+
+def build_approval_queues(
+    group_id: int,
+    event_cycle_id: Optional[int] = None,
+    department_id: Optional[int] = None,
+) -> ApprovalQueues:
+    """
+    Build the approval queues for a dashboard.
+
+    Returns queues for:
+    - pending: Lines with PENDING review
+    - kicked_back: Lines with NEEDS_INFO or NEEDS_ADJUSTMENT
+    - recently_decided: Lines decided in last 72 hours
+    """
+    # Base query for reviews in this group at APPROVAL_GROUP stage
+    base_query = (
+        db.session.query(WorkLineReview)
+        .join(WorkLine, WorkLineReview.work_line_id == WorkLine.id)
+        .join(WorkItem, WorkLine.work_item_id == WorkItem.id)
+        .join(BudgetLineDetail, BudgetLineDetail.work_line_id == WorkLine.id)
+        .filter(WorkLineReview.stage == REVIEW_STAGE_APPROVAL_GROUP)
+        .filter(WorkLineReview.approval_group_id == group_id)
+        .filter(WorkItem.is_archived == False)
+    )
+
+    # Apply event cycle filter
+    if event_cycle_id:
+        from app.models import WorkPortfolio
+        base_query = base_query.join(
+            WorkPortfolio, WorkItem.portfolio_id == WorkPortfolio.id
+        ).filter(WorkPortfolio.event_cycle_id == event_cycle_id)
+
+    # Apply department filter
+    if department_id:
+        from app.models import WorkPortfolio
+        if not event_cycle_id:
+            base_query = base_query.join(
+                WorkPortfolio, WorkItem.portfolio_id == WorkPortfolio.id
+            )
+        base_query = base_query.filter(WorkPortfolio.department_id == department_id)
+
+    # Pending queue
+    pending_reviews = base_query.filter(
+        WorkLineReview.status == REVIEW_STATUS_PENDING
+    ).order_by(WorkLineReview.created_at.asc()).all()
+
+    # Kicked back queue
+    kicked_back_reviews = base_query.filter(
+        WorkLineReview.status.in_([REVIEW_STATUS_NEEDS_INFO, REVIEW_STATUS_NEEDS_ADJUSTMENT])
+    ).order_by(WorkLineReview.decided_at.desc()).all()
+
+    # Recently decided (last 72 hours)
+    cutoff = datetime.utcnow() - timedelta(hours=72)
+    recently_decided_reviews = base_query.filter(
+        WorkLineReview.status.in_([REVIEW_STATUS_APPROVED, REVIEW_STATUS_REJECTED]),
+        WorkLineReview.decided_at >= cutoff,
+    ).order_by(WorkLineReview.decided_at.desc()).all()
+
+    def to_queue_item(review: WorkLineReview) -> ReviewQueueItem:
+        line = review.work_line
+        detail = line.budget_detail
+        line_total = detail.unit_price_cents * int(detail.quantity) if detail else 0
+        return ReviewQueueItem(
+            work_item=line.work_item,
+            work_line=line,
+            review=review,
+            budget_detail=detail,
+            line_total_cents=line_total,
+        )
+
+    return ApprovalQueues(
+        pending=[to_queue_item(r) for r in pending_reviews],
+        kicked_back=[to_queue_item(r) for r in kicked_back_reviews],
+        recently_decided=[to_queue_item(r) for r in recently_decided_reviews],
+        pending_count=len(pending_reviews),
+        kicked_back_count=len(kicked_back_reviews),
+        recently_decided_count=len(recently_decided_reviews),
+    )
+
+
+def get_active_event_cycles() -> List[EventCycle]:
+    """Get active event cycles for filter dropdown."""
+    return EventCycle.query.filter_by(is_active=True).order_by(
+        EventCycle.sort_order.asc(),
+        EventCycle.name.asc()
+    ).all()
+
+
+def get_active_departments() -> List[Department]:
+    """Get active departments for filter dropdown."""
+    return Department.query.filter_by(is_active=True).order_by(
+        Department.sort_order.asc(),
+        Department.name.asc()
+    ).all()

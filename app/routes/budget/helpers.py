@@ -411,8 +411,12 @@ def build_work_item_perms(item: WorkItem, ctx: PortfolioContext) -> WorkItemPerm
     is_submitted = item.status == WORK_ITEM_STATUS_SUBMITTED
     is_needs_info = item.status == WORK_ITEM_STATUS_NEEDS_INFO
 
-    # View: portfolio can_view
-    can_view = portfolio_perms.can_view
+    # Check if user is a reviewer (admin or approver for lines in this item)
+    is_approver_for_item = _is_approver_for_work_item(item, ctx.user_ctx)
+    is_reviewer = portfolio_perms.is_admin or is_approver_for_item
+
+    # View: portfolio can_view OR is a reviewer for this item
+    can_view = portfolio_perms.can_view or is_reviewer
 
     # Edit: (admin or membership.can_edit) AND status == DRAFT
     can_edit = portfolio_perms.can_edit and is_draft
@@ -436,8 +440,7 @@ def build_work_item_perms(item: WorkItem, ctx: PortfolioContext) -> WorkItemPerm
         item.checked_out_by_user_id == ctx.user_ctx.user_id
     )
 
-    # Can checkout: is a reviewer (admin or approver) AND item is SUBMITTED AND not already checked out
-    is_reviewer = portfolio_perms.is_admin or _is_approver_for_work_item(item, ctx.user_ctx)
+    # Can checkout: is a reviewer AND item is SUBMITTED AND not already checked out
     can_checkout_item = is_reviewer and is_submitted and not item_is_checked_out
 
     # Can checkin: current user has checkout OR admin can force release

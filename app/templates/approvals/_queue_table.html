@@ -1,0 +1,95 @@
+{# templates/approvals/_queue_table.html #}
+{# Reusable queue table partial for approval dashboard #}
+{# Expected context: queue_items (or queues.pending), show_status (optional), show_decided_at (optional) #}
+
+{% set items = queue_items if queue_items is defined else queues.pending %}
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 110px;">Request</th>
+      <th style="width: 80px;">Line #</th>
+      <th>Expense Account</th>
+      <th>Description</th>
+      <th style="width: 100px;" class="right">Amount</th>
+      {% if show_status %}
+        <th style="width: 110px;">Status</th>
+      {% endif %}
+      {% if show_decided_at %}
+        <th style="width: 130px;">Decided</th>
+      {% endif %}
+      <th style="width: 100px;"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+      {% set wi = item.work_item %}
+      {% set line = item.work_line %}
+      {% set detail = item.budget_detail %}
+      {% set review = item.review %}
+
+      {# Get event/dept codes from portfolio #}
+      {% set portfolio = wi.portfolio %}
+      {% set event_code = portfolio.event_cycle.code if portfolio else '' %}
+      {% set dept_code = portfolio.department.code if portfolio else '' %}
+
+      <tr>
+        <td>
+          <a href="{{ url_for('budget.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
+            {{ wi.public_id }}
+          </a>
+          <div class="muted small">{{ portfolio.department.name if portfolio else '-' }}</div>
+        </td>
+        <td>{{ line.line_number }}</td>
+        <td>
+          {% if detail and detail.expense_account %}
+            <strong>{{ detail.expense_account.name }}</strong>
+            {% if detail.spend_type %}
+              <div class="muted small">{{ detail.spend_type.name }}</div>
+            {% endif %}
+          {% else %}
+            <span class="muted">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if detail and detail.description %}
+            {{ detail.description[:80] }}{% if detail.description|length > 80 %}...{% endif %}
+          {% else %}
+            <span class="muted">-</span>
+          {% endif %}
+        </td>
+        <td class="right num">{{ format_currency(item.line_total_cents) }}</td>
+        {% if show_status %}
+          <td>
+            {% set status = review.status | upper %}
+            {# This is the AG dashboard, so show AG prefix for clarity #}
+            {% if status == "APPROVED" %}
+              <span class="pill" style="background: #dbeafe; color: #1e40af;">AG APPROVED</span>
+            {% elif status == "REJECTED" %}
+              <span class="pill" style="background: #fee2e2; color: #991b1b;">AG REJECTED</span>
+            {% else %}
+              {% set pill_class =
+                "pill-needs" if status in ["NEEDS_INFO", "NEEDS_ADJUSTMENT"]
+                else "" %}
+              <span class="pill {{ pill_class }}">{{ status }}</span>
+            {% endif %}
+          </td>
+        {% endif %}
+        {% if show_decided_at %}
+          <td class="muted small">
+            {% if review.decided_at %}
+              {{ review.decided_at.strftime('%m/%d %H:%M') }}
+            {% else %}
+              -
+            {% endif %}
+          </td>
+        {% endif %}
+        <td>
+          <a class="btn" href="{{ url_for('approvals.line_review', event=event_code, dept=dept_code, public_id=wi.public_id, line_num=line.line_number) }}">
+            Review
+          </a>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>

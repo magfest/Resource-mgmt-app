@@ -498,9 +498,9 @@ def test_create_primary_with_lines():
 def test_submit_primary():
     """Submit the PRIMARY work item."""
     from ..models import (
-        WorkItem, WorkPortfolio, Department, EventCycle, WorkType,
+        WorkItem, WorkPortfolio, Department, EventCycle, WorkType, WorkLineReview,
         WORK_ITEM_STATUS_DRAFT, WORK_ITEM_STATUS_SUBMITTED, REQUEST_KIND_PRIMARY,
-        REVIEW_STAGE_APPROVAL_GROUP,
+        REVIEW_STAGE_APPROVAL_GROUP, REVIEW_STATUS_PENDING,
     )
 
     event = db.session.query(EventCycle).filter_by(code="SMF2026").first()
@@ -541,7 +541,7 @@ def test_submit_primary():
     primary.submitted_at = datetime.utcnow()
     primary.submitted_by_user_id = h.get_active_user_id()
 
-    # Snapshot routing
+    # Snapshot routing and create WorkLineReview records
     for line in primary.lines:
         if line.budget_detail:
             detail = line.budget_detail
@@ -549,8 +549,18 @@ def test_submit_primary():
                 detail.routed_approval_group_id = detail.expense_account.approval_group_id
             line.current_review_stage = REVIEW_STAGE_APPROVAL_GROUP
 
+            # Create WorkLineReview record for APPROVAL_GROUP stage
+            review = WorkLineReview(
+                work_line_id=line.id,
+                stage=REVIEW_STAGE_APPROVAL_GROUP,
+                approval_group_id=detail.routed_approval_group_id,
+                status=REVIEW_STATUS_PENDING,
+                created_by_user_id=h.get_active_user_id(),
+            )
+            db.session.add(review)
+
     db.session.commit()
-    flash(f"Submitted PRIMARY {primary.public_id}", "success")
+    flash(f"Submitted PRIMARY {primary.public_id} with review records", "success")
     return redirect(url_for("dev.test_chunk_c"))
 
 
@@ -675,7 +685,10 @@ def test_set_needs_info(public_id: str):
 @dev_bp.post("/dev/test-chunk-c/reset-all")
 def test_reset_all():
     """Reset all test data for Chunk C."""
-    from ..models import WorkItem, WorkLine, BudgetLineDetail, WorkPortfolio, Department, EventCycle, WorkType
+    from ..models import (
+        WorkItem, WorkLine, BudgetLineDetail, WorkPortfolio, Department, EventCycle, WorkType,
+        WorkLineReview, WorkLineComment, WorkLineAuditEvent, WorkItemComment,
+    )
 
     event = db.session.query(EventCycle).filter_by(code="SMF2026").first()
     dept = db.session.query(Department).filter_by(code="ARCADE").first()
@@ -689,18 +702,56 @@ def test_reset_all():
         ).first()
 
         if portfolio:
-            # Delete all work items in this portfolio
+            # Get all work items in this portfolio
             items = db.session.query(WorkItem).filter_by(portfolio_id=portfolio.id).all()
+            item_count = len(items)
+
+            # Collect all line IDs for bulk deletion
+            line_ids = []
             for item in items:
                 for line in item.lines:
-                    if line.budget_detail:
-                        db.session.delete(line.budget_detail)
-                    for comment in line.comments:
-                        db.session.delete(comment)
-                    db.session.delete(line)
+                    line_ids.append(line.id)
+
+            if line_ids:
+                # Delete in correct order to avoid FK violations
+                # 1. Delete reviews
+                db.session.query(WorkLineReview).filter(
+                    WorkLineReview.work_line_id.in_(line_ids)
+                ).delete(synchronize_session=False)
+
+                # 2. Delete audit events
+                db.session.query(WorkLineAuditEvent).filter(
+                    WorkLineAuditEvent.work_line_id.in_(line_ids)
+                ).delete(synchronize_session=False)
+
+                # 3. Delete comments
+                db.session.query(WorkLineComment).filter(
+                    WorkLineComment.work_line_id.in_(line_ids)
+                ).delete(synchronize_session=False)
+
+                # 4. Delete budget details
+                db.session.query(BudgetLineDetail).filter(
+                    BudgetLineDetail.work_line_id.in_(line_ids)
+                ).delete(synchronize_session=False)
+
+                # 5. Delete lines
+                db.session.query(WorkLine).filter(
+                    WorkLine.id.in_(line_ids)
+                ).delete(synchronize_session=False)
+
+            # 6. Delete work item comments
+            item_ids = [item.id for item in items]
+            if item_ids:
+                db.session.query(WorkItemComment).filter(
+                    WorkItemComment.work_item_id.in_(item_ids)
+                ).delete(synchronize_session=False)
+
+            # 7. Delete work items
+            for item in items:
                 db.session.delete(item)
+
             db.session.commit()
-            flash(f"Deleted {len(items)} work item(s) from test portfolio", "success")
+            flash(f"Deleted {item_count} work item(s) from test portfolio", "success")
         else:
             flash("No portfolio found to reset", "info")
     else:

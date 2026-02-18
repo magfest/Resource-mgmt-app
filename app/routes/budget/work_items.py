@@ -9,8 +9,9 @@ from app import db
 from app.models import (
     WorkItem,
     WorkLine,
+    WorkLineReview,
     BudgetLineDetail,
-    WorkLineComment,
+    WorkItemComment,
     REQUEST_KIND_PRIMARY,
     REQUEST_KIND_SUPPLEMENTARY,
     WORK_ITEM_STATUS_DRAFT,
@@ -19,6 +20,7 @@ from app.models import (
     WORK_ITEM_STATUS_NEEDS_INFO,
     WORK_LINE_STATUS_PENDING,
     REVIEW_STAGE_APPROVAL_GROUP,
+    REVIEW_STATUS_PENDING,
     COMMENT_VISIBILITY_PUBLIC,
 )
 from app.routes import get_user_ctx
@@ -47,6 +49,10 @@ from .helpers import (
     get_checkout_info,
     checkout_work_item,
     checkin_work_item,
+)
+from app.routes.admin_final.helpers import (
+    can_finalize_work_item,
+    get_finalization_summary,
 )
 
 
@@ -179,6 +185,13 @@ def work_item_detail(event: str, dept: str, public_id: str):
     # Get lines with details
     lines = work_item.lines
 
+    # Check if can finalize (for admins)
+    can_finalize = False
+    finalization_summary = None
+    if perms.is_admin and work_item.status == WORK_ITEM_STATUS_SUBMITTED:
+        can_finalize, _ = can_finalize_work_item(work_item)
+        finalization_summary = get_finalization_summary(work_item)
+
     return render_template(
         "budget/work_item_detail.html",
         ctx=ctx,
@@ -187,6 +200,8 @@ def work_item_detail(event: str, dept: str, public_id: str):
         lines=lines,
         totals=totals,
         format_currency=format_currency,
+        can_finalize=can_finalize,
+        finalization_summary=finalization_summary,
     )
 
 
@@ -514,6 +529,7 @@ def work_item_submit(event: str, dept: str, public_id: str):
     work_item.submitted_by_user_id = user_ctx.user_id
 
     # Snapshot routing: set routed_approval_group_id from expense account
+    # and create WorkLineReview records for each line
     for line in work_item.lines:
         if line.budget_detail:
             detail = line.budget_detail
@@ -523,6 +539,16 @@ def work_item_submit(event: str, dept: str, public_id: str):
 
             # Set initial review stage
             line.current_review_stage = REVIEW_STAGE_APPROVAL_GROUP
+
+            # Create WorkLineReview record for APPROVAL_GROUP stage
+            review = WorkLineReview(
+                work_line_id=line.id,
+                stage=REVIEW_STAGE_APPROVAL_GROUP,
+                approval_group_id=detail.routed_approval_group_id,
+                status=REVIEW_STATUS_PENDING,
+                created_by_user_id=user_ctx.user_id,
+            )
+            db.session.add(review)
 
     db.session.commit()
 
@@ -748,16 +774,14 @@ def work_item_request_info(event: str, dept: str, public_id: str):
 
     user_ctx = get_user_ctx()
 
-    # Add comment with prefix to first line
-    first_line = work_item.lines[0] if work_item.lines else None
-    if first_line:
-        comment = WorkLineComment(
-            work_line_id=first_line.id,
-            visibility=COMMENT_VISIBILITY_PUBLIC,
-            body=f"[INFO REQUESTED] {message}",
-            created_by_user_id=user_ctx.user_id,
-        )
-        db.session.add(comment)
+    # Add request-level comment
+    comment = WorkItemComment(
+        work_item_id=work_item.id,
+        visibility=COMMENT_VISIBILITY_PUBLIC,
+        body=f"[INFO REQUESTED] {message}",
+        created_by_user_id=user_ctx.user_id,
+    )
+    db.session.add(comment)
 
     # Update work item status
     work_item.status = WORK_ITEM_STATUS_NEEDS_INFO
@@ -807,16 +831,14 @@ def work_item_respond_info(event: str, dept: str, public_id: str):
 
     user_ctx = get_user_ctx()
 
-    # Add comment with prefix to first line
-    first_line = work_item.lines[0] if work_item.lines else None
-    if first_line:
-        comment = WorkLineComment(
-            work_line_id=first_line.id,
-            visibility=COMMENT_VISIBILITY_PUBLIC,
-            body=f"[INFO RESPONSE] {response}",
-            created_by_user_id=user_ctx.user_id,
-        )
-        db.session.add(comment)
+    # Add request-level comment
+    comment = WorkItemComment(
+        work_item_id=work_item.id,
+        visibility=COMMENT_VISIBILITY_PUBLIC,
+        body=f"[INFO RESPONSE] {response}",
+        created_by_user_id=user_ctx.user_id,
+    )
+    db.session.add(comment)
 
     # Update work item status back to SUBMITTED
     work_item.status = WORK_ITEM_STATUS_SUBMITTED

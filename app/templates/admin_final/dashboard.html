@@ -1,0 +1,401 @@
+{# templates/admin_final/dashboard.html #}
+{% extends "layout/base.html" %}
+
+{% block title %}Admin Final Review{% endblock %}
+
+{% block content %}
+
+  {# Header #}
+  <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap: wrap; margin-bottom: 16px;">
+    <div>
+      <h1 style="margin:0;">Admin Final Review</h1>
+      <div class="muted" style="margin-top:4px;">
+        Final approval and finalization of budget requests
+      </div>
+    </div>
+  </div>
+
+  {# Filters #}
+  <div class="card" style="margin-bottom: 16px; background: #f8f9fa;">
+    <form method="get" action="{{ url_for('admin_final.dashboard') }}" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+      <div>
+        <label for="event" style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px;">Event Cycle</label>
+        <select name="event" id="event" style="min-width: 150px;">
+          <option value="">All Events</option>
+          {% for ec in event_cycles %}
+            <option value="{{ ec.code }}" {% if selected_event == ec.code %}selected{% endif %}>
+              {{ ec.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="dept" style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px;">Department</label>
+        <select name="dept" id="dept" style="min-width: 150px;">
+          <option value="">All Departments</option>
+          {% for d in departments %}
+            <option value="{{ d.code }}" {% if selected_dept == d.code %}selected{% endif %}>
+              {{ d.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <button type="submit" class="btn">Apply Filters</button>
+      </div>
+      {% if selected_event or selected_dept %}
+        <div>
+          <a class="btn btn-muted" href="{{ url_for('admin_final.dashboard') }}">
+            Clear Filters
+          </a>
+        </div>
+      {% endif %}
+    </form>
+  </div>
+
+  {# Summary Cards #}
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+    <div class="card" style="text-align: center;">
+      <div style="font-size: 32px; font-weight: 700; color: #0a66c2;">{{ queues.ready_for_review | length }}</div>
+      <div class="muted">Lines Ready for Review</div>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div style="font-size: 32px; font-weight: 700; color: #d97706;">{{ queues.kicked_back | length }}</div>
+      <div class="muted">Lines Kicked Back</div>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div style="font-size: 32px; font-weight: 700; color: #059669;">{{ queues.pending_finalization | length }}</div>
+      <div class="muted">Ready to Finalize</div>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div style="font-size: 32px; font-weight: 700; color: #6b7280;">{{ queues.recently_finalized | length }}</div>
+      <div class="muted">Recently Finalized</div>
+    </div>
+  </div>
+
+  {# Ready for Review Queue #}
+  <section class="card" style="margin-bottom: 16px;">
+    <h3 style="margin:0 0 12px 0;">
+      Lines Ready for Final Review
+      {% if queues.ready_for_review %}
+        <span class="pill pill-submitted">{{ queues.ready_for_review | length }}</span>
+      {% endif %}
+    </h3>
+
+    {% if queues.ready_for_review %}
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 110px;">Request</th>
+            <th style="width: 80px;">Line #</th>
+            <th>Expense Account</th>
+            <th style="width: 100px;" class="right">Requested</th>
+            <th style="width: 100px;" class="right">Recommended</th>
+            <th style="width: 100px;">AG Status</th>
+            <th style="width: 80px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in queues.ready_for_review %}
+            {% set wi = item.work_item %}
+            {% set line = item.work_line %}
+            {% set detail = item.budget_detail %}
+            {% set portfolio = wi.portfolio %}
+            {% set event_code = portfolio.event_cycle.code if portfolio else '' %}
+            {% set dept_code = portfolio.department.code if portfolio else '' %}
+            <tr>
+              <td>
+                <a href="{{ url_for('budget.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
+                  {{ wi.public_id }}
+                </a>
+                <div class="muted small">{{ portfolio.department.name if portfolio else '-' }}</div>
+              </td>
+              <td>{{ line.line_number }}</td>
+              <td>
+                {% if detail and detail.expense_account %}
+                  <strong>{{ detail.expense_account.name }}</strong>
+                {% else %}
+                  <span class="muted">-</span>
+                {% endif %}
+              </td>
+              <td class="right num">{{ format_currency(item.line_total_cents) }}</td>
+              <td class="right num">
+                {% if item.recommended_amount_cents is not none %}
+                  {{ format_currency(item.recommended_amount_cents) }}
+                {% else %}
+                  <span class="muted">-</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if item.approval_group_review %}
+                  <span class="pill" style="background: #dbeafe; color: #1e40af;">AG {{ item.approval_group_review.status }}</span>
+                {% else %}
+                  <span class="muted">-</span>
+                {% endif %}
+              </td>
+              <td>
+                <a class="btn btn-muted" href="{{ url_for('admin_final.line_review', event=event_code, dept=dept_code, public_id=wi.public_id, line_num=line.line_number) }}" style="padding: 4px 8px; font-size: 12px;">
+                  Review
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="muted" style="text-align: center; padding: 24px;">
+        No lines ready for final review.
+      </div>
+    {% endif %}
+  </section>
+
+  {# Kicked Back Queue #}
+  <section class="card" style="margin-bottom: 16px;">
+    <h3 style="margin:0 0 12px 0;">
+      Lines Kicked Back (Awaiting Requester)
+      {% if queues.kicked_back %}
+        <span class="pill pill-needs">{{ queues.kicked_back | length }}</span>
+      {% endif %}
+    </h3>
+
+    {% if queues.kicked_back %}
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 110px;">Request</th>
+            <th style="width: 80px;">Line #</th>
+            <th>Expense Account</th>
+            <th style="width: 100px;" class="right">Amount</th>
+            <th style="width: 100px;">Status</th>
+            <th style="width: 80px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in queues.kicked_back %}
+            {% set wi = item.work_item %}
+            {% set line = item.work_line %}
+            {% set detail = item.budget_detail %}
+            {% set portfolio = wi.portfolio %}
+            {% set event_code = portfolio.event_cycle.code if portfolio else '' %}
+            {% set dept_code = portfolio.department.code if portfolio else '' %}
+            <tr>
+              <td>
+                <a href="{{ url_for('budget.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
+                  {{ wi.public_id }}
+                </a>
+                <div class="muted small">{{ portfolio.department.name if portfolio else '-' }}</div>
+              </td>
+              <td>{{ line.line_number }}</td>
+              <td>
+                {% if detail and detail.expense_account %}
+                  <strong>{{ detail.expense_account.name }}</strong>
+                {% else %}
+                  <span class="muted">-</span>
+                {% endif %}
+              </td>
+              <td class="right num">{{ format_currency(item.line_total_cents) }}</td>
+              <td>
+                {% if item.admin_review %}
+                  <span class="pill pill-needs">{{ item.admin_review.status }}</span>
+                {% else %}
+                  <span class="muted">-</span>
+                {% endif %}
+              </td>
+              <td>
+                <a class="btn btn-muted" href="{{ url_for('admin_final.line_review', event=event_code, dept=dept_code, public_id=wi.public_id, line_num=line.line_number) }}" style="padding: 4px 8px; font-size: 12px;">
+                  View
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="muted" style="text-align: center; padding: 24px;">
+        No lines awaiting requester response.
+      </div>
+    {% endif %}
+  </section>
+
+  {# Pending Finalization #}
+  <section class="card" style="margin-bottom: 16px;">
+    <h3 style="margin:0 0 12px 0;">
+      Ready to Finalize
+      {% if queues.pending_finalization %}
+        <span class="pill pill-approved">{{ queues.pending_finalization | length }}</span>
+      {% endif %}
+    </h3>
+
+    {% if queues.pending_finalization %}
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 110px;">Request</th>
+            <th>Department</th>
+            <th style="width: 80px;" class="right">Lines</th>
+            <th style="width: 120px;" class="right">Requested</th>
+            <th style="width: 120px;" class="right">Approved</th>
+            <th style="width: 100px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for wi in queues.pending_finalization %}
+            {% set portfolio = wi.portfolio %}
+            {% set event_code = portfolio.event_cycle.code if portfolio else '' %}
+            {% set dept_code = portfolio.department.code if portfolio else '' %}
+            {% set summary = get_finalization_summary(wi) %}
+            <tr>
+              <td>
+                <a href="{{ url_for('budget.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
+                  {{ wi.public_id }}
+                </a>
+              </td>
+              <td>{{ portfolio.department.name if portfolio else '-' }}</td>
+              <td class="right num">
+                {{ summary.approved_lines }}/{{ summary.total_lines }}
+                {% if summary.pending_lines > 0 %}
+                  <span class="muted">({{ summary.pending_lines }} pending)</span>
+                {% endif %}
+              </td>
+              <td class="right num">{{ format_currency(summary.total_requested_cents) }}</td>
+              <td class="right num">{{ format_currency(summary.total_approved_cents) }}</td>
+              <td>
+                <button type="button" class="btn btn-primary" style="padding: 4px 8px; font-size: 12px;"
+                        onclick="openFinalizeModal('{{ wi.id }}', '{{ wi.public_id }}', {{ summary.pending_lines }})">
+                  Finalize
+                </button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="muted" style="text-align: center; padding: 24px;">
+        No requests ready to finalize.
+      </div>
+    {% endif %}
+  </section>
+
+  {# Recently Finalized #}
+  <section class="card">
+    <h3 style="margin:0 0 12px 0;">
+      Recently Finalized (Last 7 Days)
+      {% if queues.recently_finalized %}
+        <span class="pill">{{ queues.recently_finalized | length }}</span>
+      {% endif %}
+    </h3>
+
+    {% if queues.recently_finalized %}
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 110px;">Request</th>
+            <th>Department</th>
+            <th style="width: 120px;" class="right">Approved Total</th>
+            <th style="width: 130px;">Finalized</th>
+            <th style="width: 100px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for wi in queues.recently_finalized %}
+            {% set portfolio = wi.portfolio %}
+            {% set event_code = portfolio.event_cycle.code if portfolio else '' %}
+            {% set dept_code = portfolio.department.code if portfolio else '' %}
+            {% set summary = get_finalization_summary(wi) %}
+            <tr>
+              <td>
+                <a href="{{ url_for('budget.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
+                  {{ wi.public_id }}
+                </a>
+              </td>
+              <td>{{ portfolio.department.name if portfolio else '-' }}</td>
+              <td class="right num">{{ format_currency(summary.total_approved_cents) }}</td>
+              <td class="muted small">
+                {% if wi.finalized_at %}
+                  {{ wi.finalized_at.strftime('%Y-%m-%d %H:%M') }}
+                {% endif %}
+              </td>
+              <td>
+                <a class="btn btn-muted" href="{{ url_for('admin_final.unfinalize_form', work_item_id=wi.id) }}" style="padding: 4px 8px; font-size: 12px;">
+                  Unfinalize
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="muted" style="text-align: center; padding: 24px;">
+        No recently finalized requests.
+      </div>
+    {% endif %}
+  </section>
+
+  {# Finalize Modal #}
+  <div id="finalize-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div style="background: white; border-radius: 8px; padding: 24px; max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto;">
+      <h3 style="margin: 0 0 16px 0;">Finalize Request <span id="modal-public-id"></span></h3>
+
+      <div id="modal-pending-warning" class="callout" style="margin-bottom: 16px; background: #fff3cd; border-left: 4px solid #ffc107; display: none;">
+        <strong>Note:</strong> <span id="modal-pending-count"></span> pending line(s) will be auto-approved at their requested amounts.
+      </div>
+
+      <form id="finalize-form" method="post" action="">
+        <div style="margin-bottom: 16px;">
+          <label for="modal-note" style="font-weight: 600; display: block; margin-bottom: 4px;">
+            Finalization Note <span style="color: #dc3545;">*</span>
+          </label>
+          <textarea name="note" id="modal-note" rows="5" style="width: 100%;"
+                    placeholder="Enter your finalization notes... (e.g., budget adjustments made, items flagged for follow-up, conditions of approval)" required></textarea>
+          <div class="muted small" style="margin-top: 4px;">
+            This note will be recorded in the audit trail.
+          </div>
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn-primary">Confirm Finalization</button>
+          <button type="button" class="btn" onclick="closeFinalizeModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openFinalizeModal(workItemId, publicId, pendingCount) {
+  const modal = document.getElementById('finalize-modal');
+  const form = document.getElementById('finalize-form');
+  const publicIdSpan = document.getElementById('modal-public-id');
+  const pendingWarning = document.getElementById('modal-pending-warning');
+  const pendingCountSpan = document.getElementById('modal-pending-count');
+  const noteField = document.getElementById('modal-note');
+
+  form.action = '/admin/final-review/finalize/' + workItemId;
+  publicIdSpan.textContent = publicId;
+  noteField.value = '';
+
+  if (pendingCount > 0) {
+    pendingWarning.style.display = 'block';
+    pendingCountSpan.textContent = pendingCount;
+  } else {
+    pendingWarning.style.display = 'none';
+  }
+
+  modal.style.display = 'flex';
+  noteField.focus();
+}
+
+function closeFinalizeModal() {
+  document.getElementById('finalize-modal').style.display = 'none';
+}
+
+// Close modal on escape key or clicking outside
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeFinalizeModal();
+});
+document.getElementById('finalize-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeFinalizeModal();
+});
+</script>
+{% endblock %}

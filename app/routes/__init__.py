@@ -378,6 +378,8 @@ def register_all_routes(app: Flask, helpers: RouteHelpers) -> None:
     from .dashboard import dashboard_bp
     from .admin import admin_config_bp
     from .budget import budget_bp
+    from .approvals import approvals_bp
+    from .admin_final import admin_final_bp
 
     app.register_blueprint(dev_bp)
     app.register_blueprint(requests_bp)
@@ -386,6 +388,8 @@ def register_all_routes(app: Flask, helpers: RouteHelpers) -> None:
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(admin_config_bp)
     app.register_blueprint(budget_bp)
+    app.register_blueprint(approvals_bp)
+    app.register_blueprint(admin_final_bp)
 
 def get_request_or_404(request_id: int):
     from ..models_old import Request

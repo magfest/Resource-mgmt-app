@@ -1,0 +1,668 @@
+"""
+Admin Final Review helpers - helper functions for admin final review workflow.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import List, Optional, Tuple
+
+from flask import abort
+
+from app import db
+from app.models import (
+    WorkItem,
+    WorkLine,
+    WorkLineReview,
+    WorkItemAuditEvent,
+    WorkLineAuditEvent,
+    BudgetLineDetail,
+    EventCycle,
+    Department,
+    REVIEW_STAGE_APPROVAL_GROUP,
+    REVIEW_STAGE_ADMIN_FINAL,
+    REVIEW_STATUS_PENDING,
+    REVIEW_STATUS_NEEDS_INFO,
+    REVIEW_STATUS_NEEDS_ADJUSTMENT,
+    REVIEW_STATUS_APPROVED,
+    REVIEW_STATUS_REJECTED,
+    WORK_ITEM_STATUS_SUBMITTED,
+    WORK_ITEM_STATUS_FINALIZED,
+    WORK_ITEM_STATUS_PAUSED,
+    WORK_LINE_STATUS_PENDING,
+    WORK_LINE_STATUS_NEEDS_INFO,
+    WORK_LINE_STATUS_NEEDS_ADJUSTMENT,
+    WORK_LINE_STATUS_APPROVED,
+    WORK_LINE_STATUS_REJECTED,
+    AUDIT_EVENT_ADMIN_FINAL,
+    AUDIT_EVENT_AMOUNT_OVERRIDE,
+    AUDIT_EVENT_FINALIZE,
+    AUDIT_EVENT_UNFINALIZE,
+    REVIEW_ACTION_APPROVE,
+    REVIEW_ACTION_REJECT,
+    REVIEW_ACTION_NEEDS_INFO,
+    REVIEW_ACTION_RESET,
+    REQUEST_KIND_PRIMARY,
+    REQUEST_KIND_SUPPLEMENTARY,
+)
+from app.routes import UserContext
+
+
+@dataclass(frozen=True)
+class AdminQueueItem:
+    """A line item in the admin review queue."""
+    work_item: WorkItem
+    work_line: WorkLine
+    approval_group_review: Optional[WorkLineReview]
+    admin_review: Optional[WorkLineReview]
+    budget_detail: BudgetLineDetail
+    line_total_cents: int
+    recommended_amount_cents: Optional[int]
+
+
+@dataclass(frozen=True)
+class AdminQueues:
+    """Queues for the admin final review dashboard."""
+    ready_for_review: List[AdminQueueItem]
+    kicked_back: List[AdminQueueItem]
+    pending_finalization: List[WorkItem]
+    recently_finalized: List[WorkItem]
+
+
+# ============================================================
+# Permission Checks
+# ============================================================
+
+def require_admin(user_ctx: UserContext) -> None:
+    """Abort 403 if user is not an admin."""
+    if not user_ctx.is_admin:
+        abort(403, "Admin access required.")
+
+
+# ============================================================
+# Review Record Management
+# ============================================================
+
+def get_approval_group_review(line: WorkLine) -> Optional[WorkLineReview]:
+    """Get the APPROVAL_GROUP stage review for a line."""
+    if not line.budget_detail:
+        return None
+
+    return WorkLineReview.query.filter_by(
+        work_line_id=line.id,
+        stage=REVIEW_STAGE_APPROVAL_GROUP,
+    ).first()
+
+
+def get_admin_final_review(line: WorkLine) -> Optional[WorkLineReview]:
+    """Get the ADMIN_FINAL stage review for a line."""
+    return WorkLineReview.query.filter_by(
+        work_line_id=line.id,
+        stage=REVIEW_STAGE_ADMIN_FINAL,
+    ).first()
+
+
+def get_or_create_admin_review(line: WorkLine, user_ctx: UserContext) -> Tuple[WorkLineReview, bool]:
+    """
+    Get or create an ADMIN_FINAL WorkLineReview.
+
+    Returns (review, created) tuple.
+    """
+    review = get_admin_final_review(line)
+    if review:
+        return review, False
+
+    review = WorkLineReview(
+        work_line_id=line.id,
+        stage=REVIEW_STAGE_ADMIN_FINAL,
+        approval_group_id=None,  # Admin final is not tied to an approval group
+        status=REVIEW_STATUS_PENDING,
+        created_by_user_id=user_ctx.user_id,
+    )
+    db.session.add(review)
+    db.session.flush()
+
+    return review, True
+
+
+# ============================================================
+# Finalization Checks
+# ============================================================
+
+def can_finalize_work_item(work_item: WorkItem) -> Tuple[bool, str]:
+    """
+    Check if a work item can be finalized.
+
+    Returns (can_finalize, reason) tuple.
+    """
+    if work_item.status == WORK_ITEM_STATUS_FINALIZED:
+        return False, "Work item is already finalized."
+
+    if work_item.status != WORK_ITEM_STATUS_SUBMITTED:
+        return False, "Work item must be submitted before finalization."
+
+    # Check for kicked-back lines
+    for line in work_item.lines:
+        if line.status in (WORK_LINE_STATUS_NEEDS_INFO, WORK_LINE_STATUS_NEEDS_ADJUSTMENT):
+            return False, f"Line {line.line_number} is awaiting requester response."
+
+    # Check that at least one line has been reviewed
+    has_any_decision = False
+    for line in work_item.lines:
+        admin_review = get_admin_final_review(line)
+        if admin_review and admin_review.status in (REVIEW_STATUS_APPROVED, REVIEW_STATUS_REJECTED):
+            has_any_decision = True
+            break
+
+    if not has_any_decision:
+        # Check approval group reviews
+        for line in work_item.lines:
+            ag_review = get_approval_group_review(line)
+            if ag_review and ag_review.status in (REVIEW_STATUS_APPROVED, REVIEW_STATUS_REJECTED):
+                has_any_decision = True
+                break
+
+    if not has_any_decision:
+        return False, "At least one line must be reviewed before finalization."
+
+    return True, "OK"
+
+
+def get_finalization_summary(work_item: WorkItem) -> dict:
+    """
+    Get summary of work item state for finalization.
+
+    Returns dict with counts of lines in each state.
+    """
+    summary = {
+        "total_lines": 0,
+        "approved_lines": 0,
+        "rejected_lines": 0,
+        "pending_lines": 0,
+        "kicked_back_lines": 0,
+        "total_requested_cents": 0,
+        "total_approved_cents": 0,
+    }
+
+    for line in work_item.lines:
+        summary["total_lines"] += 1
+
+        if line.budget_detail:
+            line_total = line.budget_detail.unit_price_cents * int(line.budget_detail.quantity)
+            summary["total_requested_cents"] += line_total
+
+        if line.status == WORK_LINE_STATUS_APPROVED:
+            summary["approved_lines"] += 1
+            summary["total_approved_cents"] += line.approved_amount_cents or 0
+        elif line.status == WORK_LINE_STATUS_REJECTED:
+            summary["rejected_lines"] += 1
+        elif line.status in (WORK_LINE_STATUS_NEEDS_INFO, WORK_LINE_STATUS_NEEDS_ADJUSTMENT):
+            summary["kicked_back_lines"] += 1
+        else:
+            summary["pending_lines"] += 1
+
+    return summary
+
+
+# ============================================================
+# Admin Final Review Application
+# ============================================================
+
+def apply_admin_final_decision(
+    line: WorkLine,
+    work_item: WorkItem,
+    action: str,
+    approved_amount_cents: Optional[int],
+    note: Optional[str],
+    user_ctx: UserContext,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Apply an admin final review decision.
+
+    This sets the authoritative approved_amount_cents on WorkLine.
+
+    Returns (success, error_message) tuple.
+    """
+    require_admin(user_ctx)
+
+    # Get or create admin review record
+    review, _created = get_or_create_admin_review(line, user_ctx)
+
+    # Get approval group recommendation
+    ag_review = get_approval_group_review(line)
+    recommended = ag_review.approved_amount_cents if ag_review else None
+
+    # Validate action
+    if action == REVIEW_ACTION_APPROVE:
+        if approved_amount_cents is None:
+            # Use recommended amount or line total
+            if recommended is not None:
+                approved_amount_cents = recommended
+            elif line.budget_detail:
+                approved_amount_cents = line.budget_detail.unit_price_cents * int(line.budget_detail.quantity)
+            else:
+                return False, "No amount specified and no default available."
+
+        # Check if amount differs from recommended (requires note)
+        if recommended is not None and approved_amount_cents != recommended:
+            if not (note or "").strip():
+                return False, "Note required when modifying recommended amount."
+
+            # Create amount override audit event
+            _create_line_audit(
+                line,
+                AUDIT_EVENT_AMOUNT_OVERRIDE,
+                str(recommended),
+                str(approved_amount_cents),
+                note,
+                user_ctx,
+            )
+
+        review.status = REVIEW_STATUS_APPROVED
+        review.approved_amount_cents = approved_amount_cents
+        line.status = WORK_LINE_STATUS_APPROVED
+        line.approved_amount_cents = approved_amount_cents  # AUTHORITATIVE
+
+    elif action == REVIEW_ACTION_REJECT:
+        if not (note or "").strip():
+            return False, "Note required for rejection."
+
+        review.status = REVIEW_STATUS_REJECTED
+        line.status = WORK_LINE_STATUS_REJECTED
+        line.approved_amount_cents = None
+
+    elif action == REVIEW_ACTION_NEEDS_INFO:
+        if not (note or "").strip():
+            return False, "Note required when requesting information."
+
+        review.status = REVIEW_STATUS_NEEDS_INFO
+        line.status = WORK_LINE_STATUS_NEEDS_INFO
+        line.needs_requester_action = True
+
+    elif action == REVIEW_ACTION_RESET:
+        # Reset to pending for re-review
+        review.status = REVIEW_STATUS_PENDING
+        line.status = WORK_LINE_STATUS_PENDING
+        line.needs_requester_action = False
+
+    else:
+        return False, f"Invalid action: {action}"
+
+    # Update review metadata
+    review.decided_at = datetime.utcnow()
+    review.decided_by_user_id = user_ctx.user_id
+    review.note = (note or "").strip() or None
+
+    # Update line metadata
+    line.status_changed_at = datetime.utcnow()
+    line.status_changed_by_user_id = user_ctx.user_id
+    line.current_review_stage = REVIEW_STAGE_ADMIN_FINAL
+
+    # Create audit event
+    _create_line_audit(
+        line,
+        AUDIT_EVENT_ADMIN_FINAL,
+        None,
+        review.status,
+        note,
+        user_ctx,
+    )
+
+    return True, None
+
+
+def _create_line_audit(
+    line: WorkLine,
+    event_type: str,
+    old_value: Optional[str],
+    new_value: str,
+    note: Optional[str],
+    user_ctx: UserContext,
+) -> None:
+    """Create a line audit event."""
+    event = WorkLineAuditEvent(
+        work_line_id=line.id,
+        event_type=event_type,
+        field_name="status",
+        old_value=old_value,
+        new_value=new_value,
+        note=note,
+        created_by_user_id=user_ctx.user_id,
+    )
+    db.session.add(event)
+
+
+# ============================================================
+# Finalization / Unfinalization
+# ============================================================
+
+def finalize_work_item(
+    work_item: WorkItem,
+    user_ctx: UserContext,
+    note: Optional[str] = None,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Finalize a work item.
+
+    Sets approved amounts on all pending lines based on their current values.
+
+    Returns (success, error_message) tuple.
+    """
+    require_admin(user_ctx)
+
+    # Require a note
+    if not (note or "").strip():
+        return False, "A note is required for finalization."
+
+    can_do, reason = can_finalize_work_item(work_item)
+    if not can_do:
+        return False, reason
+
+    # For any lines still PENDING, approve them at their requested amount
+    for line in work_item.lines:
+        if line.status == WORK_LINE_STATUS_PENDING:
+            # Get or create admin review
+            review, _created = get_or_create_admin_review(line, user_ctx)
+
+            # Approve at requested amount
+            if line.budget_detail:
+                amount = line.budget_detail.unit_price_cents * int(line.budget_detail.quantity)
+            else:
+                amount = 0
+
+            review.status = REVIEW_STATUS_APPROVED
+            review.approved_amount_cents = amount
+            review.decided_at = datetime.utcnow()
+            review.decided_by_user_id = user_ctx.user_id
+            review.note = "Auto-approved during finalization"
+
+            line.status = WORK_LINE_STATUS_APPROVED
+            line.approved_amount_cents = amount
+            line.status_changed_at = datetime.utcnow()
+            line.status_changed_by_user_id = user_ctx.user_id
+            line.current_review_stage = REVIEW_STAGE_ADMIN_FINAL
+
+    # Set work item to finalized
+    work_item.status = WORK_ITEM_STATUS_FINALIZED
+    work_item.finalized_at = datetime.utcnow()
+    work_item.finalized_by_user_id = user_ctx.user_id
+
+    # Create audit event
+    audit = WorkItemAuditEvent(
+        work_item_id=work_item.id,
+        event_type=AUDIT_EVENT_FINALIZE,
+        old_value=WORK_ITEM_STATUS_SUBMITTED,
+        new_value=WORK_ITEM_STATUS_FINALIZED,
+        reason=(note or "").strip(),
+        created_by_user_id=user_ctx.user_id,
+    )
+    db.session.add(audit)
+
+    # If this is a PRIMARY request, un-pause any PAUSED supplementary requests
+    if work_item.request_kind == REQUEST_KIND_PRIMARY:
+        paused_supplementary = WorkItem.query.filter_by(
+            portfolio_id=work_item.portfolio_id,
+            request_kind=REQUEST_KIND_SUPPLEMENTARY,
+            status=WORK_ITEM_STATUS_PAUSED,
+            is_archived=False,
+        ).all()
+
+        for supp in paused_supplementary:
+            supp.status = WORK_ITEM_STATUS_SUBMITTED
+            # Create audit event for un-pause
+            supp_audit = WorkItemAuditEvent(
+                work_item_id=supp.id,
+                event_type="UNPAUSE",
+                old_value=WORK_ITEM_STATUS_PAUSED,
+                new_value=WORK_ITEM_STATUS_SUBMITTED,
+                reason="Primary request re-finalized",
+                created_by_user_id=user_ctx.user_id,
+            )
+            db.session.add(supp_audit)
+
+    return True, None
+
+
+def unfinalize_work_item(
+    work_item: WorkItem,
+    reason: str,
+    reset_lines: bool,
+    user_ctx: UserContext,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Unfinalize a work item for re-review.
+
+    Args:
+        work_item: The work item to unfinalize
+        reason: Required reason for unfinalizing
+        reset_lines: If True, reset all line reviews to PENDING
+        user_ctx: Current user context
+
+    Returns (success, error_message) tuple.
+    """
+    require_admin(user_ctx)
+
+    if work_item.status != WORK_ITEM_STATUS_FINALIZED:
+        return False, "Work item is not finalized."
+
+    if not (reason or "").strip():
+        return False, "Reason required for unfinalize."
+
+    # Create audit event BEFORE changing state
+    audit = WorkItemAuditEvent(
+        work_item_id=work_item.id,
+        event_type=AUDIT_EVENT_UNFINALIZE,
+        old_value=WORK_ITEM_STATUS_FINALIZED,
+        new_value=WORK_ITEM_STATUS_SUBMITTED,
+        reason=reason.strip(),
+        created_by_user_id=user_ctx.user_id,
+    )
+    db.session.add(audit)
+
+    # Reset work item status
+    work_item.status = WORK_ITEM_STATUS_SUBMITTED
+    work_item.finalized_at = None
+    work_item.finalized_by_user_id = None
+
+    # Optionally reset line reviews
+    if reset_lines:
+        for line in work_item.lines:
+            admin_review = get_admin_final_review(line)
+            if admin_review:
+                admin_review.status = REVIEW_STATUS_PENDING
+                admin_review.decided_at = None
+                admin_review.decided_by_user_id = None
+
+            line.status = WORK_LINE_STATUS_PENDING
+            line.approved_amount_cents = None
+            line.needs_requester_action = False
+
+    # If this is a PRIMARY request, pause any submitted supplementary requests
+    if work_item.request_kind == REQUEST_KIND_PRIMARY:
+        active_supplementary = WorkItem.query.filter_by(
+            portfolio_id=work_item.portfolio_id,
+            request_kind=REQUEST_KIND_SUPPLEMENTARY,
+            status=WORK_ITEM_STATUS_SUBMITTED,
+            is_archived=False,
+        ).all()
+
+        for supp in active_supplementary:
+            supp.status = WORK_ITEM_STATUS_PAUSED
+            # Create audit event for pause
+            supp_audit = WorkItemAuditEvent(
+                work_item_id=supp.id,
+                event_type="PAUSE",
+                old_value=WORK_ITEM_STATUS_SUBMITTED,
+                new_value=WORK_ITEM_STATUS_PAUSED,
+                reason=f"Primary request unfinalized: {reason.strip()}",
+                created_by_user_id=user_ctx.user_id,
+            )
+            db.session.add(supp_audit)
+
+    return True, None
+
+
+def reset_line_for_rereview(
+    line: WorkLine,
+    user_ctx: UserContext,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Reset a specific line for re-review (after unfinalize).
+
+    Returns (success, error_message) tuple.
+    """
+    require_admin(user_ctx)
+
+    admin_review = get_admin_final_review(line)
+    if admin_review:
+        admin_review.status = REVIEW_STATUS_PENDING
+        admin_review.decided_at = None
+        admin_review.decided_by_user_id = None
+
+    line.status = WORK_LINE_STATUS_PENDING
+    line.approved_amount_cents = None
+    line.needs_requester_action = False
+    line.status_changed_at = datetime.utcnow()
+    line.status_changed_by_user_id = user_ctx.user_id
+
+    _create_line_audit(
+        line,
+        AUDIT_EVENT_ADMIN_FINAL,
+        "reset",
+        REVIEW_STATUS_PENDING,
+        "Reset for re-review",
+        user_ctx,
+    )
+
+    return True, None
+
+
+# ============================================================
+# Dashboard Queues
+# ============================================================
+
+def build_admin_queues(
+    event_cycle_id: Optional[int] = None,
+    department_id: Optional[int] = None,
+) -> AdminQueues:
+    """
+    Build the admin final review queues.
+
+    Returns queues for:
+    - ready_for_review: Lines with APPROVAL_GROUP APPROVED, no ADMIN_FINAL decision
+    - kicked_back: Lines with ADMIN_FINAL NEEDS_INFO
+    - pending_finalization: Work items ready to finalize
+    - recently_finalized: Work items finalized in last 7 days
+    """
+    from app.models import WorkPortfolio
+
+    # Base query for submitted work items
+    base_item_query = WorkItem.query.filter(
+        WorkItem.status.in_([WORK_ITEM_STATUS_SUBMITTED, WORK_ITEM_STATUS_FINALIZED]),
+        WorkItem.is_archived == False,
+    )
+
+    if event_cycle_id or department_id:
+        base_item_query = base_item_query.join(
+            WorkPortfolio, WorkItem.portfolio_id == WorkPortfolio.id
+        )
+        if event_cycle_id:
+            base_item_query = base_item_query.filter(WorkPortfolio.event_cycle_id == event_cycle_id)
+        if department_id:
+            base_item_query = base_item_query.filter(WorkPortfolio.department_id == department_id)
+
+    # Get all submitted work items for processing
+    submitted_items = base_item_query.filter(
+        WorkItem.status == WORK_ITEM_STATUS_SUBMITTED
+    ).all()
+
+    ready_for_review = []
+    kicked_back = []
+    pending_finalization_items = []
+
+    for item in submitted_items:
+        item_has_pending = False
+        item_has_kicked_back = False
+        item_all_decided = True
+
+        for line in item.lines:
+            ag_review = get_approval_group_review(line)
+            admin_review = get_admin_final_review(line)
+            detail = line.budget_detail
+
+            # Calculate line total and recommended amount
+            line_total = detail.unit_price_cents * int(detail.quantity) if detail else 0
+            recommended = ag_review.approved_amount_cents if ag_review else None
+
+            queue_item = AdminQueueItem(
+                work_item=item,
+                work_line=line,
+                approval_group_review=ag_review,
+                admin_review=admin_review,
+                budget_detail=detail,
+                line_total_cents=line_total,
+                recommended_amount_cents=recommended,
+            )
+
+            # Check line state
+            if admin_review:
+                if admin_review.status in (REVIEW_STATUS_NEEDS_INFO, REVIEW_STATUS_NEEDS_ADJUSTMENT):
+                    kicked_back.append(queue_item)
+                    item_has_kicked_back = True
+                    item_all_decided = False
+                elif admin_review.status == REVIEW_STATUS_PENDING:
+                    ready_for_review.append(queue_item)
+                    item_has_pending = True
+                    item_all_decided = False
+                # APPROVED or REJECTED means decided
+            elif ag_review and ag_review.status == REVIEW_STATUS_APPROVED:
+                # Ready for admin final review
+                ready_for_review.append(queue_item)
+                item_has_pending = True
+                item_all_decided = False
+            elif line.status in (WORK_LINE_STATUS_NEEDS_INFO, WORK_LINE_STATUS_NEEDS_ADJUSTMENT):
+                # Line kicked back at approval group level
+                item_has_kicked_back = True
+                item_all_decided = False
+            else:
+                # Still pending at some level
+                item_has_pending = True
+                item_all_decided = False
+
+        # Check if item is ready for finalization
+        if not item_has_kicked_back:
+            can_finalize, _ = can_finalize_work_item(item)
+            if can_finalize:
+                pending_finalization_items.append(item)
+
+    # Recently finalized (last 7 days)
+    cutoff = datetime.utcnow() - timedelta(days=7)
+    recently_finalized_query = base_item_query.filter(
+        WorkItem.status == WORK_ITEM_STATUS_FINALIZED,
+        WorkItem.finalized_at >= cutoff,
+    ).order_by(WorkItem.finalized_at.desc())
+
+    recently_finalized = recently_finalized_query.all()
+
+    return AdminQueues(
+        ready_for_review=ready_for_review,
+        kicked_back=kicked_back,
+        pending_finalization=pending_finalization_items,
+        recently_finalized=recently_finalized,
+    )
+
+
+def get_active_event_cycles() -> List[EventCycle]:
+    """Get active event cycles for filter dropdown."""
+    return EventCycle.query.filter_by(is_active=True).order_by(
+        EventCycle.sort_order.asc(),
+        EventCycle.name.asc()
+    ).all()
+
+
+def get_active_departments() -> List[Department]:
+    """Get active departments for filter dropdown."""
+    return Department.query.filter_by(is_active=True).order_by(
+        Department.sort_order.asc(),
+        Department.name.asc()
+    ).all()

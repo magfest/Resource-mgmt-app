@@ -1,0 +1,116 @@
+{# templates/admin_final/unfinalize.html #}
+{% extends "layout/base.html" %}
+
+{% block title %}Unfinalize - {{ work_item.public_id }}{% endblock %}
+
+{% block content %}
+
+  {% set summary = get_finalization_summary(work_item) %}
+
+  {# Header #}
+  <div style="margin-bottom: 16px;">
+    <h1 style="margin:0;">Unfinalize Request</h1>
+    <div class="muted" style="margin-top:4px;">
+      {{ work_item.public_id }} &middot;
+      {{ work_item.portfolio.department.name if work_item.portfolio else '-' }} &middot;
+      {{ work_item.portfolio.event_cycle.name if work_item.portfolio else '-' }}
+    </div>
+  </div>
+
+  {# Warning #}
+  <div class="callout callout-danger" style="margin-bottom: 16px;">
+    <strong>Warning: Unfinalizing a Request</strong>
+    <div class="muted" style="margin-top:4px;">
+      This action will:
+      <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+        <li>Change the request status back to SUBMITTED</li>
+        <li>Allow the request to be reviewed again</li>
+        <li>Block any supplementary requests until this is re-finalized</li>
+        <li>Create an audit record with your reason</li>
+      </ul>
+    </div>
+  </div>
+
+  {# Summary #}
+  <section class="card" style="margin-bottom: 16px;">
+    <h3 style="margin:0 0 12px 0;">Current State</h3>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+      <div>
+        <div class="muted small">Total Lines</div>
+        <div style="font-size: 18px; font-weight: 600;">{{ summary.total_lines }}</div>
+      </div>
+      <div>
+        <div class="muted small">Approved</div>
+        <div style="font-size: 18px; font-weight: 600; color: #059669;">{{ summary.approved_lines }}</div>
+      </div>
+      <div>
+        <div class="muted small">Rejected</div>
+        <div style="font-size: 18px; font-weight: 600; color: #dc3545;">{{ summary.rejected_lines }}</div>
+      </div>
+    </div>
+    <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #eee;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <div class="muted small">Total Requested</div>
+          <div style="font-size: 18px; font-weight: 600;">{{ format_currency(summary.total_requested_cents) }}</div>
+        </div>
+        <div>
+          <div class="muted small">Total Approved</div>
+          <div style="font-size: 18px; font-weight: 600; color: #059669;">{{ format_currency(summary.total_approved_cents) }}</div>
+        </div>
+      </div>
+    </div>
+    {% if work_item.finalized_at %}
+      <div class="muted small" style="margin-top: 12px;">
+        Finalized {{ work_item.finalized_at.strftime('%Y-%m-%d %H:%M') }}
+        {% if work_item.finalized_by_user_id %}
+          by {{ work_item.finalized_by_user_id }}
+        {% endif %}
+      </div>
+    {% endif %}
+  </section>
+
+  {# Unfinalize Form #}
+  <section class="card">
+    <h3 style="margin:0 0 12px 0;">Unfinalize</h3>
+
+    <form method="post" action="{{ url_for('admin_final.unfinalize', work_item_id=work_item.id) }}">
+      <div style="margin-bottom: 12px;">
+        <label for="reason" style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px;">
+          Reason for Unfinalizing (required)
+        </label>
+        <textarea name="reason" id="reason" rows="3" style="width: 100%;" placeholder="Explain why this request needs to be unfinalized..." required></textarea>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 8px;">
+          Reset Line Reviews?
+        </label>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+            <input type="radio" name="reset_lines" value="no" checked style="margin-top: 3px;" />
+            <div>
+              <strong>Keep existing decisions</strong>
+              <div class="muted small">Line approvals/rejections remain. You can reset specific lines as needed.</div>
+            </div>
+          </label>
+          <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
+            <input type="radio" name="reset_lines" value="yes" style="margin-top: 3px;" />
+            <div>
+              <strong>Reset all lines to PENDING</strong>
+              <div class="muted small">All line decisions will be cleared. Full re-review required.</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button type="submit" class="btn" style="border-color: #dc3545; color: #dc3545;" onclick="return confirm('Are you sure you want to unfinalize this request?');">
+          Unfinalize Request
+        </button>
+        <a class="btn" href="{{ url_for('admin_final.dashboard') }}">Cancel</a>
+      </div>
+    </form>
+  </section>
+
+{% endblock %}

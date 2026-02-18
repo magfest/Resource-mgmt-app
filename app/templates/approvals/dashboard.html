@@ -1,0 +1,146 @@
+{# templates/approvals/dashboard.html #}
+{% extends "layout/base.html" %}
+
+{% block title %}{{ current_group.name }} - Approval Dashboard{% endblock %}
+
+{% block content %}
+
+  {# Header #}
+  <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap: wrap; margin-bottom: 16px;">
+    <div>
+      <h1 style="margin:0;">Approval Dashboard</h1>
+      <div class="muted" style="margin-top:4px;">
+        Review budget line items for approval groups
+      </div>
+    </div>
+  </div>
+
+  {# Group Tabs #}
+  {% if groups|length > 1 %}
+    <div class="btn-row" style="margin-bottom: 16px;">
+      {% for g in groups %}
+        {% if g.id == current_group.id %}
+          <span class="btn btn-primary">{{ g.name }}</span>
+        {% else %}
+          <a class="btn" href="{{ url_for('approvals.dashboard_group', group_code=g.code, event=selected_event, dept=selected_dept) }}">
+            {{ g.name }}
+          </a>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# Filters #}
+  <div class="card" style="margin-bottom: 16px; background: #f8f9fa;">
+    <form method="get" action="{{ url_for('approvals.dashboard_group', group_code=current_group.code) }}" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+      <div>
+        <label for="event" style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px;">Event Cycle</label>
+        <select name="event" id="event" style="min-width: 150px;">
+          <option value="">All Events</option>
+          {% for ec in event_cycles %}
+            <option value="{{ ec.code }}" {% if selected_event == ec.code %}selected{% endif %}>
+              {{ ec.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="dept" style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px;">Department</label>
+        <select name="dept" id="dept" style="min-width: 150px;">
+          <option value="">All Departments</option>
+          {% for d in departments %}
+            <option value="{{ d.code }}" {% if selected_dept == d.code %}selected{% endif %}>
+              {{ d.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <button type="submit" class="btn">Apply Filters</button>
+      </div>
+      {% if selected_event or selected_dept %}
+        <div>
+          <a class="btn btn-muted" href="{{ url_for('approvals.dashboard_group', group_code=current_group.code) }}">
+            Clear Filters
+          </a>
+        </div>
+      {% endif %}
+    </form>
+  </div>
+
+  {# Summary Cards #}
+  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
+    <div class="card" style="text-align: center;">
+      <div style="font-size: 32px; font-weight: 700; color: #0a66c2;">{{ queues.pending_count }}</div>
+      <div class="muted">Pending Review</div>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div style="font-size: 32px; font-weight: 700; color: #d97706;">{{ queues.kicked_back_count }}</div>
+      <div class="muted">Kicked Back</div>
+    </div>
+    <div class="card" style="text-align: center;">
+      <div style="font-size: 32px; font-weight: 700; color: #059669;">{{ queues.recently_decided_count }}</div>
+      <div class="muted">Recently Decided</div>
+    </div>
+  </div>
+
+  {# Pending Review Queue #}
+  <section class="card" style="margin-bottom: 16px;">
+    <h3 style="margin:0 0 12px 0;">
+      Pending Review
+      {% if queues.pending_count > 0 %}
+        <span class="pill pill-submitted">{{ queues.pending_count }}</span>
+      {% endif %}
+    </h3>
+
+    {% if queues.pending %}
+      {% include "approvals/_queue_table.html" with context %}
+    {% else %}
+      <div class="muted" style="text-align: center; padding: 24px;">
+        No lines pending review in this queue.
+      </div>
+    {% endif %}
+  </section>
+
+  {# Kicked Back Queue #}
+  <section class="card" style="margin-bottom: 16px;">
+    <h3 style="margin:0 0 12px 0;">
+      Kicked Back (Awaiting Requester)
+      {% if queues.kicked_back_count > 0 %}
+        <span class="pill pill-needs">{{ queues.kicked_back_count }}</span>
+      {% endif %}
+    </h3>
+
+    {% if queues.kicked_back %}
+      {% set queue_items = queues.kicked_back %}
+      {% set show_status = true %}
+      {% include "approvals/_queue_table.html" %}
+    {% else %}
+      <div class="muted" style="text-align: center; padding: 24px;">
+        No lines awaiting requester response.
+      </div>
+    {% endif %}
+  </section>
+
+  {# Recently Decided Queue #}
+  <section class="card">
+    <h3 style="margin:0 0 12px 0;">
+      Recently Decided (Last 72 Hours)
+      {% if queues.recently_decided_count > 0 %}
+        <span class="pill">{{ queues.recently_decided_count }}</span>
+      {% endif %}
+    </h3>
+
+    {% if queues.recently_decided %}
+      {% set queue_items = queues.recently_decided %}
+      {% set show_status = true %}
+      {% set show_decided_at = true %}
+      {% include "approvals/_queue_table.html" %}
+    {% else %}
+      <div class="muted" style="text-align: center; padding: 24px;">
+        No recent decisions.
+      </div>
+    {% endif %}
+  </section>
+
+{% endblock %}

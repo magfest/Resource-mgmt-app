@@ -9,7 +9,7 @@
   {% set status_pill_class =
     "pill-approved" if status == "FINALIZED"
     else "pill-submitted" if status == "SUBMITTED"
-    else "pill-needs" if status in ["UNDER_REVIEW", "NEEDS_INFO"]
+    else "pill-needs" if status in ["UNDER_REVIEW", "NEEDS_INFO", "PAUSED"]
     else "pill-draft" %}
 
   {# Header #}
@@ -110,10 +110,110 @@
       </form>
     {% endif %}
 
+    {# Review Lines button for reviewers #}
+    {% if perms.is_admin or perms.is_checked_out_by_current_user %}
+      <a class="btn" href="{{ url_for('approvals.dashboard_home') }}">
+        Approval Dashboard
+      </a>
+    {% endif %}
+
+    {# Admin Final Review button #}
+    {% if perms.is_admin and status == "SUBMITTED" %}
+      <a class="btn" href="{{ url_for('admin_final.dashboard') }}">
+        Admin Final Review
+      </a>
+    {% endif %}
+
     <a class="btn" href="{{ url_for('budget.portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">
       Back to Portfolio
     </a>
   </div>
+
+  {# Finalization Section for Admins #}
+  {% if perms.is_admin and status == "SUBMITTED" and finalization_summary %}
+    <div class="card" style="margin-bottom: 16px; background: #f0fdf4; border: 1px solid #059669;">
+      <h4 style="margin:0 0 12px 0;">Admin Finalization</h4>
+
+      {# Summary stats #}
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
+        <div>
+          <div class="muted small">Total Lines</div>
+          <div style="font-size: 18px; font-weight: 600;">{{ finalization_summary.total_lines }}</div>
+        </div>
+        <div>
+          <div class="muted small">Approved</div>
+          <div style="font-size: 18px; font-weight: 600; color: #059669;">{{ finalization_summary.approved_lines }}</div>
+        </div>
+        <div>
+          <div class="muted small">Rejected</div>
+          <div style="font-size: 18px; font-weight: 600; color: #dc3545;">{{ finalization_summary.rejected_lines }}</div>
+        </div>
+        <div>
+          <div class="muted small">Pending</div>
+          <div style="font-size: 18px; font-weight: 600;">{{ finalization_summary.pending_lines }}</div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+        <div>
+          <div class="muted small">Total Requested</div>
+          <div style="font-size: 18px; font-weight: 600;">{{ format_currency(finalization_summary.total_requested_cents) }}</div>
+        </div>
+        <div>
+          <div class="muted small">Total Approved</div>
+          <div style="font-size: 18px; font-weight: 600; color: #059669;">{{ format_currency(finalization_summary.total_approved_cents) }}</div>
+        </div>
+      </div>
+
+      {% if finalization_summary.kicked_back_lines > 0 %}
+        <div class="callout callout-danger" style="margin-bottom: 12px;">
+          <strong>Cannot Finalize</strong>
+          <div class="muted" style="margin-top:4px;">
+            {{ finalization_summary.kicked_back_lines }} line(s) are awaiting requester response.
+          </div>
+        </div>
+      {% elif can_finalize %}
+        <div id="finalize-section">
+          <button type="button" class="btn btn-primary" onclick="document.getElementById('finalize-form-container').style.display='block'; this.style.display='none';">
+            Finalize Request
+          </button>
+          <span class="muted" style="margin-left: 8px;">
+            {% if finalization_summary.pending_lines > 0 %}
+              ({{ finalization_summary.pending_lines }} pending lines will be auto-approved at requested amounts)
+            {% endif %}
+          </span>
+
+          <div id="finalize-form-container" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #d1d5db;">
+            <form method="post" action="{{ url_for('admin_final.finalize', work_item_id=work_item.id) }}">
+              <input type="hidden" name="referrer" value="{{ request.url }}" />
+              <div style="margin-bottom: 12px;">
+                <label for="finalize-note" style="font-weight: 600; display: block; margin-bottom: 4px;">
+                  Finalization Note <span style="color: #dc3545;">*</span>
+                </label>
+                <textarea name="note" id="finalize-note" rows="4" style="width: 100%;"
+                          placeholder="Enter your finalization notes... (e.g., budget adjustments made, items flagged for follow-up, conditions of approval)" required></textarea>
+                <div class="muted small" style="margin-top: 4px;">
+                  This note will be recorded in the audit trail and may be visible to department heads.
+                </div>
+              </div>
+              <div class="btn-row">
+                <button type="submit" class="btn btn-primary" onclick="return confirm('Finalize this request? This action will lock in all approved amounts.');">
+                  Confirm Finalization
+                </button>
+                <button type="button" class="btn" onclick="document.getElementById('finalize-form-container').style.display='none'; document.querySelector('#finalize-section > button').style.display='inline-block';">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      {% else %}
+        <div class="muted">
+          At least one line must be reviewed before finalization.
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
 
   {# Status-specific callouts #}
   {% if status == "NEEDS_INFO" %}
@@ -154,6 +254,14 @@
         {% endif %}
       </div>
     </div>
+  {% elif status == "PAUSED" %}
+    <div class="callout callout-action" style="margin-bottom: 16px;">
+      <strong>Paused - Awaiting Primary Request</strong>
+      <div class="muted" style="margin-top:4px;">
+        This supplementary request is paused because the primary budget request was unfinalized.
+        It will automatically resume review once the primary request is re-finalized.
+      </div>
+    </div>
   {% endif %}
 
   {# Request Information Form (for reviewers with checkout) #}
@@ -177,6 +285,7 @@
     <h3 style="margin:0 0 12px 0;">Budget Lines</h3>
 
     {% if lines %}
+      {% set show_approved_column = status == "FINALIZED" or totals.approved > 0 %}
       <table>
         <thead>
           <tr>
@@ -185,15 +294,21 @@
             <th>Description</th>
             <th style="width: 80px;" class="right">Qty</th>
             <th style="width: 100px;" class="right">Unit Price</th>
-            <th style="width: 120px;" class="right">Total</th>
+            <th style="width: 120px;" class="right">Requested</th>
+            {% if show_approved_column %}
+              <th style="width: 120px;" class="right">Approved</th>
+            {% endif %}
             <th style="width: 100px;">Status</th>
+            {% if status == "SUBMITTED" or status == "UNDER_REVIEW" or status == "NEEDS_INFO" %}
+              <th style="width: 80px;"></th>
+            {% endif %}
           </tr>
         </thead>
         <tbody>
           {% for line in lines %}
             {% set detail = line.budget_detail %}
             {% set line_total = (detail.unit_price_cents * detail.quantity) if detail else 0 %}
-            <tr>
+            <tr id="line-{{ line.line_number }}">
               <td>{{ line.line_number }}</td>
               <td>
                 {% if detail and detail.expense_account %}
@@ -219,19 +334,66 @@
                     {% if detail.warehouse_flag %} &middot; Warehouse{% endif %}
                   </div>
                 {% endif %}
+                {% if line.needs_requester_action %}
+                  <div class="muted small" style="margin-top: 4px; color: #d97706;">
+                    Action required
+                  </div>
+                {% endif %}
               </td>
               <td class="right num">{{ detail.quantity if detail else '-' }}</td>
               <td class="right num">{{ format_currency(detail.unit_price_cents) if detail else '-' }}</td>
-              <td class="right num"><strong>{{ format_currency(line_total) }}</strong></td>
+              <td class="right num">{{ format_currency(line_total) }}</td>
+              {% if show_approved_column %}
+                <td class="right num">
+                  {% if line.approved_amount_cents is not none %}
+                    {% set diff = line.approved_amount_cents - line_total %}
+                    <strong style="{% if diff < 0 %}color: #dc3545;{% elif diff > 0 %}color: #059669;{% else %}color: #059669;{% endif %}">
+                      {{ format_currency(line.approved_amount_cents) }}
+                    </strong>
+                    {% if diff != 0 %}
+                      <div class="muted small">
+                        {% if diff > 0 %}+{% endif %}{{ format_currency(diff) }}
+                      </div>
+                    {% endif %}
+                  {% elif line.status == "REJECTED" %}
+                    <span class="muted">$0.00</span>
+                  {% else %}
+                    <span class="muted">-</span>
+                  {% endif %}
+                </td>
+              {% endif %}
               <td>
                 {% set line_status = line.status | upper %}
+                {% set review_stage = line.current_review_stage | upper if line.current_review_stage else '' %}
                 {% set line_pill_class =
                   "pill-approved" if line_status == "APPROVED"
                   else "pill-needs" if line_status in ["NEEDS_INFO", "NEEDS_ADJUSTMENT"]
                   else "tag-kicked" if line_status == "REJECTED"
                   else "" %}
-                <span class="pill {{ line_pill_class }}">{{ line_status }}</span>
+                {# Show different text based on review stage #}
+                {% if line_status == "APPROVED" %}
+                  {% if review_stage == "ADMIN_FINAL" %}
+                    <span class="pill {{ line_pill_class }}">APPROVED</span>
+                  {% else %}
+                    <span class="pill" style="background: #dbeafe; color: #1e40af;">AG APPROVED</span>
+                  {% endif %}
+                {% elif line_status == "REJECTED" %}
+                  {% if review_stage == "ADMIN_FINAL" %}
+                    <span class="pill {{ line_pill_class }}">REJECTED</span>
+                  {% else %}
+                    <span class="pill" style="background: #fee2e2; color: #991b1b;">AG REJECTED</span>
+                  {% endif %}
+                {% else %}
+                  <span class="pill {{ line_pill_class }}">{{ line_status }}</span>
+                {% endif %}
               </td>
+              {% if status == "SUBMITTED" or status == "UNDER_REVIEW" or status == "NEEDS_INFO" %}
+                <td>
+                  <a class="btn btn-muted" href="{{ url_for('approvals.line_review', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="padding: 4px 8px; font-size: 12px;">
+                    Review
+                  </a>
+                </td>
+              {% endif %}
             </tr>
           {% endfor %}
         </tbody>
@@ -239,8 +401,28 @@
           <tr style="font-weight: 700;">
             <td colspan="5" class="right">Total Requested:</td>
             <td class="right num">{{ format_currency(totals.requested) }}</td>
+            {% if show_approved_column %}
+              <td class="right num" style="color: #059669;">{{ format_currency(totals.approved) }}</td>
+            {% endif %}
             <td></td>
+            {% if status == "SUBMITTED" or status == "UNDER_REVIEW" or status == "NEEDS_INFO" %}
+              <td></td>
+            {% endif %}
           </tr>
+          {% if show_approved_column and totals.approved != totals.requested %}
+            <tr class="muted">
+              <td colspan="5" class="right">Difference:</td>
+              <td></td>
+              <td class="right num" style="{% if totals.approved < totals.requested %}color: #dc3545;{% else %}color: #059669;{% endif %}">
+                {% set total_diff = totals.approved - totals.requested %}
+                {% if total_diff > 0 %}+{% endif %}{{ format_currency(total_diff) }}
+              </td>
+              <td></td>
+              {% if status == "SUBMITTED" or status == "UNDER_REVIEW" or status == "NEEDS_INFO" %}
+                <td></td>
+              {% endif %}
+            </tr>
+          {% endif %}
         </tfoot>
       </table>
     {% else %}
@@ -253,4 +435,24 @@
     {% endif %}
   </section>
 
+  {# Request-level Comments #}
+  {% if work_item.comments %}
+    <section class="card" style="margin-top: 16px;">
+      <h3 style="margin:0 0 12px 0;">Request Comments</h3>
+      {% for comment in work_item.comments %}
+        <div class="comment">
+          <div class="muted small">
+            {{ comment.created_at.strftime('%Y-%m-%d %H:%M') }} &middot;
+            {{ comment.created_by_user_id }}
+            {% if comment.visibility == "ADMIN" %}
+              <span class="pill" style="margin-left: 4px;">Admin Only</span>
+            {% endif %}
+          </div>
+          <div style="margin-top: 4px; white-space: pre-wrap;">{{ comment.body }}</div>
+        </div>
+      {% endfor %}
+    </section>
+  {% endif %}
+
 {% endblock %}
+
