@@ -19,7 +19,7 @@ from app.models import (
     WORK_LINE_STATUS_REJECTED,
 )
 from app.routes import get_user_ctx
-from app.routes.budget.helpers import format_currency
+from app.routes.work.helpers import format_currency
 from . import admin_final_bp
 from .helpers import (
     require_admin,

@@ -6,7 +6,6 @@
 <h1>{{ division.name }} - Division Members</h1>
 <div class="muted" style="margin-bottom: 16px;">
   Manage users who have division-level access to all departments in this division.
-  Division heads can view and edit budget requests for any department in the division.
 </div>
 
 <div class="row" style="margin-bottom: 16px;">
@@ -19,11 +18,10 @@
   <thead>
     <tr>
       <th style="width: 200px;">User</th>
-      <th style="width: 120px;">Event Cycle</th>
-      <th style="width: 80px;">Can View</th>
-      <th style="width: 80px;">Can Edit</th>
-      <th style="width: 100px;">Division Head</th>
-      <th style="width: 150px;">Actions</th>
+      <th style="width: 100px;">Event Cycle</th>
+      <th style="width: 100px;">Role</th>
+      <th>Work Type Access</th>
+      <th style="width: 130px;">Actions</th>
     </tr>
   </thead>
   <tbody>
@@ -35,30 +33,35 @@
         </td>
         <td>{{ m.event_cycle.code }}</td>
         <td>
-          {% if m.can_view %}
-            <span class="pill" style="background: #e9f7ef;">Yes</span>
-          {% else %}
-            <span class="pill" style="background: #fbeaea;">No</span>
-          {% endif %}
-        </td>
-        <td>
-          {% if m.can_edit %}
-            <span class="pill" style="background: #e9f7ef;">Yes</span>
-          {% else %}
-            <span class="pill" style="background: #fbeaea;">No</span>
-          {% endif %}
-        </td>
-        <td>
           {% if m.is_division_head %}
-            <span class="pill" style="background: #dbeafe; color: #1e40af;">Division Head</span>
+            <span class="pill" style="background: #dbeafe; color: #1e40af;">Div Head</span>
           {% else %}
-            <span class="muted">—</span>
+            <span class="muted">Member</span>
+          {% endif %}
+        </td>
+        <td>
+          {% set ns = namespace(has_any_access=false) %}
+          {% for wt in work_types %}
+            {% set wta = m.get_work_type_access(wt.id) %}
+            {% if wta and (wta.can_view or wta.can_edit) %}
+              {% set ns.has_any_access = true %}
+              <span class="pill" style="background: {% if wta.can_edit %}#e9f7ef{% else %}#f0f9ff{% endif %}; margin-right: 4px; margin-bottom: 4px;">
+                {{ wt.config.item_plural if wt.config else wt.name }}
+                <span class="muted small" style="margin-left: 2px;">
+                  ({% if wta.can_edit %}edit{% else %}view{% endif %})
+                </span>
+              </span>
+            {% endif %}
+          {% endfor %}
+          {% if not ns.has_any_access %}
+            <span class="muted small">No access</span>
           {% endif %}
         </td>
         <td>
           <div class="btn-row">
             <a class="btn" href="{{ url_for('admin_config.divisions.edit_member', division_id=division.id, membership_id=m.id) }}">Edit</a>
             <form method="post" action="{{ url_for('admin_config.divisions.delete_member', division_id=division.id, membership_id=m.id) }}" style="display: inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn" type="submit" onclick="return confirm('Remove this member?')">Remove</button>
             </form>
           </div>
@@ -79,11 +82,15 @@
 {% endif %}
 
 <div class="callout" style="margin-top: 24px;">
-  <strong>Permission Levels</strong>
+  <strong>Work Type Access</strong>
+  <p style="margin: 8px 0 0 0;">
+    Division members have access to all departments within the division. Access is scoped per work type -
+    a user with Budget access does not automatically have Contracts access.
+  </p>
   <ul style="margin: 8px 0 0 0; padding-left: 20px;">
-    <li><strong>Can View</strong>: User can view budget requests for all departments in this division</li>
-    <li><strong>Can Edit</strong>: User can create, edit, and submit budget requests for all departments in this division</li>
-    <li><strong>Division Head</strong>: Informational flag to identify division leadership (enables Can View + Can Edit)</li>
+    <li><strong>View</strong>: User can view requests for this work type across all division departments</li>
+    <li><strong>Edit</strong>: User can create, edit, and submit requests for this work type across all division departments</li>
+    <li><strong>Division Head</strong>: Informational flag to identify division leadership</li>
   </ul>
 </div>
 {% endblock %}

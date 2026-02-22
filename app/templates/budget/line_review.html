@@ -36,7 +36,7 @@
         {% endif %}
       </h1>
       <div class="muted" style="margin-top:4px; line-height:1.5;">
-        <a href="{{ url_for('budget.work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+        <a href="{{ url_for('work.work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
           {{ work_item.public_id }}
         </a>
         &middot;
@@ -79,7 +79,7 @@
 
   {# Navigation #}
   <div class="btn-row" style="margin-bottom: 16px;">
-    <a class="btn" href="{{ url_for('budget.work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+    <a class="btn" href="{{ url_for('work.work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
       Back to Request
     </a>
     <a class="btn" href="{{ url_for('approvals.dashboard_home') }}">
@@ -221,6 +221,7 @@
           {# Response form for requester #}
           {% if can_respond %}
             <form method="post" action="{{ url_for('approvals.line_respond', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="margin-top: 12px;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <div style="margin-bottom: 8px;">
                 <label for="response"><strong>Your Response:</strong></label>
                 <textarea name="response" id="response" rows="3" style="width: 100%; margin-top: 4px;" placeholder="Provide the requested information..." required></textarea>
@@ -245,6 +246,7 @@
           {# Edit form for requester to adjust line details #}
           {% if can_respond %}
             <form method="post" action="{{ url_for('approvals.line_adjust', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="margin-top: 12px;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <div style="background: #fff; padding: 12px; border-radius: 6px; margin-bottom: 12px;">
                 <h4 style="margin: 0 0 12px 0;">Edit Line Details</h4>
 
@@ -279,7 +281,7 @@
         </div>
       {% elif status == "APPROVED" %}
         <div class="callout callout-success" style="margin-bottom: 16px;">
-          <strong>Approved</strong>
+          <strong>AG Approved</strong>
           {% if review and review.decided_at %}
             <div class="muted" style="margin-top:4px;">
               Decided {{ review.decided_at.strftime('%Y-%m-%d %H:%M') }}
@@ -291,7 +293,7 @@
         </div>
       {% elif status == "REJECTED" %}
         <div class="callout callout-danger" style="margin-bottom: 16px;">
-          <strong>Rejected</strong>
+          <strong>AG Rejected</strong>
           {% if review and review.decided_at %}
             <div class="muted" style="margin-top:4px;">
               Decided {{ review.decided_at.strftime('%Y-%m-%d %H:%M') }}
@@ -327,12 +329,6 @@
                 Note (required for reject/needs-info/needs-adjustment)
               </label>
               <textarea name="note" id="review_note" rows="3" style="width: 100%;" placeholder="Enter your review notes..."></textarea>
-              {% if user_ctx.is_admin %}
-              <label style="display: block; margin-top: 6px; font-size: 13px; cursor: pointer;">
-                <input type="checkbox" name="admin_only" value="1" id="ag_admin_only" style="margin-right: 4px;" />
-                Admin-only note (not visible to requesters)
-              </label>
-              {% endif %}
             </div>
 
             <div style="margin-bottom: 16px;">
@@ -348,6 +344,7 @@
 
             <div class="btn-row">
               <form method="post" action="{{ url_for('approvals.line_approve', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="note" class="note-field" />
                 <input type="hidden" name="recommended_amount" class="amount-field" />
                 <input type="hidden" name="admin_only" class="admin-only-field" />
@@ -357,6 +354,7 @@
               </form>
 
               <form method="post" action="{{ url_for('approvals.line_reject', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="note" class="note-field" />
                 <input type="hidden" name="admin_only" class="admin-only-field" />
                 <button type="submit" class="btn" style="border-color: #dc3545; color: #dc3545;" onclick="return confirmAction(this, 'Reject this line?', true)">
@@ -365,6 +363,7 @@
               </form>
 
               <form method="post" action="{{ url_for('approvals.line_needs_info', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="note" class="note-field" />
                 <input type="hidden" name="admin_only" class="admin-only-field" />
                 <button type="submit" class="btn" onclick="return confirmAction(this, 'Request more info?', true)">
@@ -373,6 +372,7 @@
               </form>
 
               <form method="post" action="{{ url_for('approvals.line_needs_adjustment', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="note" class="note-field" />
                 <input type="hidden" name="admin_only" class="admin-only-field" />
                 <button type="submit" class="btn" onclick="return confirmAction(this, 'Request adjustment?', true)">
@@ -388,7 +388,8 @@
               You must checkout the work item to make review decisions.
             </div>
             <div style="margin-top: 12px;">
-              <form method="post" action="{{ url_for('budget.work_item_checkout', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
+              <form method="post" action="{{ url_for('work.work_item_checkout', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn btn-primary">Checkout for Review</button>
               </form>
             </div>
@@ -419,6 +420,7 @@
 
               {# Reset option #}
               <form method="post" action="{{ url_for('admin_final.line_reset', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="margin-top: 12px;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="btn" onclick="return confirm('Reset this line for re-review?');">
                   Reset for Re-review
                 </button>
@@ -494,6 +496,7 @@
 
               <div class="btn-row">
                 <form method="post" action="{{ url_for('admin_final.line_approve', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="display: inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="approved_amount" class="admin-amount-field" />
                   <input type="hidden" name="note" class="admin-note-field" />
                   <input type="hidden" name="admin_only" class="admin-admin-only-field" />
@@ -503,6 +506,7 @@
                 </form>
 
                 <form method="post" action="{{ url_for('admin_final.line_reject', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="display: inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="note" class="admin-note-field" />
                   <input type="hidden" name="admin_only" class="admin-admin-only-field" />
                   <button type="submit" class="btn" style="border-color: #dc3545; color: #dc3545;" onclick="return confirmAdminAction(this, 'Reject this line?', true)">
@@ -511,6 +515,7 @@
                 </form>
 
                 <form method="post" action="{{ url_for('admin_final.line_needs_info', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="display: inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="note" class="admin-note-field" />
                   <input type="hidden" name="admin_only" class="admin-admin-only-field" />
                   <button type="submit" class="btn" onclick="return confirmAdminAction(this, 'Request more info from requester?', true)">
@@ -543,6 +548,26 @@
         {% else %}
           <div class="muted" style="text-align: center; padding: 16px;">
             No comments yet.
+          </div>
+        {% endif %}
+
+        {# Add Comment Form - visible to reviewers #}
+        {% if can_review %}
+          <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
+            <form method="post" action="{{ url_for('approvals.line_comment', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <div style="margin-bottom: 8px;">
+                <label for="standalone_comment" style="font-size: 13px; font-weight: 600;">Add Comment:</label>
+                <textarea name="comment" id="standalone_comment" rows="3" style="width: 100%; margin-top: 4px;" placeholder="Enter your comment..."></textarea>
+              </div>
+              {% if user_ctx.is_admin %}
+                <label style="display: block; margin-bottom: 8px; font-size: 13px; cursor: pointer;">
+                  <input type="checkbox" name="admin_only" value="1" style="margin-right: 4px;" />
+                  Admin-only (not visible to requesters)
+                </label>
+              {% endif %}
+              <button type="submit" class="btn">Add Comment</button>
+            </form>
           </div>
         {% endif %}
       </section>

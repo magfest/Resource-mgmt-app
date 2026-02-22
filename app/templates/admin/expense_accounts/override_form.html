@@ -12,6 +12,7 @@
   <form method="post"
     action="{% if override %}{{ url_for('admin_config.expense_accounts.update_override', account_id=account.id, override_id=override.id) }}{% else %}{{ url_for('admin_config.expense_accounts.create_override', account_id=account.id) }}{% endif %}"
   >
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
 
       <div>
@@ -106,6 +107,7 @@
       <a class="btn" href="{{ url_for('admin_config.expense_accounts.list_overrides', account_id=account.id) }}">Cancel</a>
       {% if override %}
         <form method="post" action="{{ url_for('admin_config.expense_accounts.delete_override', account_id=account.id, override_id=override.id) }}" style="display: inline;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn" type="submit" onclick="return confirm('Delete this override?')" style="color: #c00;">Delete</button>
         </form>
       {% endif %}

@@ -228,9 +228,12 @@ def apply_admin_final_decision(
     # Get or create admin review record
     review, _created = get_or_create_admin_review(line, user_ctx)
 
-    # Get approval group recommendation
+    # Get approval group recommendation (if exists)
     ag_review = get_approval_group_review(line)
-    recommended = ag_review.approved_amount_cents if ag_review else None
+    if ag_review:
+        recommended = ag_review.approved_amount_cents
+    else:
+        recommended = None
 
     # Validate action
     if action == REVIEW_ACTION_APPROVE:
@@ -408,17 +411,48 @@ def finalize_work_item(
         ).all()
 
         for supp in paused_supplementary:
-            supp.status = WORK_ITEM_STATUS_SUBMITTED
-            # Create audit event for un-pause
-            supp_audit = WorkItemAuditEvent(
-                work_item_id=supp.id,
-                event_type="UNPAUSE",
-                old_value=WORK_ITEM_STATUS_PAUSED,
-                new_value=WORK_ITEM_STATUS_SUBMITTED,
-                reason="Primary request re-finalized",
-                created_by_user_id=user_ctx.user_id,
-            )
-            db.session.add(supp_audit)
+            # Validate supplementary is in a consistent state before un-pausing
+            # Check that all lines have budget details and valid approval group routing
+            can_unpause = True
+            for line in supp.lines:
+                if not line.budget_detail:
+                    can_unpause = False
+                    break
+                if not line.budget_detail.routed_approval_group_id:
+                    can_unpause = False
+                    break
+                # Check that line has a valid review record
+                ag_review = WorkLineReview.query.filter_by(
+                    work_line_id=line.id,
+                    stage=REVIEW_STAGE_APPROVAL_GROUP,
+                ).first()
+                if not ag_review:
+                    can_unpause = False
+                    break
+
+            if can_unpause:
+                supp.status = WORK_ITEM_STATUS_SUBMITTED
+                # Create audit event for un-pause
+                supp_audit = WorkItemAuditEvent(
+                    work_item_id=supp.id,
+                    event_type="UNPAUSE",
+                    old_value=WORK_ITEM_STATUS_PAUSED,
+                    new_value=WORK_ITEM_STATUS_SUBMITTED,
+                    reason="Primary request re-finalized",
+                    created_by_user_id=user_ctx.user_id,
+                )
+                db.session.add(supp_audit)
+            else:
+                # Log that we couldn't un-pause due to invalid state
+                supp_audit = WorkItemAuditEvent(
+                    work_item_id=supp.id,
+                    event_type="UNPAUSE_FAILED",
+                    old_value=WORK_ITEM_STATUS_PAUSED,
+                    new_value=WORK_ITEM_STATUS_PAUSED,
+                    reason="Primary re-finalized but supplementary has invalid line state - manual review required",
+                    created_by_user_id=user_ctx.user_id,
+                )
+                db.session.add(supp_audit)
 
     return True, None
 
@@ -590,9 +624,17 @@ def build_admin_queues(
             admin_review = get_admin_final_review(line)
             detail = line.budget_detail
 
-            # Calculate line total and recommended amount
-            line_total = detail.unit_price_cents * int(detail.quantity) if detail else 0
-            recommended = ag_review.approved_amount_cents if ag_review else None
+            # Calculate line total
+            if detail:
+                line_total = detail.unit_price_cents * int(detail.quantity)
+            else:
+                line_total = 0
+
+            # Get recommended amount from approval group review
+            if ag_review:
+                recommended = ag_review.approved_amount_cents
+            else:
+                recommended = None
 
             queue_item = AdminQueueItem(
                 work_item=item,

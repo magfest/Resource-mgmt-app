@@ -21,7 +21,7 @@ from app.models import (
     COMMENT_VISIBILITY_ADMIN,
 )
 from app.routes import get_user_ctx
-from app.routes.budget.helpers import (
+from app.routes.work.helpers import (
     get_portfolio_context,
     require_work_item_view,
     build_work_item_perms,
@@ -242,9 +242,14 @@ def _handle_review_action(event: str, dept: str, public_id: str, line_num: int, 
                 REVIEW_ACTION_NEEDS_ADJUSTMENT: "[ADJUSTMENT REQUESTED]",
                 REVIEW_ACTION_RESET: "[RESET]",
             }
-            # Check if admin-only note
-            admin_only = request.form.get("admin_only") == "1" and user_ctx.is_admin
-            visibility = COMMENT_VISIBILITY_ADMIN if admin_only else COMMENT_VISIBILITY_PUBLIC
+            # Check if admin requested admin-only visibility
+            admin_only_requested = request.form.get("admin_only") == "1"
+            is_admin_only = admin_only_requested and user_ctx.is_admin
+
+            if is_admin_only:
+                visibility = COMMENT_VISIBILITY_ADMIN
+            else:
+                visibility = COMMENT_VISIBILITY_PUBLIC
             comment = WorkLineComment(
                 work_line_id=line.id,
                 visibility=visibility,
@@ -328,9 +333,15 @@ def line_respond(event: str, dept: str, public_id: str, line_num: int):
         flash("Response submitted. The line is back in review.", "success")
 
         # Add comment with the response
-        # Check if admin-only note
-        admin_only = request.form.get("admin_only") == "1" and user_ctx.is_admin
-        visibility = COMMENT_VISIBILITY_ADMIN if admin_only else COMMENT_VISIBILITY_PUBLIC
+        # Check if admin requested admin-only visibility
+        admin_only_requested = request.form.get("admin_only") == "1"
+        is_admin_only = admin_only_requested and user_ctx.is_admin
+
+        if is_admin_only:
+            visibility = COMMENT_VISIBILITY_ADMIN
+        else:
+            visibility = COMMENT_VISIBILITY_PUBLIC
+
         comment = WorkLineComment(
             work_line_id=line.id,
             visibility=visibility,
@@ -498,9 +509,15 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int):
         changes_text = ", ".join(changes) if changes else "No field changes"
         comment_body = f"[ADJUSTMENT] {changes_text}\n\n{response_text}"
 
-        # Check if admin-only note
-        admin_only = request.form.get("admin_only") == "1" and user_ctx.is_admin
-        visibility = COMMENT_VISIBILITY_ADMIN if admin_only else COMMENT_VISIBILITY_PUBLIC
+        # Check if admin requested admin-only visibility
+        admin_only_requested = request.form.get("admin_only") == "1"
+        is_admin_only = admin_only_requested and user_ctx.is_admin
+
+        if is_admin_only:
+            visibility = COMMENT_VISIBILITY_ADMIN
+        else:
+            visibility = COMMENT_VISIBILITY_PUBLIC
+
         comment = WorkLineComment(
             work_line_id=line.id,
             visibility=visibility,
@@ -517,3 +534,48 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int):
         public_id=public_id,
         line_num=line_num
     ))
+
+
+# ============================================================
+# Standalone Comment Route
+# ============================================================
+
+@approvals_bp.post("/<event>/<dept>/budget/item/<public_id>/line/<int:line_num>/comment")
+def line_comment(event: str, dept: str, public_id: str, line_num: int):
+    """Add a standalone comment to a line."""
+    user_ctx = get_user_ctx()
+    work_item, line, ctx = get_work_item_and_line(event, dept, public_id, line_num)
+
+    # Permission check: must be reviewer for this line
+    if not is_reviewer_for_line(line, user_ctx):
+        flash("You do not have permission to comment on this line.", "error")
+        return redirect(url_for("approvals.line_review", event=event, dept=dept,
+                                public_id=public_id, line_num=line_num))
+
+    comment_text = (request.form.get("comment") or "").strip()
+    if not comment_text:
+        flash("Comment text is required.", "error")
+        return redirect(url_for("approvals.line_review", event=event, dept=dept,
+                                public_id=public_id, line_num=line_num))
+
+    # Check if admin requested admin-only visibility
+    admin_only_requested = request.form.get("admin_only") == "1"
+    is_admin_only = admin_only_requested and user_ctx.is_admin
+
+    if is_admin_only:
+        visibility = COMMENT_VISIBILITY_ADMIN
+    else:
+        visibility = COMMENT_VISIBILITY_PUBLIC
+
+    comment = WorkLineComment(
+        work_line_id=line.id,
+        visibility=visibility,
+        body=f"[COMMENT] {comment_text}",
+        created_by_user_id=user_ctx.user_id,
+    )
+    db.session.add(comment)
+    db.session.commit()
+
+    flash("Comment added.", "success")
+    return redirect(url_for("approvals.line_review", event=event, dept=dept,
+                            public_id=public_id, line_num=line_num))

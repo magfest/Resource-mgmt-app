@@ -7,7 +7,7 @@
 <div class="muted" style="margin: 8px 0 16px;">
   {% if user %}
     Editing user: <strong>{{ user.display_name }}</strong>
-    {% if user.auth_subject %}
+    {% if user.auth_subject and not user.auth_subject.startswith('dev:') %}
       <span class="pill" style="margin-left: 8px; background: #dbeafe;">Google Linked</span>
     {% else %}
       <span class="pill" style="margin-left: 8px; background: #fef3c7;">Not Yet Linked</span>
@@ -21,6 +21,7 @@
   <form method="post"
     action="{% if user %}{{ url_for('admin_config.users.update_user', user_id=user.id) }}{% else %}{{ url_for('admin_config.users.create_user') }}{% endif %}"
   >
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
 
       <div>
@@ -86,7 +87,7 @@
       {% if approval_groups %}
       <div style="margin-bottom: 8px;">
         <div style="font-weight: 600; margin-bottom: 8px;">Approver</div>
-        <div class="muted small" style="margin-bottom: 8px;">Can review and approve budget lines routed to these groups.</div>
+        <div class="muted small" style="margin-bottom: 8px;">Can review and approve request lines routed to these groups.</div>
         <div style="display: flex; flex-wrap: wrap; gap: 16px;">
           {% for ag in approval_groups %}
             <label style="display: flex; gap: 6px; align-items: center; font-weight: normal;">
@@ -107,10 +108,12 @@
       {% if user %}
         {% if user.is_active %}
           <form method="post" action="{{ url_for('admin_config.users.archive_user', user_id=user.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn" type="submit" onclick="return confirm('Deactivate this user?')">Deactivate</button>
           </form>
         {% else %}
           <form method="post" action="{{ url_for('admin_config.users.restore_user', user_id=user.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn" type="submit">Reactivate</button>
           </form>
         {% endif %}
@@ -137,11 +140,11 @@
   </table>
 </div>
 
-{% if user.auth_subject %}
-<div class="callout" style="max-width: 800px; margin-top: 24px;">
+{% if user.auth_subject and not user.auth_subject.startswith('dev:') %}
+<div class="callout" style="max-width: 800px; margin-top: 24px; background: #f0fdf4; border-color: #bbf7d0;">
   <strong>Google Account Linked</strong>
   <div class="muted small" style="margin-top: 4px;">
-    Auth Subject: <code>{{ user.auth_subject }}</code>
+    This user has signed in with Google. Their account is matched by email address.
   </div>
 </div>
 {% endif %}

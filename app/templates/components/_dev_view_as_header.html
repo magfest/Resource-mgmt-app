@@ -1,18 +1,32 @@
+{#
+  This header has three modes:
+  1. Dev/Beta mode: Full debug info with user details, memberships, role override
+  2. Production (logged in): Minimal bar with just name and logout
+  3. Production (not logged in): Login prompt
+#}
+
+{% set show_debug_header = dev_login_enabled or beta_testing_mode %}
+{% set oauth_enabled = google_auth_enabled or keycloak_auth_enabled %}
+
+{% if show_debug_header %}
+{# === DEV/BETA MODE: Full debug header === #}
 <div style="padding: 10px 12px; background: #f3f4f6; border-bottom: 1px solid #ddd; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;">
   <div style="display:flex; gap:12px; align-items:flex-start; justify-content:space-between;">
     <div style="line-height:1.4;">
-      <strong>Viewing as:</strong>
       {% if active_user %}
+        <strong>Logged in as:</strong>
         <div>
           {{ active_user.display_name }}
-          <span style="color:#666;">({{ active_user.id }})</span>
+          {% if dev_login_enabled %}
+            <span style="color:#666;">({{ active_user.id }})</span>
+          {% endif %}
         </div>
 
         <div style="color:#444; font-size:0.9em;">
           Email: <code>{{ active_user.email }}</code>
         </div>
 
-        {% if active_user.auth_subject %}
+        {% if dev_login_enabled and active_user.auth_subject %}
           <div style="color:#666; font-size:0.85em;">
             Auth subject: <code>{{ active_user.auth_subject }}</code>
           </div>
@@ -54,13 +68,78 @@
             No department memberships
           </div>
         {% endif %}
+      {% elif oauth_enabled %}
+        <span style="color:#666;">Not logged in</span>
       {% else %}
         <span style="color:#b00;">Unknown user ({{ active_user_id }})</span>
       {% endif %}
     </div>
 
-    <div style="white-space:nowrap;">
-      <a href="{{ url_for('dev.dev_login') }}">Switch user</a>
+    <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+      {# Login/logout options #}
+      {% if active_user %}
+        {% if dev_login_enabled %}
+          <a href="{{ url_for('dev.dev_login') }}">Switch user</a>
+        {% endif %}
+        {% if oauth_enabled %}
+          <a href="{{ url_for('auth.logout') }}">Logout</a>
+        {% endif %}
+      {% else %}
+        {% if oauth_enabled %}
+          <a href="{{ url_for('auth.login') }}" style="background:{% if keycloak_auth_enabled %}#0066cc{% else %}#4285f4{% endif %}; color:#fff; padding:8px 16px; border-radius:4px; text-decoration:none; font-size:0.9em;">
+            {% if keycloak_auth_enabled %}Sign in with SSO{% else %}Sign in with Google{% endif %}
+          </a>
+        {% endif %}
+        {% if dev_login_enabled %}
+          <a href="{{ url_for('dev.dev_login') }}">Dev login</a>
+        {% endif %}
+      {% endif %}
+
+      {# Role override dropdown - only for super-admins in beta mode, not while impersonating #}
+      {% if can_override_role and not is_impersonating %}
+        <div style="border-top:1px solid #ddd; padding-top:8px; margin-top:4px;">
+          <form method="post" action="{{ url_for('dev.set_role_override') }}" style="display:flex; gap:6px; align-items:center;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label style="font-size:0.85em; color:#666;">Test as:</label>
+            <select name="role_override" style="font-size:0.85em; padding:4px 6px;" onchange="this.form.submit()">
+              <option value="normal" {% if not role_override %}selected{% endif %}>Normal (Super Admin)</option>
+              <option value="finance" {% if role_override == 'finance' %}selected{% endif %}>Finance Only</option>
+              {% for group in _get_approval_groups() %}
+                <option value="approver:{{ group.id }}"
+                  {% if role_override == 'approver' and role_override_approval_group_id == group.id %}selected{% endif %}>
+                  Approver: {{ group.name }}
+                </option>
+              {% endfor %}
+              <option value="none" {% if role_override == 'none' %}selected{% endif %}>No Permissions</option>
+            </select>
+            <noscript><button type="submit" style="font-size:0.85em; padding:4px 8px;">Apply</button></noscript>
+          </form>
+          {% if role_override %}
+            <div style="font-size:0.8em; color:#b00; margin-top:4px;">
+              Role Override Active
+            </div>
+          {% endif %}
+        </div>
+
+        {# Impersonate user link #}
+        <a href="{{ url_for('dev.impersonate_user_page') }}" style="font-size:0.85em; color:#7c3aed;">
+          Impersonate User
+        </a>
+      {% endif %}
     </div>
   </div>
 </div>
+
+{% elif oauth_enabled %}
+{# === PRODUCTION MODE: Minimal user bar === #}
+  {% if active_user %}
+  <div style="padding: 8px 12px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.9em; display: flex; justify-content: flex-end; align-items: center; gap: 16px;">
+    <span style="color: #666;">{{ active_user.display_name }}</span>
+    <a href="{{ url_for('auth.logout') }}" style="color: #666; text-decoration: none;">Sign out</a>
+  </div>
+  {% elif not active_user %}
+  <div style="padding: 8px 12px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.9em; display: flex; justify-content: flex-end; align-items: center;">
+    <a href="{{ url_for('auth.login') }}" style="color: #666; text-decoration: none;">Sign in</a>
+  </div>
+  {% endif %}
+{% endif %}

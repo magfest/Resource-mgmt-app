@@ -19,6 +19,7 @@
   <form method="post"
     action="{% if department %}{{ url_for('admin_config.departments.update_department', dept_id=department.id) }}{% else %}{{ url_for('admin_config.departments.create_department') }}{% endif %}"
   >
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
 
       <div>
@@ -92,10 +93,12 @@
       {% if department %}
         {% if department.is_active %}
           <form method="post" action="{{ url_for('admin_config.departments.archive_department', dept_id=department.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn" type="submit" onclick="return confirm('Archive this department?')">Archive</button>
           </form>
         {% else %}
           <form method="post" action="{{ url_for('admin_config.departments.restore_department', dept_id=department.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn" type="submit">Restore</button>
           </form>
         {% endif %}

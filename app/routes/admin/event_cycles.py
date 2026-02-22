@@ -23,6 +23,7 @@ from .helpers import (
     track_changes,
     validate_code_length,
     CODE_MAX_LENGTH,
+    safe_int,
 )
 
 event_cycles_bp = Blueprint('event_cycles', __name__, url_prefix='/event-cycles')
@@ -133,7 +134,7 @@ def create_event_cycle():
         name=name,
         is_active=request.form.get("is_active") == "1",
         is_default=is_default,
-        sort_order=int(request.form.get("sort_order") or 0),
+        sort_order=safe_int(request.form.get("sort_order")),
         event_start_date=_parse_date(request.form.get("event_start_date")),
         submission_deadline=_parse_date(request.form.get("submission_deadline")),
         approval_target_date=_parse_date(request.form.get("approval_target_date")),
@@ -213,7 +214,7 @@ def update_event_cycle(cycle_id: int):
     cycle.name = name
     cycle.is_active = request.form.get("is_active") == "1"
     cycle.is_default = is_default
-    cycle.sort_order = int(request.form.get("sort_order") or 0)
+    cycle.sort_order = safe_int(request.form.get("sort_order"))
     cycle.event_start_date = _parse_date(request.form.get("event_start_date"))
     cycle.submission_deadline = _parse_date(request.form.get("submission_deadline"))
     cycle.approval_target_date = _parse_date(request.form.get("approval_target_date"))

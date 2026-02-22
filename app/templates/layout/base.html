@@ -212,6 +212,24 @@
             background: #f6f6f6;
         }
 
+        /* Clickable pill links */
+        a.pill-link {
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        a.pill-link:hover {
+            filter: brightness(0.95);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        a.pill-link:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
         /* -------- Snapshot / summary rows -------- */
         .meta {
             margin-bottom: 16px;
@@ -424,6 +442,8 @@
 </head>
 
 <body>
+{% include "components/_env_banner.html" %}
+
 {% include "components/_dev_view_as_header.html" %}
 
 {% include "components/_flash.html" %}

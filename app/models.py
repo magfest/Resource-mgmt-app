@@ -146,6 +146,7 @@ class DivisionMembership(db.Model):
     """
     Division-level membership grants permissions across ALL departments in a division.
     Division heads can view/edit/submit requests for any department in their division.
+    Access is still scoped by work type via DivisionMembershipWorkTypeAccess.
     """
     __tablename__ = "division_memberships"
 
@@ -182,10 +183,75 @@ class DivisionMembership(db.Model):
     user = db.relationship("User", backref=db.backref("division_memberships", lazy=True))
     event_cycle = db.relationship("EventCycle")
 
+    work_type_access = db.relationship(
+        "DivisionMembershipWorkTypeAccess",
+        backref="membership",
+        cascade="all, delete-orphan",
+        lazy=True,
+    )
+
     __table_args__ = (
         db.UniqueConstraint(
             "user_id", "division_id", "event_cycle_id",
             name="uq_division_membership_user_div_cycle",
+        ),
+    )
+
+    def get_work_type_access(self, work_type_id: int):
+        """Get work type access for this membership, or None if no access."""
+        for wta in self.work_type_access:
+            if wta.work_type_id == work_type_id:
+                return wta
+        return None
+
+    def can_view_work_type(self, work_type_id: int) -> bool:
+        """Check if this membership grants view access to a work type."""
+        wta = self.get_work_type_access(work_type_id)
+        return wta is not None and wta.can_view
+
+    def can_edit_work_type(self, work_type_id: int) -> bool:
+        """Check if this membership grants edit access to a work type."""
+        wta = self.get_work_type_access(work_type_id)
+        return wta is not None and wta.can_edit
+
+
+class DivisionMembershipWorkTypeAccess(db.Model):
+    """
+    Work type-specific access within a division membership.
+
+    A user's division membership grants potential access to all departments
+    in the division, but they only see/edit work types explicitly granted here.
+    """
+    __tablename__ = "division_membership_work_type_access"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    division_membership_id = db.Column(
+        db.Integer,
+        db.ForeignKey("division_memberships.id", name="fk_divmwta_membership_id"),
+        nullable=False,
+        index=True,
+    )
+
+    work_type_id = db.Column(
+        db.Integer,
+        db.ForeignKey("work_types.id", name="fk_divmwta_work_type_id"),
+        nullable=False,
+        index=True,
+    )
+
+    can_view = db.Column(db.Boolean, nullable=False, default=True)
+    can_edit = db.Column(db.Boolean, nullable=False, default=False)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    work_type = db.relationship("WorkType")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "division_membership_id", "work_type_id",
+            name="uq_divmwta_membership_work_type",
         ),
     )
 
@@ -272,10 +338,75 @@ class DepartmentMembership(db.Model):
     department = db.relationship("Department")
     event_cycle = db.relationship("EventCycle")
 
+    work_type_access = db.relationship(
+        "DepartmentMembershipWorkTypeAccess",
+        backref="membership",
+        cascade="all, delete-orphan",
+        lazy=True,
+    )
+
     __table_args__ = (
         db.UniqueConstraint(
             "user_id", "department_id", "event_cycle_id",
             name="uq_dept_membership_user_dept_cycle",
+        ),
+    )
+
+    def get_work_type_access(self, work_type_id: int):
+        """Get work type access for this membership, or None if no access."""
+        for wta in self.work_type_access:
+            if wta.work_type_id == work_type_id:
+                return wta
+        return None
+
+    def can_view_work_type(self, work_type_id: int) -> bool:
+        """Check if this membership grants view access to a work type."""
+        wta = self.get_work_type_access(work_type_id)
+        return wta is not None and wta.can_view
+
+    def can_edit_work_type(self, work_type_id: int) -> bool:
+        """Check if this membership grants edit access to a work type."""
+        wta = self.get_work_type_access(work_type_id)
+        return wta is not None and wta.can_edit
+
+
+class DepartmentMembershipWorkTypeAccess(db.Model):
+    """
+    Work type-specific access within a department membership.
+
+    A user's department membership grants potential access, but they only
+    see/edit work types explicitly granted here.
+    """
+    __tablename__ = "department_membership_work_type_access"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    department_membership_id = db.Column(
+        db.Integer,
+        db.ForeignKey("department_memberships.id", name="fk_dmwta_membership_id"),
+        nullable=False,
+        index=True,
+    )
+
+    work_type_id = db.Column(
+        db.Integer,
+        db.ForeignKey("work_types.id", name="fk_dmwta_work_type_id"),
+        nullable=False,
+        index=True,
+    )
+
+    can_view = db.Column(db.Boolean, nullable=False, default=True)
+    can_edit = db.Column(db.Boolean, nullable=False, default=False)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    work_type = db.relationship("WorkType")
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "department_membership_id", "work_type_id",
+            name="uq_dmwta_membership_work_type",
         ),
     )
 
@@ -311,6 +442,56 @@ class WorkType(db.Model):
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
+
+
+# Routing strategy constants
+ROUTING_STRATEGY_EXPENSE_ACCOUNT = "expense_account"
+ROUTING_STRATEGY_CONTRACT_TYPE = "contract_type"
+ROUTING_STRATEGY_CATEGORY = "category"
+ROUTING_STRATEGY_DIRECT = "direct"
+
+
+class WorkTypeConfig(db.Model):
+    """Configuration for each work type - controls routing, UI, and behavior."""
+    __tablename__ = "work_type_configs"
+
+    work_type_id = db.Column(
+        db.Integer,
+        db.ForeignKey("work_types.id", name="fk_work_type_configs_work_type_id"),
+        primary_key=True,
+    )
+
+    # URL slug for routes (e.g., "budget", "contracts", "supply")
+    url_slug = db.Column(db.String(32), unique=True, nullable=False, index=True)
+
+    # Public ID prefix (e.g., "BUD", "CON", "SUP")
+    public_id_prefix = db.Column(db.String(8), nullable=False)
+
+    # Line detail table discriminator
+    line_detail_type = db.Column(db.String(32), nullable=False)
+
+    # Routing strategy: "expense_account", "contract_type", "category", "direct"
+    routing_strategy = db.Column(db.String(32), nullable=False, default=ROUTING_STRATEGY_DIRECT)
+
+    # Default approval group when routing_strategy="direct"
+    default_approval_group_id = db.Column(
+        db.Integer,
+        db.ForeignKey("approval_groups.id", name="fk_work_type_configs_default_approval_group_id"),
+        nullable=True,
+    )
+
+    # Feature flags
+    supports_supplementary = db.Column(db.Boolean, nullable=False, default=True)
+    supports_fixed_costs = db.Column(db.Boolean, nullable=False, default=False)
+
+    # Display labels
+    item_singular = db.Column(db.String(32), nullable=False, default="Request")
+    item_plural = db.Column(db.String(32), nullable=False, default="Requests")
+    line_singular = db.Column(db.String(32), nullable=False, default="Line")
+    line_plural = db.Column(db.String(32), nullable=False, default="Lines")
+
+    work_type = db.relationship("WorkType", backref=db.backref("config", uselist=False))
+    default_approval_group = db.relationship("ApprovalGroup", foreign_keys=[default_approval_group_id])
 
 
 class WorkPortfolio(db.Model):
@@ -1154,4 +1335,188 @@ class BudgetLineDetail(db.Model):
     __table_args__ = (
         # Composite index for approval group workload queries
         db.Index("ix_budget_line_details_approval_routing", "routed_approval_group_id", "expense_account_id"),
+    )
+
+
+# ============================================================
+# Contract work type models
+# ============================================================
+
+class ContractType(db.Model):
+    """Contract types for categorization and routing."""
+    __tablename__ = "contract_types"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(32), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(128), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+
+    approval_group_id = db.Column(
+        db.Integer,
+        db.ForeignKey("approval_groups.id", name="fk_contract_types_approval_group_id"),
+        nullable=True,
+        index=True,
+    )
+
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_by_user_id = db.Column(db.String(64), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by_user_id = db.Column(db.String(64), nullable=True)
+
+    approval_group = db.relationship("ApprovalGroup", foreign_keys=[approval_group_id])
+
+
+class ContractLineDetail(db.Model):
+    """Contract-specific line details."""
+    __tablename__ = "contract_line_details"
+
+    work_line_id = db.Column(
+        db.Integer,
+        db.ForeignKey("work_lines.id", name="fk_contract_line_details_work_line_id"),
+        primary_key=True,
+    )
+
+    contract_type_id = db.Column(
+        db.Integer,
+        db.ForeignKey("contract_types.id", name="fk_contract_line_details_contract_type_id"),
+        nullable=False,
+        index=True,
+    )
+
+    # Snapshot of routing at submission/review time
+    routed_approval_group_id = db.Column(
+        db.Integer,
+        db.ForeignKey("approval_groups.id", name="fk_contract_line_details_routed_approval_group_id"),
+        nullable=True,
+        index=True,
+    )
+
+    vendor_name = db.Column(db.String(256), nullable=False)
+    vendor_contact = db.Column(db.String(256), nullable=True)
+    contract_amount_cents = db.Column(db.Integer, nullable=False)
+    start_date = db.Column(db.Date, nullable=True)
+    end_date = db.Column(db.Date, nullable=True)
+    terms_summary = db.Column(db.Text, nullable=True)
+    description = db.Column(db.Text, nullable=True)
+
+    work_line = db.relationship("WorkLine", backref=db.backref("contract_detail", uselist=False))
+    contract_type = db.relationship("ContractType")
+    routed_approval_group = db.relationship("ApprovalGroup", foreign_keys=[routed_approval_group_id])
+
+    __table_args__ = (
+        db.Index("ix_contract_line_details_approval_routing", "routed_approval_group_id", "contract_type_id"),
+    )
+
+
+# ============================================================
+# Supply Order work type models
+# ============================================================
+
+class SupplyCategory(db.Model):
+    """Categories for supply items - used for routing."""
+    __tablename__ = "supply_categories"
+
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(32), unique=True, nullable=False, index=True)
+    name = db.Column(db.String(128), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+
+    approval_group_id = db.Column(
+        db.Integer,
+        db.ForeignKey("approval_groups.id", name="fk_supply_categories_approval_group_id"),
+        nullable=True,
+        index=True,
+    )
+
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_by_user_id = db.Column(db.String(64), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by_user_id = db.Column(db.String(64), nullable=True)
+
+    approval_group = db.relationship("ApprovalGroup", foreign_keys=[approval_group_id])
+
+
+class SupplyItem(db.Model):
+    """Warehouse/supply catalog items."""
+    __tablename__ = "supply_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    category_id = db.Column(
+        db.Integer,
+        db.ForeignKey("supply_categories.id", name="fk_supply_items_category_id"),
+        nullable=False,
+        index=True,
+    )
+
+    item_name = db.Column(db.String(256), nullable=False)
+    unit = db.Column(db.String(32), nullable=False)  # "each", "case", "box"
+    notes = db.Column(db.Text, nullable=True)
+    image_url = db.Column(db.String(512), nullable=True)
+
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+    is_limited = db.Column(db.Boolean, nullable=False, default=False)
+    is_popular = db.Column(db.Boolean, nullable=False, default=False)
+    is_expendable = db.Column(db.Boolean, nullable=False, default=True)
+    notes_required = db.Column(db.Boolean, nullable=False, default=False)
+    internal_type = db.Column(db.String(32), nullable=True)
+
+    unit_cost_cents = db.Column(db.Integer, nullable=True)
+    qty_on_hand = db.Column(db.Integer, nullable=True)
+    location_zone = db.Column(db.String(32), nullable=True)
+    bin_location = db.Column(db.String(32), nullable=True)
+
+    sort_order = db.Column(db.Integer, nullable=False, default=0)
+
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_by_user_id = db.Column(db.String(64), nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by_user_id = db.Column(db.String(64), nullable=True)
+
+    category = db.relationship("SupplyCategory", backref="items")
+
+
+class SupplyOrderLineDetail(db.Model):
+    """Supply order line details."""
+    __tablename__ = "supply_order_line_details"
+
+    work_line_id = db.Column(
+        db.Integer,
+        db.ForeignKey("work_lines.id", name="fk_supply_order_line_details_work_line_id"),
+        primary_key=True,
+    )
+
+    item_id = db.Column(
+        db.Integer,
+        db.ForeignKey("supply_items.id", name="fk_supply_order_line_details_item_id"),
+        nullable=False,
+        index=True,
+    )
+
+    # Snapshot of routing at submission/review time
+    routed_approval_group_id = db.Column(
+        db.Integer,
+        db.ForeignKey("approval_groups.id", name="fk_supply_order_line_details_routed_approval_group_id"),
+        nullable=True,
+        index=True,
+    )
+
+    quantity_requested = db.Column(db.Integer, nullable=False)
+    quantity_approved = db.Column(db.Integer, nullable=True)
+    needed_by_date = db.Column(db.Date, nullable=True)
+    delivery_location = db.Column(db.String(256), nullable=True)
+    requester_notes = db.Column(db.Text, nullable=True)
+
+    work_line = db.relationship("WorkLine", backref=db.backref("supply_detail", uselist=False))
+    item = db.relationship("SupplyItem")
+    routed_approval_group = db.relationship("ApprovalGroup", foreign_keys=[routed_approval_group_id])
+
+    __table_args__ = (
+        db.Index("ix_supply_order_line_details_approval_routing", "routed_approval_group_id", "item_id"),
     )

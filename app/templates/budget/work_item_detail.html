@@ -75,13 +75,14 @@
   {# Actions #}
   <div class="btn-row" style="margin-bottom: 16px;">
     {% if perms.is_draft and perms.can_edit %}
-      <a class="btn btn-primary" href="{{ url_for('budget.work_item_edit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+      <a class="btn btn-primary" href="{{ url_for('work.work_item_edit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
         Edit Draft
       </a>
     {% endif %}
 
     {% if perms.can_submit %}
-      <form method="post" action="{{ url_for('budget.work_item_submit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
+      <form method="post" action="{{ url_for('work.work_item_submit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-primary" onclick="return confirm('Submit this request for review?');">
           Submit for Review
         </button>
@@ -90,7 +91,8 @@
 
     {# Checkout button for reviewers #}
     {% if perms.can_checkout %}
-      <form method="post" action="{{ url_for('budget.work_item_checkout', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
+      <form method="post" action="{{ url_for('work.work_item_checkout', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-primary">
           Checkout for Review
         </button>
@@ -99,7 +101,8 @@
 
     {# Checkin button #}
     {% if perms.can_checkin %}
-      <form method="post" action="{{ url_for('budget.work_item_checkin', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
+      <form method="post" action="{{ url_for('work.work_item_checkin', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn" onclick="return confirm('Release your checkout lock?');">
           {% if perms.is_checked_out_by_current_user %}
             Release Lock
@@ -124,7 +127,7 @@
       </a>
     {% endif %}
 
-    <a class="btn" href="{{ url_for('budget.portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">
+    <a class="btn" href="{{ url_for('work.portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">
       Back to Portfolio
     </a>
   </div>
@@ -185,6 +188,7 @@
 
           <div id="finalize-form-container" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid #d1d5db;">
             <form method="post" action="{{ url_for('admin_final.finalize', work_item_id=work_item.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="referrer" value="{{ request.url }}" />
               <div style="margin-bottom: 12px;">
                 <label for="finalize-note" style="font-weight: 600; display: block; margin-bottom: 4px;">
@@ -228,7 +232,8 @@
 
       {# Response form for requester #}
       {% if perms.can_respond_to_info %}
-        <form method="post" action="{{ url_for('budget.work_item_respond_info', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="margin-top: 12px;">
+        <form method="post" action="{{ url_for('work.work_item_respond_info', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="margin-top: 12px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div style="margin-bottom: 8px;">
             <label for="response"><strong>Your Response:</strong></label>
             <textarea name="response" id="response" rows="3" style="width: 100%; margin-top: 4px;" placeholder="Provide the requested information..." required></textarea>
@@ -268,7 +273,8 @@
   {% if perms.can_request_info %}
     <div class="card" style="margin-bottom: 16px; background: #f8f9fa;">
       <h4 style="margin:0 0 12px 0;">Request Information</h4>
-      <form method="post" action="{{ url_for('budget.work_item_request_info', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+      <form method="post" action="{{ url_for('work.work_item_request_info', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div style="margin-bottom: 8px;">
           <label for="message"><strong>What information do you need?</strong></label>
           <textarea name="message" id="message" rows="3" style="width: 100%; margin-top: 4px;" placeholder="Describe what additional information you need from the requester..." required></textarea>
@@ -429,17 +435,18 @@
       <div class="muted" style="text-align: center; padding: 24px;">
         No budget lines yet.
         {% if perms.can_add_lines %}
-          <a href="{{ url_for('budget.line_new', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">Add one now</a>.
+          <a href="{{ url_for('work.line_new', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">Add one now</a>.
         {% endif %}
       </div>
     {% endif %}
   </section>
 
   {# Request-level Comments #}
-  {% if work_item.comments %}
-    <section class="card" style="margin-top: 16px;">
-      <h3 style="margin:0 0 12px 0;">Request Comments</h3>
-      {% for comment in work_item.comments %}
+  <section class="card" style="margin-top: 16px;">
+    <h3 style="margin:0 0 12px 0;">Request Comments</h3>
+
+    {% if filtered_comments %}
+      {% for comment in filtered_comments %}
         <div class="comment">
           <div class="muted small">
             {{ comment.created_at.strftime('%Y-%m-%d %H:%M') }} &middot;
@@ -451,8 +458,32 @@
           <div style="margin-top: 4px; white-space: pre-wrap;">{{ comment.body }}</div>
         </div>
       {% endfor %}
-    </section>
-  {% endif %}
+    {% else %}
+      <div class="muted" style="text-align: center; padding: 16px;">
+        No comments yet.
+      </div>
+    {% endif %}
+
+    {# Add Comment Form - visible to reviewers/admins #}
+    {% if can_add_comment %}
+      <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
+        <form method="post" action="{{ url_for('work.work_item_comment', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div style="margin-bottom: 8px;">
+            <label for="work_item_comment" style="font-size: 13px; font-weight: 600;">Add Comment:</label>
+            <textarea name="comment" id="work_item_comment" rows="3" style="width: 100%; margin-top: 4px;" placeholder="Enter your comment..."></textarea>
+          </div>
+          {% if perms.is_admin %}
+            <label style="display: block; margin-bottom: 8px; font-size: 13px; cursor: pointer;">
+              <input type="checkbox" name="admin_only" value="1" style="margin-right: 4px;" />
+              Admin-only (not visible to requesters)
+            </label>
+          {% endif %}
+          <button type="submit" class="btn">Add Comment</button>
+        </form>
+      </div>
+    {% endif %}
+  </section>
 
 {% endblock %}
 

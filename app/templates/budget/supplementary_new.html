@@ -37,10 +37,11 @@
       </p>
     </div>
 
-    <form method="post" action="{{ url_for('budget.supplementary_create', event=ctx.event_cycle.code, dept=ctx.department.code) }}">
+    <form method="post" action="{{ url_for('work.supplementary_create', event=ctx.event_cycle.code, dept=ctx.department.code) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="btn-row" style="margin-top: 16px;">
         <button type="submit" class="btn btn-primary">Create Supplementary Budget Request</button>
-        <a class="btn" href="{{ url_for('budget.portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">Cancel</a>
+        <a class="btn" href="{{ url_for('work.portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">Cancel</a>
       </div>
     </form>
   </div>

@@ -105,7 +105,7 @@
             {% set dept_code = portfolio.department.code if portfolio else '' %}
             <tr>
               <td>
-                <a href="{{ url_for('budget.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
+                <a href="{{ url_for('work.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
                   {{ wi.public_id }}
                 </a>
                 <div class="muted small">{{ portfolio.department.name if portfolio else '-' }}</div>
@@ -189,7 +189,7 @@
             {% set dept_code = portfolio.department.code if portfolio else '' %}
             <tr>
               <td>
-                <a href="{{ url_for('budget.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
+                <a href="{{ url_for('work.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
                   {{ wi.public_id }}
                 </a>
                 <div class="muted small">{{ portfolio.department.name if portfolio else '-' }}</div>
@@ -255,7 +255,7 @@
             {% set summary = get_finalization_summary(wi) %}
             <tr>
               <td>
-                <a href="{{ url_for('budget.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
+                <a href="{{ url_for('work.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
                   {{ wi.public_id }}
                 </a>
               </td>
@@ -313,7 +313,7 @@
             {% set summary = get_finalization_summary(wi) %}
             <tr>
               <td>
-                <a href="{{ url_for('budget.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
+                <a href="{{ url_for('work.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
                   {{ wi.public_id }}
                 </a>
               </td>
@@ -350,6 +350,7 @@
       </div>
 
       <form id="finalize-form" method="post" action="">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div style="margin-bottom: 16px;">
           <label for="modal-note" style="font-weight: 600; display: block; margin-bottom: 4px;">
             Finalization Note <span style="color: #dc3545;">*</span>

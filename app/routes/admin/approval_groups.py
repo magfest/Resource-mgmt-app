@@ -22,6 +22,7 @@ from .helpers import (
     track_changes,
     validate_code_length,
     CODE_MAX_LENGTH,
+    safe_int,
 )
 
 approval_groups_bp = Blueprint('approval_groups', __name__, url_prefix='/approval-groups')
@@ -113,7 +114,7 @@ def create_approval_group():
         name=name,
         description=(request.form.get("description") or "").strip() or None,
         is_active=request.form.get("is_active") == "1",
-        sort_order=int(request.form.get("sort_order") or 0),
+        sort_order=safe_int(request.form.get("sort_order")),
         created_by_user_id=h.get_active_user_id(),
         updated_by_user_id=h.get_active_user_id(),
     )
@@ -180,7 +181,7 @@ def update_approval_group(group_id: int):
     group.name = name
     group.description = (request.form.get("description") or "").strip() or None
     group.is_active = request.form.get("is_active") == "1"
-    group.sort_order = int(request.form.get("sort_order") or 0)
+    group.sort_order = safe_int(request.form.get("sort_order"))
     group.updated_by_user_id = h.get_active_user_id()
 
     new_values = _group_to_dict(group)

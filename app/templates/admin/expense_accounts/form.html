@@ -26,6 +26,7 @@
   <form method="post"
     action="{% if account %}{{ url_for('admin_config.expense_accounts.update_expense_account', account_id=account.id) }}{% else %}{{ url_for('admin_config.expense_accounts.create_expense_account') }}{% endif %}"
   >
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
 
       <div>
@@ -156,10 +157,12 @@
       {% if account and can_modify %}
         {% if account.is_active %}
           <form method="post" action="{{ url_for('admin_config.expense_accounts.archive_expense_account', account_id=account.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn" type="submit" onclick="return confirm('Archive this expense account?')">Archive</button>
           </form>
         {% else %}
           <form method="post" action="{{ url_for('admin_config.expense_accounts.restore_expense_account', account_id=account.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn" type="submit">Restore</button>
           </form>
         {% endif %}

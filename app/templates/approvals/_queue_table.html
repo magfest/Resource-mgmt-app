@@ -35,7 +35,7 @@
 
       <tr>
         <td>
-          <a href="{{ url_for('budget.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
+          <a href="{{ url_for('work.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
             {{ wi.public_id }}
           </a>
           <div class="muted small">{{ portfolio.department.name if portfolio else '-' }}</div>

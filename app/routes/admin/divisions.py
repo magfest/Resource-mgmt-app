@@ -9,9 +9,11 @@ from app import db
 from app.models import (
     Division,
     DivisionMembership,
+    DivisionMembershipWorkTypeAccess,
     Department,
     EventCycle,
     User,
+    WorkType,
     CONFIG_AUDIT_CREATE,
     CONFIG_AUDIT_UPDATE,
     CONFIG_AUDIT_ARCHIVE,
@@ -25,6 +27,7 @@ from .helpers import (
     track_changes,
     validate_code_length,
     CODE_MAX_LENGTH,
+    safe_int,
 )
 
 divisions_bp = Blueprint('divisions', __name__, url_prefix='/divisions')
@@ -47,6 +50,16 @@ def _division_to_dict(division: Division) -> dict:
         "is_active": division.is_active,
         "sort_order": division.sort_order,
     }
+
+
+def _get_active_work_types():
+    """Get all active work types for access configuration."""
+    return (
+        db.session.query(WorkType)
+        .filter(WorkType.is_active == True)
+        .order_by(WorkType.sort_order, WorkType.name)
+        .all()
+    )
 
 
 @divisions_bp.get("/")
@@ -121,7 +134,7 @@ def create_division():
         name=name,
         description=(request.form.get("description") or "").strip() or None,
         is_active=request.form.get("is_active") == "1",
-        sort_order=int(request.form.get("sort_order") or 0),
+        sort_order=safe_int(request.form.get("sort_order")),
     )
 
     db.session.add(division)
@@ -186,7 +199,7 @@ def update_division(division_id: int):
     division.name = name
     division.description = (request.form.get("description") or "").strip() or None
     division.is_active = request.form.get("is_active") == "1"
-    division.sort_order = int(request.form.get("sort_order") or 0)
+    division.sort_order = safe_int(request.form.get("sort_order"))
 
     new_values = _division_to_dict(division)
     changes = track_changes(old_values, new_values)
@@ -264,11 +277,15 @@ def list_members(division_id: int):
         .all()
     )
 
+    # Get active work types for display
+    work_types = _get_active_work_types()
+
     return render_admin_config_page(
         "admin/divisions/members.html",
         division=division,
         memberships=memberships,
         event_cycles=event_cycles,
+        work_types=work_types,
     )
 
 
@@ -294,12 +311,16 @@ def add_member_form(division_id: int):
         .all()
     )
 
+    # Get active work types for access configuration
+    work_types = _get_active_work_types()
+
     return render_admin_config_page(
         "admin/divisions/member_form.html",
         division=division,
         membership=None,
         users=users,
         event_cycles=event_cycles,
+        work_types=work_types,
     )
 
 
@@ -337,6 +358,23 @@ def add_member(division_id: int):
     )
 
     db.session.add(membership)
+    db.session.flush()  # Get the membership ID
+
+    # Add work type access records
+    work_types = _get_active_work_types()
+    for wt in work_types:
+        wt_can_view = request.form.get(f"wt_{wt.id}_view") == "1"
+        wt_can_edit = request.form.get(f"wt_{wt.id}_edit") == "1"
+
+        if wt_can_view or wt_can_edit:
+            wta = DivisionMembershipWorkTypeAccess(
+                division_membership_id=membership.id,
+                work_type_id=wt.id,
+                can_view=wt_can_view,
+                can_edit=wt_can_edit,
+            )
+            db.session.add(wta)
+
     db.session.commit()
 
     user = db.session.get(User, user_id)
@@ -354,12 +392,16 @@ def edit_member(division_id: int, membership_id: int):
     if not membership or membership.division_id != division_id:
         abort(404, "Membership not found")
 
+    # Get active work types for access configuration
+    work_types = _get_active_work_types()
+
     return render_admin_config_page(
         "admin/divisions/member_form.html",
         division=division,
         membership=membership,
         users=None,  # Can't change user on edit
         event_cycles=None,  # Can't change event cycle on edit
+        work_types=work_types,
     )
 
 
@@ -376,6 +418,32 @@ def update_member(division_id: int, membership_id: int):
     membership.can_view = request.form.get("can_view") == "1"
     membership.can_edit = request.form.get("can_edit") == "1"
     membership.is_division_head = request.form.get("is_division_head") == "1"
+
+    # Update work type access records
+    work_types = _get_active_work_types()
+    for wt in work_types:
+        wt_can_view = request.form.get(f"wt_{wt.id}_view") == "1"
+        wt_can_edit = request.form.get(f"wt_{wt.id}_edit") == "1"
+
+        # Find existing access record
+        existing_wta = membership.get_work_type_access(wt.id)
+
+        if wt_can_view or wt_can_edit:
+            if existing_wta:
+                existing_wta.can_view = wt_can_view
+                existing_wta.can_edit = wt_can_edit
+            else:
+                wta = DivisionMembershipWorkTypeAccess(
+                    division_membership_id=membership.id,
+                    work_type_id=wt.id,
+                    can_view=wt_can_view,
+                    can_edit=wt_can_edit,
+                )
+                db.session.add(wta)
+        else:
+            # Remove access if both are unchecked
+            if existing_wta:
+                db.session.delete(existing_wta)
 
     db.session.commit()
 

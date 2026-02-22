@@ -21,6 +21,17 @@
   {% endif %}
 </div>
 
+{# Setup prompt for admins when no event cycle #}
+{% if not default_cycle and is_super_admin %}
+<div class="card" style="background: #fef3c7; border: 1px solid #f59e0b; padding: 24px; margin-bottom: 24px;">
+  <h3 style="margin: 0 0 8px 0; color: #92400e;">Setup Required</h3>
+  <p style="margin: 0 0 16px 0; color: #78350f;">
+    No event cycle is configured. Create an event cycle to start managing budgets.
+  </p>
+  <a href="{{ url_for('admin_config.event_cycles.new_event_cycle') }}" class="btn btn-primary">Create Event Cycle</a>
+</div>
+{% endif %}
+
 {# Timeline / Milestones - shown to everyone #}
 {% if milestones %}
 <section class="card" style="margin-bottom: 24px;">
@@ -181,9 +192,10 @@
     <thead>
       <tr>
         <th>Department</th>
-        <th style="width: 120px;">Division</th>
-        <th style="width: 150px;">Budget Status</th>
-        <th style="width: 100px;">Access</th>
+        <th style="width: 100px;">Source</th>
+        {% for wt in active_work_types %}
+          <th style="width: 130px;">{{ wt.config.item_plural if wt.config else wt.name }}</th>
+        {% endfor %}
         <th style="width: 140px;">Role</th>
         <th style="width: 80px;"></th>
       </tr>
@@ -192,14 +204,13 @@
       {% set current_division = namespace(name='') %}
       {% for dept_info in accessible_depts %}
         {% set dept = dept_info.department %}
-        {% set budget_status = dept_budget_status.get(dept.id) %}
         {% set div_name = dept.division.name if dept.division else 'No Division' %}
 
         {# Division header row when division changes #}
         {% if div_name != current_division.name %}
           {% set current_division.name = div_name %}
           <tr style="background: #f8fafc;">
-            <td colspan="6" style="padding: 8px 12px; font-weight: 600; color: #64748b; font-size: 0.85rem;">
+            <td colspan="{{ 4 + active_work_types|length }}" style="padding: 8px 12px; font-weight: 600; color: #64748b; font-size: 0.85rem;">
               {{ div_name }}
             </td>
           </tr>
@@ -216,51 +227,60 @@
               direct
             {% endif %}
           </td>
-          <td>
-            {% if budget_status %}
-              {% set status = budget_status.effective_status %}
-              {% if status == "FINALIZED" %}
-                <span class="pill pill-approved">Finalized</span>
-              {% elif status == "DRAFT" %}
-                <span class="pill pill-draft">Draft</span>
-              {% elif status == "NEEDS_INFO" or status == "NEEDS_ADJUSTMENT" or status == "NEEDS_RESPONSE" %}
-                <span class="pill pill-needs">{{ status | replace('_', ' ') | title }}</span>
-                {% if budget_status.has_issues %}
-                  <div class="muted small" style="margin-top:2px;">
-                    {% if budget_status.needs_info_count > 0 %}{{ budget_status.needs_info_count }} info{% endif %}
-                    {% if budget_status.needs_info_count > 0 and budget_status.needs_adjustment_count > 0 %}, {% endif %}
-                    {% if budget_status.needs_adjustment_count > 0 %}{{ budget_status.needs_adjustment_count }} adjust{% endif %}
-                  </div>
-                {% endif %}
-              {% elif status == "UNDER_REVIEW" %}
-                <span class="pill pill-submitted">Under Review</span>
-                {% if budget_status.approved_count > 0 %}
-                  <div class="muted small" style="margin-top:2px;">
-                    {% if budget_status.ag_approved_count > 0 %}
-                      {{ budget_status.ag_approved_count }} AG approved
-                    {% endif %}
-                    {% if budget_status.ag_approved_count > 0 and budget_status.final_approved_count > 0 %}, {% endif %}
-                    {% if budget_status.final_approved_count > 0 %}
-                      {{ budget_status.final_approved_count }} final
-                    {% endif %}
-                  </div>
-                {% endif %}
-              {% elif status == "SUBMITTED" %}
-                <span class="pill pill-submitted">Submitted</span>
-              {% else %}
-                <span class="pill">{{ status | replace('_', ' ') | title }}</span>
-              {% endif %}
+          {# Status column for each work type - only show if user has access #}
+          {% for wt in active_work_types %}
+            {% set wt_access = dept_work_type_access.get((dept.id, wt.id)) %}
+            {% set wt_status = dept_work_type_status.get((dept.id, wt.id)) %}
+            {% set url_slug = wt.config.url_slug if wt.config else 'budget' %}
+            {# Build the correct URL based on work type slug #}
+            {% if url_slug == 'budget' %}
+              {% set wt_url = url_for('work.portfolio_landing', event=default_cycle.code, dept=dept.code) %}
+            {% elif url_slug == 'contracts' %}
+              {% set wt_url = url_for('work.contracts_placeholder', event=default_cycle.code, dept=dept.code) %}
+            {% elif url_slug == 'supply' %}
+              {% set wt_url = url_for('work.supply_placeholder', event=default_cycle.code, dept=dept.code) %}
             {% else %}
-              <span class="muted small">Not started</span>
+              {% set wt_url = url_for('work.department_home', event=default_cycle.code, dept=dept.code) %}
             {% endif %}
-          </td>
-          <td>
-            {% if dept_info.can_edit %}
-              <span class="pill" style="background: #e9f7ef;">Edit</span>
-            {% elif dept_info.can_view %}
-              <span class="pill" style="background: #dbeafe;">View</span>
-            {% endif %}
-          </td>
+            <td>
+              {% if wt_access or is_super_admin %}
+                {% if wt_status %}
+                  {% set status = wt_status.effective_status %}
+                  {% if status == "FINALIZED" %}
+                    <a href="{{ wt_url }}" class="pill pill-approved pill-link">Finalized</a>
+                  {% elif status == "DRAFT" %}
+                    <a href="{{ wt_url }}" class="pill pill-draft pill-link">Draft</a>
+                  {% elif status == "NEEDS_INFO" or status == "NEEDS_ADJUSTMENT" or status == "NEEDS_RESPONSE" %}
+                    <a href="{{ wt_url }}" class="pill pill-needs pill-link">{{ status | replace('_', ' ') | title }}</a>
+                  {% elif status == "UNDER_REVIEW" %}
+                    <a href="{{ wt_url }}" class="pill pill-submitted pill-link">Under Review</a>
+                  {% elif status == "SUBMITTED" %}
+                    <a href="{{ wt_url }}" class="pill pill-submitted pill-link">Submitted</a>
+                  {% else %}
+                    <a href="{{ wt_url }}" class="pill pill-link">{{ status | replace('_', ' ') | title }}</a>
+                  {% endif %}
+                  {# Show supplementary indicator if there are any #}
+                  {% if wt_status.supplementary_count > 0 %}
+                    {% if wt_status.supplementary_draft_count > 0 %}
+                      <span class="pill" style="background: #fef3c7; color: #92400e; font-size: 10px; padding: 1px 5px; margin-left: 2px;" title="{{ wt_status.supplementary_count }} supplementary request(s), {{ wt_status.supplementary_draft_count }} in draft">+{{ wt_status.supplementary_count }}</span>
+                    {% elif wt_status.supplementary_needs_attention > 0 %}
+                      <span class="pill" style="background: #fee2e2; color: #dc2626; font-size: 10px; padding: 1px 5px; margin-left: 2px;" title="{{ wt_status.supplementary_count }} supplementary request(s), {{ wt_status.supplementary_needs_attention }} need attention">+{{ wt_status.supplementary_count }}</span>
+                    {% else %}
+                      <span class="pill" style="background: #e9f7ef; color: #059669; font-size: 10px; padding: 1px 5px; margin-left: 2px;" title="{{ wt_status.supplementary_count }} supplementary request(s)">+{{ wt_status.supplementary_count }}</span>
+                    {% endif %}
+                  {% endif %}
+                {% else %}
+                  {% if default_cycle %}
+                    <a href="{{ wt_url }}" class="pill pill-link" style="background: #f1f5f9; color: #64748b;">Not started</a>
+                  {% else %}
+                    <span class="muted small">-</span>
+                  {% endif %}
+                {% endif %}
+              {% else %}
+                <span class="muted small" style="color: #cbd5e1;">—</span>
+              {% endif %}
+            </td>
+          {% endfor %}
           <td>
             {% if dept_info.is_head %}
               {% if dept_info.access_source == 'division' %}
@@ -274,9 +294,7 @@
           </td>
           <td>
             {% if default_cycle %}
-              <a class="btn" href="{{ url_for('budget.portfolio_landing', event=default_cycle.code, dept=dept.code) }}">
-                View
-              </a>
+              <a class="btn" href="{{ url_for('work.department_home', event=default_cycle.code, dept=dept.code) }}">View</a>
             {% endif %}
           </td>
         </tr>

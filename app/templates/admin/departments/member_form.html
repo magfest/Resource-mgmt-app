@@ -17,6 +17,7 @@
   <form method="post"
     action="{% if membership %}{{ url_for('admin_config.departments.update_member', dept_id=department.id, membership_id=membership.id) }}{% else %}{{ url_for('admin_config.departments.add_member', dept_id=department.id) }}{% endif %}"
   >
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if not membership %}
     <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
       <div>
@@ -42,7 +43,7 @@
     {% endif %}
 
     <div style="border-top: 1px solid #eee; padding-top: 16px; margin-top: 8px;">
-      <strong style="display: block; margin-bottom: 12px;">Permissions</strong>
+      <strong style="display: block; margin-bottom: 12px;">General Permissions</strong>
 
       <div style="display: flex; flex-direction: column; gap: 12px;">
         <label style="display: flex; gap: 8px; align-items: flex-start; font-weight: normal;">
@@ -51,7 +52,7 @@
                  style="margin-top: 3px;" />
           <div>
             <strong>Can View</strong>
-            <div class="muted small">View budget requests for this department</div>
+            <div class="muted small">General view permission (see work type access below for specifics)</div>
           </div>
         </label>
 
@@ -61,7 +62,7 @@
                  style="margin-top: 3px;" />
           <div>
             <strong>Can Edit</strong>
-            <div class="muted small">Create, edit, and submit budget requests for this department</div>
+            <div class="muted small">General edit permission (see work type access below for specifics)</div>
           </div>
         </label>
 
@@ -71,11 +72,49 @@
                  style="margin-top: 3px;" />
           <div>
             <strong>Department Head</strong>
-            <div class="muted small">Mark as department leadership (informational, auto-enables View + Edit)</div>
+            <div class="muted small">Mark as department leadership (informational)</div>
           </div>
         </label>
       </div>
     </div>
+
+    {% if work_types %}
+    <div style="border-top: 1px solid #eee; padding-top: 16px; margin-top: 16px;">
+      <strong style="display: block; margin-bottom: 12px;">Work Type Access</strong>
+      <p class="muted small" style="margin: 0 0 12px 0;">
+        Select which work types this member can access. Each work type can be granted view and/or edit permissions independently.
+      </p>
+
+      <table style="width: 100%;">
+        <thead>
+          <tr>
+            <th style="text-align: left;">Work Type</th>
+            <th style="width: 80px; text-align: center;">View</th>
+            <th style="width: 80px; text-align: center;">Edit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for wt in work_types %}
+            {% set wta = membership.get_work_type_access(wt.id) if membership else None %}
+            <tr>
+              <td>
+                <strong>{{ wt.config.item_plural if wt.config else wt.name }}</strong>
+                <div class="muted small">{{ wt.code }}</div>
+              </td>
+              <td style="text-align: center;">
+                <input type="checkbox" name="wt_{{ wt.id }}_view" value="1"
+                       {% if wta and wta.can_view %}checked{% endif %} />
+              </td>
+              <td style="text-align: center;">
+                <input type="checkbox" name="wt_{{ wt.id }}_edit" value="1"
+                       {% if wta and wta.can_edit %}checked{% endif %} />
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
 
     <div class="btn-row" style="margin-top: 20px;">
       <button class="btn btn-primary" type="submit">{% if membership %}Save Changes{% else %}Add Member{% endif %}</button>

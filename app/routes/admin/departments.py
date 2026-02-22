@@ -9,9 +9,11 @@ from app import db
 from app.models import (
     Department,
     DepartmentMembership,
+    DepartmentMembershipWorkTypeAccess,
     Division,
     EventCycle,
     User,
+    WorkType,
     CONFIG_AUDIT_CREATE,
     CONFIG_AUDIT_UPDATE,
     CONFIG_AUDIT_ARCHIVE,
@@ -25,6 +27,7 @@ from .helpers import (
     track_changes,
     validate_code_length,
     CODE_MAX_LENGTH,
+    safe_int,
 )
 
 departments_bp = Blueprint('departments', __name__, url_prefix='/departments')
@@ -58,6 +61,16 @@ def _get_active_divisions():
         db.session.query(Division)
         .filter(Division.is_active == True)
         .order_by(Division.sort_order, Division.name)
+        .all()
+    )
+
+
+def _get_active_work_types():
+    """Get all active work types for access configuration."""
+    return (
+        db.session.query(WorkType)
+        .filter(WorkType.is_active == True)
+        .order_by(WorkType.sort_order, WorkType.name)
         .all()
     )
 
@@ -136,7 +149,7 @@ def create_department():
         mailing_list=(request.form.get("mailing_list") or "").strip() or None,
         slack_channel=(request.form.get("slack_channel") or "").strip() or None,
         is_active=request.form.get("is_active") == "1",
-        sort_order=int(request.form.get("sort_order") or 0),
+        sort_order=safe_int(request.form.get("sort_order")),
         created_by_user_id=h.get_active_user_id(),
         updated_by_user_id=h.get_active_user_id(),
     )
@@ -211,7 +224,7 @@ def update_department(dept_id: int):
     dept.mailing_list = (request.form.get("mailing_list") or "").strip() or None
     dept.slack_channel = (request.form.get("slack_channel") or "").strip() or None
     dept.is_active = request.form.get("is_active") == "1"
-    dept.sort_order = int(request.form.get("sort_order") or 0)
+    dept.sort_order = safe_int(request.form.get("sort_order"))
     dept.updated_by_user_id = h.get_active_user_id()
 
     new_values = _dept_to_dict(dept)
@@ -292,11 +305,15 @@ def list_members(dept_id: int):
         .all()
     )
 
+    # Get active work types for display
+    work_types = _get_active_work_types()
+
     return render_admin_config_page(
         "admin/departments/members.html",
         department=dept,
         memberships=memberships,
         event_cycles=event_cycles,
+        work_types=work_types,
     )
 
 
@@ -322,12 +339,16 @@ def add_member_form(dept_id: int):
         .all()
     )
 
+    # Get active work types for access configuration
+    work_types = _get_active_work_types()
+
     return render_admin_config_page(
         "admin/departments/member_form.html",
         department=dept,
         membership=None,
         users=users,
         event_cycles=event_cycles,
+        work_types=work_types,
     )
 
 
@@ -365,6 +386,23 @@ def add_member(dept_id: int):
     )
 
     db.session.add(membership)
+    db.session.flush()  # Get the membership ID
+
+    # Add work type access records
+    work_types = _get_active_work_types()
+    for wt in work_types:
+        wt_can_view = request.form.get(f"wt_{wt.id}_view") == "1"
+        wt_can_edit = request.form.get(f"wt_{wt.id}_edit") == "1"
+
+        if wt_can_view or wt_can_edit:
+            wta = DepartmentMembershipWorkTypeAccess(
+                department_membership_id=membership.id,
+                work_type_id=wt.id,
+                can_view=wt_can_view,
+                can_edit=wt_can_edit,
+            )
+            db.session.add(wta)
+
     db.session.commit()
 
     user = db.session.get(User, user_id)
@@ -382,12 +420,16 @@ def edit_member(dept_id: int, membership_id: int):
     if not membership or membership.department_id != dept_id:
         abort(404, "Membership not found")
 
+    # Get active work types for access configuration
+    work_types = _get_active_work_types()
+
     return render_admin_config_page(
         "admin/departments/member_form.html",
         department=dept,
         membership=membership,
         users=None,  # Can't change user on edit
         event_cycles=None,  # Can't change event cycle on edit
+        work_types=work_types,
     )
 
 
@@ -404,6 +446,32 @@ def update_member(dept_id: int, membership_id: int):
     membership.can_view = request.form.get("can_view") == "1"
     membership.can_edit = request.form.get("can_edit") == "1"
     membership.is_department_head = request.form.get("is_department_head") == "1"
+
+    # Update work type access records
+    work_types = _get_active_work_types()
+    for wt in work_types:
+        wt_can_view = request.form.get(f"wt_{wt.id}_view") == "1"
+        wt_can_edit = request.form.get(f"wt_{wt.id}_edit") == "1"
+
+        # Find existing access record
+        existing_wta = membership.get_work_type_access(wt.id)
+
+        if wt_can_view or wt_can_edit:
+            if existing_wta:
+                existing_wta.can_view = wt_can_view
+                existing_wta.can_edit = wt_can_edit
+            else:
+                wta = DepartmentMembershipWorkTypeAccess(
+                    department_membership_id=membership.id,
+                    work_type_id=wt.id,
+                    can_view=wt_can_view,
+                    can_edit=wt_can_edit,
+                )
+                db.session.add(wta)
+        else:
+            # Remove access if both are unchecked
+            if existing_wta:
+                db.session.delete(existing_wta)
 
     db.session.commit()
 

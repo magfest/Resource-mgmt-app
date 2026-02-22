@@ -19,6 +19,7 @@
   <form method="post"
     action="{% if cycle %}{{ url_for('admin_config.event_cycles.update_event_cycle', cycle_id=cycle.id) }}{% else %}{{ url_for('admin_config.event_cycles.create_event_cycle') }}{% endif %}"
   >
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
 
       <div>
@@ -101,10 +102,12 @@
       {% if cycle %}
         {% if cycle.is_active %}
           <form method="post" action="{{ url_for('admin_config.event_cycles.archive_event_cycle', cycle_id=cycle.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn" type="submit" onclick="return confirm('Archive this event cycle?')">Archive</button>
           </form>
         {% else %}
           <form method="post" action="{{ url_for('admin_config.event_cycles.restore_event_cycle', cycle_id=cycle.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn" type="submit">Restore</button>
           </form>
         {% endif %}

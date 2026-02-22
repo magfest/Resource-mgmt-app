@@ -9,7 +9,7 @@ from flask import Blueprint, redirect, url_for, request, flash
 
 from app import db
 from app.models import WorkItem, User, Department, EventCycle, WorkPortfolio
-from app.routes.budget.helpers import release_expired_checkouts
+from app.routes.work.helpers import release_expired_checkouts
 from .helpers import require_super_admin, render_admin_config_page
 
 locks_bp = Blueprint('locks', __name__, url_prefix='/locks')

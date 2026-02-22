@@ -19,6 +19,7 @@
   <form method="post"
     action="{% if division %}{{ url_for('admin_config.divisions.update_division', division_id=division.id) }}{% else %}{{ url_for('admin_config.divisions.create_division') }}{% endif %}"
   >
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
 
       <div>
@@ -64,10 +65,12 @@
       {% if division %}
         {% if division.is_active %}
           <form method="post" action="{{ url_for('admin_config.divisions.archive_division', division_id=division.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn" type="submit" onclick="return confirm('Archive this division?')">Archive</button>
           </form>
         {% else %}
           <form method="post" action="{{ url_for('admin_config.divisions.restore_division', division_id=division.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn" type="submit">Restore</button>
           </form>
         {% endif %}

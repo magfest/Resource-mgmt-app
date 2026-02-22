@@ -1,7 +1,30 @@
+# Python
 .venv/
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment & secrets
+.env
+
+# Database
 instance/
 *.sqlite3
-.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific
 /z_old_donotuse/
+/Demo_Data/

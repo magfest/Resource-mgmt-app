@@ -29,30 +29,32 @@
 
   {# Actions #}
   <div class="btn-row" style="margin-bottom: 16px;">
-    <a class="btn btn-primary" href="{{ url_for('budget.line_new', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+    <a class="btn btn-primary" href="{{ url_for('work.line_new', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
       Add Line
     </a>
 
     {% if perms.can_submit %}
-      <form method="post" action="{{ url_for('budget.work_item_submit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
+      <form method="post" action="{{ url_for('work.work_item_submit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-primary" onclick="return confirm('Submit this request for review?');">
           Submit for Review
         </button>
       </form>
     {% endif %}
 
-    <a class="btn" href="{{ url_for('budget.work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+    <a class="btn" href="{{ url_for('work.work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
       View Details
     </a>
 
-    <a class="btn" href="{{ url_for('budget.portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">
+    <a class="btn" href="{{ url_for('work.portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">
       Back to Portfolio
     </a>
   </div>
 
   {# Fixed-Cost Items Section #}
   {% if fixed_cost_data %}
-  <form method="post" action="{{ url_for('budget.work_item_fixed_costs_save', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+  <form method="post" action="{{ url_for('work.work_item_fixed_costs_save', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <section class="card" style="margin-bottom: 16px;">
       <h3 style="margin:0 0 8px 0;">Fixed-Cost Items</h3>
       <div class="muted" style="margin-bottom: 12px;">
@@ -126,7 +128,8 @@
   {% endif %}
 
   {# Regular Budget Lines Table with Delete Checkboxes #}
-  <form method="post" action="{{ url_for('budget.work_item_edit_save', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+  <form method="post" action="{{ url_for('work.work_item_edit_save', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <section class="card">
       <h3 style="margin:0 0 12px 0;">Other Budget Lines</h3>
       <div class="muted" style="margin-bottom: 12px;">
@@ -208,7 +211,7 @@
       {% else %}
         <div class="muted" style="text-align: center; padding: 24px;">
           No other budget lines yet.
-          <a href="{{ url_for('budget.line_new', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">Add one now</a>.
+          <a href="{{ url_for('work.line_new', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">Add one now</a>.
         </div>
       {% endif %}
     </section>

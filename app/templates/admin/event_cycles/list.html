@@ -3,6 +3,10 @@
 {% block title %}Event Cycles - Admin{% endblock %}
 
 {% block content %}
+<div class="muted" style="margin-bottom: 12px;">
+  <a href="{{ url_for('admin_final.admin_home') }}">&larr; Back to Admin</a>
+</div>
+
 <h1>Event Cycles</h1>
 <div class="muted" style="margin-bottom: 16px;">
   Manage event cycles (years/events) for budget tracking.
@@ -60,6 +64,7 @@
           <a class="btn" href="{{ url_for('admin_config.event_cycles.edit_event_cycle', cycle_id=cycle.id) }}">Edit</a>
           {% if cycle.is_active and not cycle.is_default %}
             <form method="post" action="{{ url_for('admin_config.event_cycles.set_default_event_cycle', cycle_id=cycle.id) }}" style="display: inline;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn" type="submit">Set Default</button>
             </form>
           {% endif %}

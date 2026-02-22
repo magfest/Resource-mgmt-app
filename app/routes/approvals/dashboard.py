@@ -5,7 +5,7 @@ from flask import render_template, redirect, url_for, request, abort
 
 from app.models import ApprovalGroup, EventCycle, Department
 from app.routes import get_user_ctx
-from app.routes.budget.helpers import format_currency
+from app.routes.work.helpers import format_currency
 from . import approvals_bp
 from .helpers import (
     get_reviewable_groups,
@@ -44,8 +44,13 @@ def dashboard_group(group_code: str):
     if not groups:
         abort(403, "You do not have permission to access the approvals dashboard.")
 
-    # Find requested group
-    group = next((g for g in groups if g.code.upper() == group_code.upper()), None)
+    # Find requested group by code (case-insensitive)
+    group = None
+    for g in groups:
+        if g.code.upper() == group_code.upper():
+            group = g
+            break
+
     if not group:
         abort(404, f"Approval group not found: {group_code}")
 

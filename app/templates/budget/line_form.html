@@ -12,7 +12,21 @@
     ({{ ctx.department.name }} - {{ ctx.event_cycle.code }})
   </div>
 
-  <form method="post" action="{{ url_for('budget.line_create', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+  {% if not expense_accounts %}
+  <div class="card" style="background: #fef2f2; border: 1px solid #fecaca; padding: 24px; text-align: center;">
+    <h3 style="margin: 0 0 8px 0; color: #dc2626;">No Expense Accounts Available</h3>
+    <p class="muted" style="margin: 0;">
+      There are no expense accounts configured for this department.
+      Please contact an administrator to set up expense accounts.
+    </p>
+    <div class="btn-row" style="justify-content: center; margin-top: 16px;">
+      <a href="{{ url_for('work.work_item_edit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" class="btn">Back to Request</a>
+    </div>
+  </div>
+  {% else %}
+
+  <form method="post" action="{{ url_for('work.line_create', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <section class="card">
       <h3 style="margin:0 0 16px 0;">Line Details</h3>
 
@@ -123,10 +137,11 @@
       {# Actions #}
       <div class="btn-row" style="margin-top: 20px;">
         <button type="submit" class="btn btn-primary">{% if is_edit %}Save Changes{% else %}Add Line{% endif %}</button>
-        <a class="btn" href="{{ url_for('budget.work_item_edit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">Cancel</a>
+        <a class="btn" href="{{ url_for('work.work_item_edit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">Cancel</a>
       </div>
     </section>
   </form>
+  {% endif %}
 
 {% endblock %}
 

@@ -39,6 +39,8 @@ from .helpers import (
     track_changes,
     validate_code_length,
     CODE_MAX_LENGTH,
+    safe_int,
+    safe_int_or_none,
 )
 
 expense_accounts_bp = Blueprint('expense_accounts', __name__, url_prefix='/expense-accounts')
@@ -71,9 +73,8 @@ def _can_modify_expense_account(account_id: int) -> tuple[bool, str]:
         .count()
     )
         if count > 0:
-            #return False, f"Cannot modify: referenced by {count} submitted line(s)"
-            return False, f"Should be false:( {count} {account_id})"
-        return True, "Should be true"
+            return False, f"Cannot modify: referenced by {count} submitted line(s)"
+        return True, None
 
 def _get_form_context():
     """Get common form context data."""
@@ -215,6 +216,11 @@ def create_expense_account():
         flash("Code and name are required", "error")
         return redirect(url_for(".new_expense_account"))
 
+    approval_group_id = safe_int_or_none(request.form.get("approval_group_id"))
+    if not approval_group_id:
+        flash("Approval group is required", "error")
+        return redirect(url_for(".new_expense_account"))
+
     # Validate code length
     if not validate_code_length(code, "Code"):
         return redirect(url_for(".new_expense_account"))
@@ -234,18 +240,18 @@ def create_expense_account():
         is_active=request.form.get("is_active") == "1",
         is_contract_eligible=request.form.get("is_contract_eligible") == "1",
         spend_type_mode=request.form.get("spend_type_mode") or SPEND_TYPE_MODE_ALLOW_LIST,
-        default_spend_type_id=int(request.form.get("default_spend_type_id")) if request.form.get("default_spend_type_id") else None,
+        default_spend_type_id=safe_int_or_none(request.form.get("default_spend_type_id")),
         visibility_mode=request.form.get("visibility_mode") or VISIBILITY_MODE_ALL,
-        approval_group_id=int(request.form.get("approval_group_id")) if request.form.get("approval_group_id") else None,
+        approval_group_id=approval_group_id,
         is_fixed_cost=request.form.get("is_fixed_cost") == "1",
         default_unit_price_cents=_parse_price_cents(request.form.get("default_unit_price")),
         unit_price_locked=request.form.get("unit_price_locked") == "1",
-        default_frequency_id=int(request.form.get("default_frequency_id")) if request.form.get("default_frequency_id") else None,
+        default_frequency_id=safe_int_or_none(request.form.get("default_frequency_id")),
         frequency_locked=request.form.get("frequency_locked") == "1",
         warehouse_default=request.form.get("warehouse_default") == "1",
         ui_display_group=request.form.get("ui_display_group") or None,
         prompt_mode=request.form.get("prompt_mode") or PROMPT_MODE_NONE,
-        sort_order=int(request.form.get("sort_order") or 0),
+        sort_order=safe_int(request.form.get("sort_order")),
         created_by_user_id=h.get_active_user_id(),
         updated_by_user_id=h.get_active_user_id(),
     )
@@ -316,6 +322,11 @@ def update_expense_account(account_id: int):
         flash("Code and name are required", "error")
         return redirect(url_for(".edit_expense_account", account_id=account_id))
 
+    approval_group_id = safe_int_or_none(request.form.get("approval_group_id"))
+    if not approval_group_id:
+        flash("Approval group is required", "error")
+        return redirect(url_for(".edit_expense_account", account_id=account_id))
+
     # Validate code length
     if not validate_code_length(code, "Code"):
         return redirect(url_for(".edit_expense_account", account_id=account_id))
@@ -336,18 +347,18 @@ def update_expense_account(account_id: int):
     account.is_active = request.form.get("is_active") == "1"
     account.is_contract_eligible = request.form.get("is_contract_eligible") == "1"
     account.spend_type_mode = request.form.get("spend_type_mode") or SPEND_TYPE_MODE_ALLOW_LIST
-    account.default_spend_type_id = int(request.form.get("default_spend_type_id")) if request.form.get("default_spend_type_id") else None
+    account.default_spend_type_id = safe_int_or_none(request.form.get("default_spend_type_id"))
     account.visibility_mode = request.form.get("visibility_mode") or VISIBILITY_MODE_ALL
-    account.approval_group_id = int(request.form.get("approval_group_id")) if request.form.get("approval_group_id") else None
+    account.approval_group_id = approval_group_id
     account.is_fixed_cost = request.form.get("is_fixed_cost") == "1"
     account.default_unit_price_cents = _parse_price_cents(request.form.get("default_unit_price"))
     account.unit_price_locked = request.form.get("unit_price_locked") == "1"
-    account.default_frequency_id = int(request.form.get("default_frequency_id")) if request.form.get("default_frequency_id") else None
+    account.default_frequency_id = safe_int_or_none(request.form.get("default_frequency_id"))
     account.frequency_locked = request.form.get("frequency_locked") == "1"
     account.warehouse_default = request.form.get("warehouse_default") == "1"
     account.ui_display_group = request.form.get("ui_display_group") or None
     account.prompt_mode = request.form.get("prompt_mode") or PROMPT_MODE_NONE
-    account.sort_order = int(request.form.get("sort_order") or 0)
+    account.sort_order = safe_int(request.form.get("sort_order"))
     account.updated_by_user_id = h.get_active_user_id()
 
     # Update allowed spend types
@@ -530,10 +541,10 @@ def create_override(account_id: int):
         is_fixed_cost=_parse_optional_bool(request.form.get("is_fixed_cost")),
         default_unit_price_cents=_parse_price_cents(request.form.get("default_unit_price")),
         unit_price_locked=_parse_optional_bool(request.form.get("unit_price_locked")),
-        default_frequency_id=int(request.form.get("default_frequency_id")) if request.form.get("default_frequency_id") else None,
+        default_frequency_id=safe_int_or_none(request.form.get("default_frequency_id")),
         frequency_locked=_parse_optional_bool(request.form.get("frequency_locked")),
         warehouse_default=_parse_optional_bool(request.form.get("warehouse_default")),
-        default_spend_type_id=int(request.form.get("default_spend_type_id")) if request.form.get("default_spend_type_id") else None,
+        default_spend_type_id=safe_int_or_none(request.form.get("default_spend_type_id")),
         ui_display_group=request.form.get("ui_display_group") or None,
         prompt_mode=request.form.get("prompt_mode") or None,
     )
@@ -594,10 +605,10 @@ def update_override(account_id: int, override_id: int):
     override.is_fixed_cost = _parse_optional_bool(request.form.get("is_fixed_cost"))
     override.default_unit_price_cents = _parse_price_cents(request.form.get("default_unit_price"))
     override.unit_price_locked = _parse_optional_bool(request.form.get("unit_price_locked"))
-    override.default_frequency_id = int(request.form.get("default_frequency_id")) if request.form.get("default_frequency_id") else None
+    override.default_frequency_id = safe_int_or_none(request.form.get("default_frequency_id"))
     override.frequency_locked = _parse_optional_bool(request.form.get("frequency_locked"))
     override.warehouse_default = _parse_optional_bool(request.form.get("warehouse_default"))
-    override.default_spend_type_id = int(request.form.get("default_spend_type_id")) if request.form.get("default_spend_type_id") else None
+    override.default_spend_type_id = safe_int_or_none(request.form.get("default_spend_type_id"))
     override.ui_display_group = request.form.get("ui_display_group") or None
     override.prompt_mode = request.form.get("prompt_mode") or None
 

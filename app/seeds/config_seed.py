@@ -21,6 +21,7 @@ from app import db
 from app.models import (
     ApprovalGroup,
     ConfidenceLevel,
+    ContractType,
     Department,
     Division,
     EventCycle,
@@ -28,6 +29,9 @@ from app.models import (
     FrequencyOption,
     PriorityLevel,
     SpendType,
+    SupplyCategory,
+    WorkType,
+    WorkTypeConfig,
     SPEND_TYPE_MODE_SINGLE_LOCKED,
     SPEND_TYPE_MODE_ALLOW_LIST,
     VISIBILITY_MODE_ALL,
@@ -35,6 +39,9 @@ from app.models import (
     PROMPT_MODE_NONE,
     PROMPT_MODE_REQUIRE_EXPLICIT_NA,
     UI_GROUP_KNOWN_COSTS,
+    ROUTING_STRATEGY_EXPENSE_ACCOUNT,
+    ROUTING_STRATEGY_CONTRACT_TYPE,
+    ROUTING_STRATEGY_CATEGORY,
 )
 
 
@@ -68,6 +75,174 @@ def seed_approval_groups() -> dict[str, ApprovalGroup]:
     db.session.flush()
     print(f"  Created {len(groups)} approval groups")
     return groups
+
+
+def seed_work_types() -> dict[str, WorkType]:
+    """Seed work types (BUDGET, CONTRACT, SUPPLY)."""
+    print("Seeding work types...")
+
+    work_types_data = [
+        ("BUDGET", "Budget Requests", 10),
+        ("CONTRACT", "Contracts", 20),
+        ("SUPPLY", "Supply Orders", 30),
+    ]
+
+    work_types = {}
+    for code, name, sort_order in work_types_data:
+        existing = db.session.query(WorkType).filter_by(code=code).first()
+        if existing:
+            work_types[code] = existing
+            continue
+
+        wt = WorkType(
+            code=code,
+            name=name,
+            is_active=True,
+            sort_order=sort_order,
+        )
+        db.session.add(wt)
+        work_types[code] = wt
+
+    db.session.flush()
+    print(f"  Created {len(work_types)} work types")
+    return work_types
+
+
+def seed_work_type_configs(work_types: dict[str, WorkType]) -> None:
+    """Seed work type configurations."""
+    print("Seeding work type configs...")
+
+    configs_created = 0
+
+    # BUDGET config
+    budget_wt = work_types.get("BUDGET")
+    if budget_wt and not budget_wt.config:
+        config = WorkTypeConfig(
+            work_type_id=budget_wt.id,
+            url_slug="budget",
+            public_id_prefix="BUD",
+            line_detail_type="budget",
+            routing_strategy=ROUTING_STRATEGY_EXPENSE_ACCOUNT,
+            supports_supplementary=True,
+            supports_fixed_costs=True,
+            item_singular="Budget Request",
+            item_plural="Budget Requests",
+            line_singular="Line Item",
+            line_plural="Line Items",
+        )
+        db.session.add(config)
+        configs_created += 1
+
+    # CONTRACT config
+    contract_wt = work_types.get("CONTRACT")
+    if contract_wt and not contract_wt.config:
+        config = WorkTypeConfig(
+            work_type_id=contract_wt.id,
+            url_slug="contracts",
+            public_id_prefix="CON",
+            line_detail_type="contract",
+            routing_strategy=ROUTING_STRATEGY_CONTRACT_TYPE,
+            supports_supplementary=False,
+            supports_fixed_costs=False,
+            item_singular="Contract",
+            item_plural="Contracts",
+            line_singular="Contract",
+            line_plural="Contracts",
+        )
+        db.session.add(config)
+        configs_created += 1
+
+    # SUPPLY config
+    supply_wt = work_types.get("SUPPLY")
+    if supply_wt and not supply_wt.config:
+        config = WorkTypeConfig(
+            work_type_id=supply_wt.id,
+            url_slug="supply",
+            public_id_prefix="SUP",
+            line_detail_type="supply",
+            routing_strategy=ROUTING_STRATEGY_CATEGORY,
+            supports_supplementary=False,
+            supports_fixed_costs=False,
+            item_singular="Supply Order",
+            item_plural="Supply Orders",
+            line_singular="Item",
+            line_plural="Items",
+        )
+        db.session.add(config)
+        configs_created += 1
+
+    db.session.flush()
+    print(f"  Created {configs_created} work type configs")
+
+
+def seed_contract_types(approval_groups: dict[str, ApprovalGroup]) -> dict[str, ContractType]:
+    """Seed contract types for routing."""
+    print("Seeding contract types...")
+
+    contract_types_data = [
+        ("PERFORMER", "Performer/Artist", "Contracts for performers and artists", "OTHER", 10),
+        ("VENDOR", "Vendor Service", "Service provider contracts", "OTHER", 20),
+        ("VENUE", "Venue/Space", "Venue and space rental contracts", "HOTEL", 30),
+        ("EQUIPMENT", "Equipment Rental", "Equipment rental contracts", "TECH", 40),
+        ("SPONSOR", "Sponsorship", "Sponsorship agreements", "OTHER", 50),
+    ]
+
+    contract_types = {}
+    for code, name, description, approval_group_code, sort_order in contract_types_data:
+        existing = db.session.query(ContractType).filter_by(code=code).first()
+        if existing:
+            contract_types[code] = existing
+            continue
+
+        ct = ContractType(
+            code=code,
+            name=name,
+            description=description,
+            approval_group_id=approval_groups.get(approval_group_code).id if approval_group_code in approval_groups else None,
+            is_active=True,
+            sort_order=sort_order,
+        )
+        db.session.add(ct)
+        contract_types[code] = ct
+
+    db.session.flush()
+    print(f"  Created {len(contract_types)} contract types")
+    return contract_types
+
+
+def seed_supply_categories(approval_groups: dict[str, ApprovalGroup]) -> dict[str, SupplyCategory]:
+    """Seed supply categories for routing."""
+    print("Seeding supply categories...")
+
+    categories_data = [
+        ("OFFICE", "Office Supplies", "General office supplies", "OTHER", 10),
+        ("TECH", "Tech Equipment", "Technical equipment and supplies", "TECH", 20),
+        ("EVENT", "Event Supplies", "Event-specific supplies", "OTHER", 30),
+        ("SAFETY", "Safety/Medical", "Safety and medical supplies", "OTHER", 40),
+        ("SIGNAGE", "Signage/Printing", "Signs, banners, and printed materials", "OTHER", 50),
+    ]
+
+    categories = {}
+    for code, name, description, approval_group_code, sort_order in categories_data:
+        existing = db.session.query(SupplyCategory).filter_by(code=code).first()
+        if existing:
+            categories[code] = existing
+            continue
+
+        sc = SupplyCategory(
+            code=code,
+            name=name,
+            description=description,
+            approval_group_id=approval_groups.get(approval_group_code).id if approval_group_code in approval_groups else None,
+            is_active=True,
+            sort_order=sort_order,
+        )
+        db.session.add(sc)
+        categories[code] = sc
+
+    db.session.flush()
+    print(f"  Created {len(categories)} supply categories")
+    return categories
 
 
 def seed_spend_types() -> dict[str, SpendType]:
@@ -381,7 +556,7 @@ def determine_approval_group(row: dict) -> str:
     Mapping logic:
     - Hotel-related items → HOTEL
     - Tech/Equipment items → TECH
-    - Everything else → OTHER
+    - Everything else → GENERAL
     """
     name = str(row.get('Expense Accounts', '')).lower()
 
@@ -396,7 +571,7 @@ def determine_approval_group(row: dict) -> str:
         return 'TECH'
 
     # Default to OTHER (Admin)
-    return 'OTHER'
+    return 'GENERAL'
 
 
 def seed_expense_accounts_from_spreadsheet(
@@ -664,6 +839,10 @@ def run_all_seeds():
     print("=" * 60)
 
     approval_groups = seed_approval_groups()
+    work_types = seed_work_types()
+    seed_work_type_configs(work_types)
+    seed_contract_types(approval_groups)
+    seed_supply_categories(approval_groups)
     spend_types = seed_spend_types()
     seed_reference_data()
     divisions = seed_divisions()

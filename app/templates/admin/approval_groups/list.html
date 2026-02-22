@@ -3,6 +3,10 @@
 {% block title %}Approval Groups - Admin{% endblock %}
 
 {% block content %}
+<div class="muted" style="margin-bottom: 12px;">
+  <a href="{{ url_for('admin_final.admin_home') }}">&larr; Back to Admin</a>
+</div>
+
 <h1>Approval Groups</h1>
 <div class="muted" style="margin-bottom: 16px;">
   Manage approval groups that review expense accounts. Each expense account routes to one approval group.

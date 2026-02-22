@@ -19,6 +19,7 @@
   <form method="post"
     action="{% if group %}{{ url_for('admin_config.approval_groups.update_approval_group', group_id=group.id) }}{% else %}{{ url_for('admin_config.approval_groups.create_approval_group') }}{% endif %}"
   >
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
 
       <div>
@@ -64,10 +65,12 @@
       {% if group %}
         {% if group.is_active %}
           <form method="post" action="{{ url_for('admin_config.approval_groups.archive_approval_group', group_id=group.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn" type="submit" onclick="return confirm('Archive this approval group?')">Archive</button>
           </form>
         {% else %}
           <form method="post" action="{{ url_for('admin_config.approval_groups.restore_approval_group', group_id=group.id) }}" style="display: inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button class="btn" type="submit">Restore</button>
           </form>
         {% endif %}

@@ -75,6 +75,7 @@
     <h3 style="margin:0 0 12px 0;">Unfinalize</h3>
 
     <form method="post" action="{{ url_for('admin_final.unfinalize', work_item_id=work_item.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div style="margin-bottom: 12px;">
         <label for="reason" style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px;">
           Reason for Unfinalizing (required)

@@ -16,7 +16,7 @@ from app.models import (
     COMMENT_VISIBILITY_ADMIN,
 )
 from app.routes import get_user_ctx
-from app.routes.budget.helpers import (
+from app.routes.work.helpers import (
     get_portfolio_context,
     format_currency,
 )
@@ -70,8 +70,18 @@ def line_review(event: str, dept: str, public_id: str, line_num: int):
 
     # Get line details
     detail = line.budget_detail
-    line_total = detail.unit_price_cents * int(detail.quantity) if detail else 0
-    recommended_amount = ag_review.approved_amount_cents if ag_review else None
+
+    # Calculate line total
+    if detail:
+        line_total = detail.unit_price_cents * int(detail.quantity)
+    else:
+        line_total = 0
+
+    # Get recommended amount from approval group review
+    if ag_review:
+        recommended_amount = ag_review.approved_amount_cents
+    else:
+        recommended_amount = None
 
     # Get comments
     comments = line.comments

@@ -18,6 +18,7 @@
   {# Submit Draft / New Revision #}
   {% if perms is defined and perms.can_submit %}
     <form method="post" action="{{ url_for('requests.submit_request_draft', request_id=req.id) }}" style="display:inline;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn btn-primary" type="submit"
               onclick="return confirm('Submit this draft as a new immutable revision?');">
         Submit Draft
@@ -28,6 +29,7 @@
   {# Finalize Approval (admin/finance only, and only when ready) #}
   {% if perms is defined and perms.can_finalize %}
     <form method="post" action="{{ url_for('requests.approve_request', request_id=req.id) }}" style="display:inline;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn btn-primary" type="submit"
               {% if not ready %}disabled title="Not ready: some lines still need review."{% endif %}>
         Finalize Approval

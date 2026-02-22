@@ -15,7 +15,6 @@ CODE_MAX_LENGTH = 16
 
 from app import db
 from app.models import (
-    ROLE_SUPER_ADMIN,
     ConfigAuditEvent,
     CONFIG_AUDIT_CREATE,
     CONFIG_AUDIT_UPDATE,
@@ -29,8 +28,17 @@ def require_super_admin(f):
     """Decorator to require SUPER_ADMIN role."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        from flask import redirect, url_for, session, current_app
+
+        # Check if user is authenticated
+        if not session.get('active_user_id') and not current_app.config.get('DEV_LOGIN_ENABLED'):
+            return redirect(url_for('auth.login_page'))
+
         user_ctx = get_user_ctx()
-        if ROLE_SUPER_ADMIN not in user_ctx.roles:
+        if user_ctx.user_id is None:
+            return redirect(url_for('auth.login_page'))
+
+        if not user_ctx.is_admin:
             abort(403, "Super admin access required")
         return f(*args, **kwargs)
     return decorated_function
@@ -39,7 +47,7 @@ def require_super_admin(f):
 def render_admin_config_page(template: str, **ctx):
     """Render an admin config page with user context."""
     user_ctx = get_user_ctx()
-    if ROLE_SUPER_ADMIN not in user_ctx.roles:
+    if not user_ctx.is_admin:
         abort(403, "Super admin access required")
     return render_template(template, user_ctx=user_ctx, **ctx)
 
@@ -107,6 +115,118 @@ def flash_errors(form_errors: dict[str, list[str]]):
     for field, errors in form_errors.items():
         for error in errors:
             flash(f"{field}: {error}", "error")
+
+
+def safe_int(value: str | None, default: int = 0) -> int:
+    """
+    Safely convert a string to int, returning default on failure.
+
+    Args:
+        value: String value to convert (e.g., from request.form.get())
+        default: Value to return if conversion fails
+
+    Returns:
+        The integer value, or default if conversion fails
+    """
+    if not value:
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def safe_int_or_none(value: str | None) -> int | None:
+    """
+    Safely convert a string to int, returning None on failure.
+
+    Args:
+        value: String value to convert (e.g., from request.form.get())
+
+    Returns:
+        The integer value, or None if conversion fails or value is empty
+    """
+    if not value:
+        return None
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
+# File upload validation constants
+ALLOWED_UPLOAD_EXTENSIONS = {'.csv', '.xlsx', '.xls'}
+ALLOWED_UPLOAD_MIME_TYPES = {
+    'text/csv',
+    'text/plain',  # Some systems send CSV as text/plain
+    'application/csv',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+}
+MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+def validate_upload_file(file, flash_errors: bool = True) -> bool:
+    """
+    Validate an uploaded file for allowed extensions, MIME types, and size.
+
+    Args:
+        file: Flask FileStorage object from request.files
+        flash_errors: If True, flash error messages for validation failures
+
+    Returns:
+        True if file is valid, False otherwise
+    """
+    if not file or not file.filename:
+        if flash_errors:
+            flash("No file selected", "error")
+        return False
+
+    # Check file extension
+    filename_lower = file.filename.lower()
+    ext = None
+    for allowed_ext in ALLOWED_UPLOAD_EXTENSIONS:
+        if filename_lower.endswith(allowed_ext):
+            ext = allowed_ext
+            break
+
+    if not ext:
+        if flash_errors:
+            allowed = ', '.join(sorted(ALLOWED_UPLOAD_EXTENSIONS))
+            flash(f"Invalid file type. Allowed types: {allowed}", "error")
+        return False
+
+    # Check MIME type (if provided by browser)
+    if file.content_type:
+        # Normalize the MIME type (some browsers add charset)
+        mime_type = file.content_type.split(';')[0].strip().lower()
+        if mime_type not in ALLOWED_UPLOAD_MIME_TYPES:
+            # Allow through if extension is valid - some browsers misreport MIME types
+            # but still validate that it's not something obviously wrong
+            dangerous_mimes = {'application/x-executable', 'application/x-msdownload'}
+            if mime_type in dangerous_mimes:
+                if flash_errors:
+                    flash("File type not allowed", "error")
+                return False
+
+    # Check file size
+    # Seek to end to get size, then back to start
+    file.seek(0, 2)  # Seek to end
+    size = file.tell()
+    file.seek(0)  # Seek back to start
+
+    if size > MAX_UPLOAD_SIZE_BYTES:
+        if flash_errors:
+            max_mb = MAX_UPLOAD_SIZE_BYTES / (1024 * 1024)
+            flash(f"File too large. Maximum size is {max_mb:.0f} MB", "error")
+        return False
+
+    if size == 0:
+        if flash_errors:
+            flash("File is empty", "error")
+        return False
+
+    return True
 
 
 def validate_code_length(code: str, entity_name: str = "Code") -> bool:
