@@ -281,6 +281,45 @@ def create_app() -> Flask:
         ensure_demo_reference_data()
         ensure_demo_expense_accounts()
 
+    def ensure_bootstrap_admins():
+        """Ensure essential admin accounts exist. Runs on every deployment."""
+        from .models import User, UserRole, ROLE_SUPER_ADMIN
+        import uuid
+
+        # List of bootstrap admins: (email, display_name)
+        # These users will always be created/ensured as SUPER_ADMIN
+        bootstrap_admins = [
+            ("matthew.stoldal@magfest.org", "Matthew Stoldal"),
+        ]
+
+        for email, display_name in bootstrap_admins:
+            user = db.session.query(User).filter_by(email=email).first()
+            if not user:
+                user = User(
+                    id=str(uuid.uuid4()),
+                    email=email,
+                    display_name=display_name,
+                    is_active=True,
+                )
+                db.session.add(user)
+                db.session.flush()
+                app.logger.info(f"Created bootstrap admin user: {email}")
+
+            # Ensure SUPER_ADMIN role exists
+            has_admin_role = (
+                db.session.query(UserRole)
+                .filter_by(user_id=user.id, role_code=ROLE_SUPER_ADMIN)
+                .first()
+            )
+            if not has_admin_role:
+                db.session.add(UserRole(
+                    user_id=user.id,
+                    role_code=ROLE_SUPER_ADMIN,
+                ))
+                app.logger.info(f"Granted SUPER_ADMIN role to: {email}")
+
+        db.session.commit()
+
     def ensure_demo_users():
         from .models import User, UserRole, ApprovalGroup, ROLE_SUPER_ADMIN, ROLE_APPROVER
 
@@ -650,6 +689,18 @@ def create_app() -> Flask:
             real_is_admin=_real_is_admin,
         ),
     )
+
+    # --- Bootstrap Admins (runs once on first request) ---
+    _bootstrap_done = {"done": False}
+
+    @app.before_request
+    def run_bootstrap_once():
+        if not _bootstrap_done["done"]:
+            _bootstrap_done["done"] = True
+            try:
+                ensure_bootstrap_admins()
+            except Exception as e:
+                app.logger.warning(f"Bootstrap admins check failed (may be pre-migration): {e}")
 
     # --- Error Handlers ---
     from flask import redirect, url_for, flash
