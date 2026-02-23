@@ -1198,7 +1198,7 @@ class ConfigAuditEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     entity_type = db.Column(db.String(64), nullable=False, index=True)  # expense_account, approval_group, etc.
-    entity_id = db.Column(db.Integer, nullable=False, index=True)
+    entity_id = db.Column(db.String(64), nullable=False, index=True)  # String to support both int IDs and UUID strings
 
     action = db.Column(db.String(32), nullable=False, index=True)  # CREATE, UPDATE, ARCHIVE, RESTORE
     changes_json = db.Column(db.Text, nullable=True)  # JSON diff of changed fields
