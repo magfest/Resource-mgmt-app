@@ -290,7 +290,9 @@ def create_app() -> Flask:
         # These users will always be created/ensured as SUPER_ADMIN
         bootstrap_admins = [
             ("matthew.stoldal@magfest.org", "Matthew Stoldal"),
+            ("jason.spriggs@magfest.org", "Jason Spriggs")
         ]
+
 
         for email, display_name in bootstrap_admins:
             user = db.session.query(User).filter_by(email=email).first()
