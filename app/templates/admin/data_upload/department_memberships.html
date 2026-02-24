@@ -74,18 +74,6 @@
         <td>Uses default above if not specified</td>
       </tr>
       <tr>
-        <td><strong>Can View</strong></td>
-        <td>No</td>
-        <td><code>can_view</code>, <code>view</code>, <code>viewer</code></td>
-        <td>yes/no/true/false/1/0 (defaults to yes)</td>
-      </tr>
-      <tr>
-        <td><strong>Can Edit</strong></td>
-        <td>No</td>
-        <td><code>can_edit</code>, <code>edit</code>, <code>editor</code></td>
-        <td>yes/no/true/false/1/0 (defaults to no)</td>
-      </tr>
-      <tr>
         <td><strong>Department Head</strong></td>
         <td>No</td>
         <td><code>is_department_head</code>, <code>department_head</code>, <code>head</code>, <code>dh</code>, <code>is_head</code></td>
@@ -100,11 +88,6 @@
 </div>
 
 <div style="margin-top: 16px; padding: 16px; background: #f3e5f5; border: 1px solid #9c27b0;">
-  <strong>Permission levels:</strong><br>
-  <ul style="margin: 8px 0 0 0; padding-left: 20px;">
-    <li><strong>Viewer</strong>: can_view=yes, can_edit=no - Can see budget requests but not edit</li>
-    <li><strong>Editor</strong>: can_view=yes, can_edit=yes - Can create and edit budget requests</li>
-    <li><strong>Department Head</strong>: is_department_head=yes - Can submit requests for final approval</li>
-  </ul>
+  <strong>Note:</strong> Work type-specific access (view/edit permissions per work type) is configured separately via the member edit form after uploading memberships.
 </div>
 {% endblock %}

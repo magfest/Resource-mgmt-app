@@ -472,8 +472,7 @@ def create_app() -> Flask:
             raise RuntimeError(f"Missing demo departments: {missing}")
 
         def upsert_membership(
-                *, user_id: str, dept_code: str,
-                can_view: bool, can_edit: bool, is_department_head: bool
+                *, user_id: str, dept_code: str, is_department_head: bool
         ):
             dept = dept_by_code[dept_code]
 
@@ -493,24 +492,24 @@ def create_app() -> Flask:
                 )
                 db.session.add(row)
 
-            row.can_view = bool(can_view)
-            row.can_edit = bool(can_edit)
             row.is_department_head = bool(is_department_head)
 
         # --- membership plan (truth table) ---
+        # Format: (user_id, dept_code, is_department_head)
+        # Work type access is managed separately via DepartmentMembershipWorkTypeAccess
         membership_plan = [
             # Arcades
-            ("dev:alex", "ARCADE", True, True, True),  # DH
-            ("dev:riley", "ARCADE", True, True, False),  # editor
-            ("dev:sam", "ARCADE", True, False, False),  # viewer
+            ("dev:alex", "ARCADE", True),  # DH
+            ("dev:riley", "ARCADE", False),  # editor
+            ("dev:sam", "ARCADE", False),  # viewer
 
             # Guests
-            ("dev:jordan", "GUEST", True, True, True),  # DH
-            ("dev:casey", "GUEST", True, True, False),  # editor
+            ("dev:jordan", "GUEST", True),  # DH
+            ("dev:casey", "GUEST", False),  # editor
 
             # Mixed: Arcades view + Guests edit
-            ("dev:morgan", "ARCADE", True, False, False),
-            ("dev:morgan", "GUEST", True, True, False),
+            ("dev:morgan", "ARCADE", False),
+            ("dev:morgan", "GUEST", False),
         ]
 
         # Validate users exist (fail loudly if demo users aren't seeded)
@@ -521,12 +520,10 @@ def create_app() -> Flask:
             raise RuntimeError(f"Missing demo users for memberships: {missing_users}")
 
         # Apply plan
-        for user_id, dept_code, can_view, can_edit, is_dh in membership_plan:
+        for user_id, dept_code, is_dh in membership_plan:
             upsert_membership(
                 user_id=user_id,
                 dept_code=dept_code,
-                can_view=can_view,
-                can_edit=can_edit,
                 is_department_head=is_dh,
             )
 

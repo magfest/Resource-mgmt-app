@@ -175,8 +175,6 @@ class DivisionMembership(db.Model):
         index=True,
     )
 
-    can_view = db.Column(db.Boolean, nullable=False, default=True)
-    can_edit = db.Column(db.Boolean, nullable=False, default=False)
     is_division_head = db.Column(db.Boolean, nullable=False, default=False)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -329,8 +327,6 @@ class DepartmentMembership(db.Model):
         index=True,
     )
 
-    can_view = db.Column(db.Boolean, nullable=False, default=True)
-    can_edit = db.Column(db.Boolean, nullable=False, default=False)
     is_department_head = db.Column(db.Boolean, nullable=False, default=False)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)

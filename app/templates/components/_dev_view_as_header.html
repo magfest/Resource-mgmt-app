@@ -48,16 +48,15 @@
                   {% if m.event_cycle %}
                     <span style="color:#666;">({{ m.event_cycle.code }})</span>
                   {% endif %}
-                  —
                   {% if m.is_department_head %}
-                    <strong>DH</strong>,
+                    — <strong>DH</strong>
                   {% endif %}
-                  {% if m.can_edit %}
-                    edit
-                  {% elif m.can_view %}
-                    view
-                  {% else %}
-                    no access
+                  {% if m.work_type_access %}
+                    {% for wta in m.work_type_access %}
+                      <span style="font-size:0.8em; color:#666; margin-left:4px;">
+                        {{ wta.work_type.code }}{% if wta.can_edit %}:edit{% elif wta.can_view %}:view{% endif %}
+                      </span>
+                    {% endfor %}
                   {% endif %}
                 </li>
               {% endfor %}

@@ -43,29 +43,9 @@
     {% endif %}
 
     <div style="border-top: 1px solid #eee; padding-top: 16px; margin-top: 8px;">
-      <strong style="display: block; margin-bottom: 12px;">General Permissions</strong>
+      <strong style="display: block; margin-bottom: 12px;">Membership Options</strong>
 
       <div style="display: flex; flex-direction: column; gap: 12px;">
-        <label style="display: flex; gap: 8px; align-items: flex-start; font-weight: normal;">
-          <input type="checkbox" name="can_view" value="1"
-                 {% if not membership or membership.can_view %}checked{% endif %}
-                 style="margin-top: 3px;" />
-          <div>
-            <strong>Can View</strong>
-            <div class="muted small">General view permission (see work type access below for specifics)</div>
-          </div>
-        </label>
-
-        <label style="display: flex; gap: 8px; align-items: flex-start; font-weight: normal;">
-          <input type="checkbox" name="can_edit" value="1"
-                 {% if membership and membership.can_edit %}checked{% endif %}
-                 style="margin-top: 3px;" />
-          <div>
-            <strong>Can Edit</strong>
-            <div class="muted small">General edit permission (see work type access below for specifics)</div>
-          </div>
-        </label>
-
         <label style="display: flex; gap: 8px; align-items: flex-start; font-weight: normal;">
           <input type="checkbox" name="is_department_head" value="1"
                  {% if membership and membership.is_department_head %}checked{% endif %}
@@ -123,13 +103,4 @@
   </form>
 </div>
 
-<script>
-// Auto-enable can_view and can_edit when is_department_head is checked
-document.querySelector('input[name="is_department_head"]').addEventListener('change', function() {
-  if (this.checked) {
-    document.querySelector('input[name="can_view"]').checked = true;
-    document.querySelector('input[name="can_edit"]').checked = true;
-  }
-});
-</script>
 {% endblock %}

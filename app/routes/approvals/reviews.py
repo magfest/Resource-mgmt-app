@@ -101,7 +101,10 @@ def line_review(event: str, dept: str, public_id: str, line_num: int):
     # Check if user can respond to kicked-back line
     # User can respond if: line needs action AND (user is owner OR has edit membership)
     is_owner = work_item.created_by_user_id == user_ctx.user_id
-    has_edit_membership = ctx.membership and ctx.membership.can_edit
+    has_edit_membership = (
+        (ctx.membership and ctx.membership.can_edit_work_type(ctx.work_type.id)) or
+        (ctx.division_membership and ctx.division_membership.can_edit_work_type(ctx.work_type.id))
+    )
     can_respond = (
         line.needs_requester_action and
         review and
@@ -395,7 +398,10 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int):
 
     # Validate user can respond
     is_owner = work_item.created_by_user_id == user_ctx.user_id
-    has_edit_membership = ctx.membership and ctx.membership.can_edit
+    has_edit_membership = (
+        (ctx.membership and ctx.membership.can_edit_work_type(ctx.work_type.id)) or
+        (ctx.division_membership and ctx.division_membership.can_edit_work_type(ctx.work_type.id))
+    )
     if not (is_owner or has_edit_membership or user_ctx.is_admin):
         flash("You do not have permission to adjust this line.", "error")
         return redirect(url_for(

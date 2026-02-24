@@ -162,8 +162,6 @@ def index():
                     "membership": dm,
                     "access_source": "direct",
                     "access_source_name": None,
-                    "can_view": dm.can_view,
-                    "can_edit": dm.can_edit,
                     "is_head": dm.is_department_head,
                 })
 
@@ -197,8 +195,6 @@ def index():
                             "membership": None,
                             "access_source": "division",
                             "access_source_name": div_m.division.name,
-                            "can_view": div_m.can_view,
-                            "can_edit": div_m.can_edit,
                             "is_head": div_m.is_division_head,
                         })
 

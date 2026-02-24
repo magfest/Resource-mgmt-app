@@ -55,16 +55,15 @@
                   <span style="color:#666;">
                     ({{ m.event_cycle.code if m.event_cycle else "global" }})
                   </span>
-                  —
                   {% if m.is_department_head %}
-                    <strong>DH</strong>,
+                    — <strong>DH</strong>
                   {% endif %}
-                  {% if m.can_edit %}
-                    edit
-                  {% elif m.can_view %}
-                    view
-                  {% else %}
-                    no access
+                  {% if m.work_type_access %}
+                    {% for wta in m.work_type_access %}
+                      <span class="pill" style="font-size:0.7em; margin-left:4px;">
+                        {{ wta.work_type.code }}{% if wta.can_edit %}:edit{% elif wta.can_view %}:view{% endif %}
+                      </span>
+                    {% endfor %}
                   {% endif %}
                 </li>
               {% endfor %}

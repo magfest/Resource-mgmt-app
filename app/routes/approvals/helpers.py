@@ -242,16 +242,32 @@ def validate_review_transition(
         # Verify user is actually the requester (owner or editor)
         work_item = line.work_item
         is_owner = work_item.created_by_user_id == user_ctx.user_id
-        # Check department membership for edit rights
+        # Check department or division membership for edit rights
         has_edit_membership = False
         if work_item.portfolio:
-            from app.models import DepartmentMembership
+            from app.models import DepartmentMembership, DivisionMembership, Department
+            work_type_id = work_item.portfolio.work_type_id
+
+            # Check direct department membership
             membership = DepartmentMembership.query.filter_by(
                 department_id=work_item.portfolio.department_id,
                 event_cycle_id=work_item.portfolio.event_cycle_id,
                 user_id=user_ctx.user_id,
             ).first()
-            has_edit_membership = membership and membership.can_edit
+            if membership and membership.can_edit_work_type(work_type_id):
+                has_edit_membership = True
+
+            # Check division membership
+            if not has_edit_membership:
+                dept = Department.query.get(work_item.portfolio.department_id)
+                if dept and dept.division_id:
+                    div_membership = DivisionMembership.query.filter_by(
+                        division_id=dept.division_id,
+                        event_cycle_id=work_item.portfolio.event_cycle_id,
+                        user_id=user_ctx.user_id,
+                    ).first()
+                    if div_membership and div_membership.can_edit_work_type(work_type_id):
+                        has_edit_membership = True
         if not (is_owner or has_edit_membership or user_ctx.is_admin):
             return "", "You do not have permission to respond to this line."
     elif allowed_role == "ADMIN":

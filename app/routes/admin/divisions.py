@@ -352,8 +352,6 @@ def add_member(division_id: int):
         user_id=user_id,
         division_id=division_id,
         event_cycle_id=int(event_cycle_id),
-        can_view=request.form.get("can_view") == "1",
-        can_edit=request.form.get("can_edit") == "1",
         is_division_head=request.form.get("is_division_head") == "1",
     )
 
@@ -415,8 +413,6 @@ def update_member(division_id: int, membership_id: int):
     if not membership or membership.division_id != division_id:
         abort(404, "Membership not found")
 
-    membership.can_view = request.form.get("can_view") == "1"
-    membership.can_edit = request.form.get("can_edit") == "1"
     membership.is_division_head = request.form.get("is_division_head") == "1"
 
     # Update work type access records

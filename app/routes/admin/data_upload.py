@@ -126,16 +126,12 @@ USER_ID_COLS = ['id', 'user_id', 'username']
 DM_USER_COLS = ['email', 'user_email', 'user', 'user_id']
 DM_DEPT_COLS = ['department', 'dept', 'department_code', 'dept_code']
 DM_CYCLE_COLS = ['event_cycle', 'cycle', 'event', 'event_code']
-DM_VIEW_COLS = ['can_view', 'view', 'viewer']
-DM_EDIT_COLS = ['can_edit', 'edit', 'editor']
 DM_HEAD_COLS = ['is_department_head', 'department_head', 'head', 'dh', 'is_head']
 
 # Division membership column aliases
 DVM_USER_COLS = ['email', 'user_email', 'user', 'user_id']
 DVM_DIV_COLS = ['division', 'div', 'division_code', 'div_code']
 DVM_CYCLE_COLS = ['event_cycle', 'cycle', 'event', 'event_code']
-DVM_VIEW_COLS = ['can_view', 'view', 'viewer']
-DVM_EDIT_COLS = ['can_edit', 'edit', 'editor']
 DVM_HEAD_COLS = ['is_division_head', 'division_head', 'head', 'is_head']
 
 # User role column aliases
@@ -889,8 +885,6 @@ def department_memberships_upload():
     user_col = _find_column(df, DM_USER_COLS)
     dept_col = _find_column(df, DM_DEPT_COLS)
     cycle_col = _find_column(df, DM_CYCLE_COLS)
-    view_col = _find_column(df, DM_VIEW_COLS)
-    edit_col = _find_column(df, DM_EDIT_COLS)
     head_col = _find_column(df, DM_HEAD_COLS)
 
     if not user_col:
@@ -941,14 +935,7 @@ def department_memberships_upload():
             continue
 
         # Parse permissions
-        can_view = _parse_bool(_get_cell_value(row, view_col)) if view_col else True
-        can_edit = _parse_bool(_get_cell_value(row, edit_col)) if edit_col else False
         is_head = _parse_bool(_get_cell_value(row, head_col)) if head_col else False
-
-        # Department heads always have view and edit
-        if is_head:
-            can_view = True
-            can_edit = True
 
         # Check for existing membership
         existing = db.session.query(DepartmentMembership).filter_by(
@@ -958,8 +945,6 @@ def department_memberships_upload():
         ).first()
 
         if existing:
-            existing.can_view = can_view
-            existing.can_edit = can_edit
             existing.is_department_head = is_head
             updated += 1
         else:
@@ -967,8 +952,6 @@ def department_memberships_upload():
                 user_id=user.id,
                 department_id=dept.id,
                 event_cycle_id=cycle.id,
-                can_view=can_view,
-                can_edit=can_edit,
                 is_department_head=is_head,
             )
             db.session.add(membership)
@@ -1034,8 +1017,6 @@ def division_memberships_upload():
     user_col = _find_column(df, DVM_USER_COLS)
     div_col = _find_column(df, DVM_DIV_COLS)
     cycle_col = _find_column(df, DVM_CYCLE_COLS)
-    view_col = _find_column(df, DVM_VIEW_COLS)
-    edit_col = _find_column(df, DVM_EDIT_COLS)
     head_col = _find_column(df, DVM_HEAD_COLS)
 
     if not user_col:
@@ -1086,14 +1067,7 @@ def division_memberships_upload():
             continue
 
         # Parse permissions
-        can_view = _parse_bool(_get_cell_value(row, view_col)) if view_col else True
-        can_edit = _parse_bool(_get_cell_value(row, edit_col)) if edit_col else False
         is_head = _parse_bool(_get_cell_value(row, head_col)) if head_col else False
-
-        # Division heads always have view and edit
-        if is_head:
-            can_view = True
-            can_edit = True
 
         # Check for existing membership
         existing = db.session.query(DivisionMembership).filter_by(
@@ -1103,8 +1077,6 @@ def division_memberships_upload():
         ).first()
 
         if existing:
-            existing.can_view = can_view
-            existing.can_edit = can_edit
             existing.is_division_head = is_head
             updated += 1
         else:
@@ -1112,8 +1084,6 @@ def division_memberships_upload():
                 user_id=user.id,
                 division_id=div.id,
                 event_cycle_id=cycle.id,
-                can_view=can_view,
-                can_edit=can_edit,
                 is_division_head=is_head,
             )
             db.session.add(membership)
@@ -1320,12 +1290,12 @@ david@example.org,David Brown,
 @require_super_admin
 def download_department_memberships_template():
     """Download a CSV template for department memberships."""
-    csv_content = """email,department,event_cycle,can_view,can_edit,is_department_head
-alice@example.org,TECHOPS,SMF2026,yes,yes,yes
-bob@example.org,TECHOPS,SMF2026,yes,yes,no
-carol@example.org,TECHOPS,SMF2026,yes,no,no
-david@example.org,REGISTRATION,SMF2026,yes,yes,yes
-alice@example.org,REGISTRATION,SMF2026,yes,no,no
+    csv_content = """email,department,event_cycle,is_department_head
+alice@example.org,TECHOPS,SMF2026,yes
+bob@example.org,TECHOPS,SMF2026,no
+carol@example.org,TECHOPS,SMF2026,no
+david@example.org,REGISTRATION,SMF2026,yes
+alice@example.org,REGISTRATION,SMF2026,no
 """
     return _make_csv_response(csv_content, 'department_memberships_template.csv')
 
@@ -1334,9 +1304,9 @@ alice@example.org,REGISTRATION,SMF2026,yes,no,no
 @require_super_admin
 def download_division_memberships_template():
     """Download a CSV template for division memberships."""
-    csv_content = """email,division,event_cycle,can_view,can_edit,is_division_head
-alice@example.org,OPERATIONS,SMF2026,yes,yes,yes
-bob@example.org,ENTERTAINMENT,SMF2026,yes,yes,yes
+    csv_content = """email,division,event_cycle,is_division_head
+alice@example.org,OPERATIONS,SMF2026,yes
+bob@example.org,ENTERTAINMENT,SMF2026,yes
 """
     return _make_csv_response(csv_content, 'division_memberships_template.csv')
 
