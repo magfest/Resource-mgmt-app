@@ -19,28 +19,6 @@ magfest-budget/
 └── run.py                  # Flask app entry point
 ```
 
-## Why is `line_details.py` in the app root?
-
-**Short answer**: It's a cross-cutting utility, not specific to one work type.
-
-`line_details.py` provides generic helpers that work across ALL work types:
-
-```python
-# These functions work regardless of whether the line is Budget, Contract, or Supply
-get_line_detail(line)           # Returns BudgetLineDetail, ContractLineDetail, etc.
-get_line_amount_cents(line)     # Returns amount regardless of how it's calculated
-get_line_routing_approval_group(line)  # Returns approval group for any line type
-```
-
-It lives at the app root because:
-1. It's imported by multiple modules (`routes/work/`, `routes/approvals/`, etc.)
-2. It's not tied to any specific work type
-3. Placing it in `routes/budget/` would be misleading since it handles contracts and supply too
-
-**Similar pattern**: `models.py` is also at the app root because models are used everywhere.
-
----
-
 ## Detailed Breakdown
 
 ### `app/models.py`
