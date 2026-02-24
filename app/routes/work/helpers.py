@@ -696,6 +696,83 @@ def get_fixed_cost_expense_accounts(
     return accounts
 
 
+def get_hotel_service_expense_accounts(
+    department_id: int,
+    event_cycle_id: int | None = None,
+) -> list[ExpenseAccount]:
+    """
+    Get hotel/Gaylord expense accounts (UI_GROUP_HOTEL_SERVICES).
+
+    These are per-day/per-night costs where the calculator is useful.
+
+    Args:
+        department_id: Department to filter for
+        event_cycle_id: Optional event cycle for overrides
+    """
+    from app.models import UI_GROUP_HOTEL_SERVICES
+
+    query = ExpenseAccount.query.filter(
+        ExpenseAccount.is_active == True,
+        ExpenseAccount.is_fixed_cost == True,
+        ExpenseAccount.ui_display_group == UI_GROUP_HOTEL_SERVICES,
+    )
+
+    # Filter by visibility mode
+    query = query.filter(
+        or_(
+            ExpenseAccount.visibility_mode == VISIBILITY_MODE_ALL,
+            ExpenseAccount.visible_to_departments.any(id=department_id)
+        )
+    )
+
+    accounts = query.order_by(
+        ExpenseAccount.sort_order.asc(),
+        ExpenseAccount.name.asc()
+    ).all()
+
+    return accounts
+
+
+def get_non_hotel_fixed_cost_accounts(
+    department_id: int,
+    event_cycle_id: int | None = None,
+) -> list[ExpenseAccount]:
+    """
+    Get fixed-cost accounts that are NOT hotel services.
+
+    These stay in the Fixed Costs tab (one-time costs like Ethernet Drops).
+
+    Args:
+        department_id: Department to filter for
+        event_cycle_id: Optional event cycle for overrides
+    """
+    from app.models import UI_GROUP_HOTEL_SERVICES
+
+    query = ExpenseAccount.query.filter(
+        ExpenseAccount.is_active == True,
+        ExpenseAccount.is_fixed_cost == True,
+        or_(
+            ExpenseAccount.ui_display_group.is_(None),
+            ExpenseAccount.ui_display_group != UI_GROUP_HOTEL_SERVICES,
+        )
+    )
+
+    # Filter by visibility mode
+    query = query.filter(
+        or_(
+            ExpenseAccount.visibility_mode == VISIBILITY_MODE_ALL,
+            ExpenseAccount.visible_to_departments.any(id=department_id)
+        )
+    )
+
+    accounts = query.order_by(
+        ExpenseAccount.sort_order.asc(),
+        ExpenseAccount.name.asc()
+    ).all()
+
+    return accounts
+
+
 def get_effective_fixed_cost_settings(
     expense_account: ExpenseAccount,
     event_cycle_id: int | None = None,

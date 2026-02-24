@@ -74,6 +74,13 @@
         </div>
 
         <div>
+          <label for="event_end_date" style="display: block; font-weight: 600; margin-bottom: 6px;">Event End Date</label>
+          <input id="event_end_date" name="event_end_date" type="date"
+                 value="{{ cycle.event_end_date.isoformat() if cycle and cycle.event_end_date else '' }}" />
+          <div class="muted small" style="margin-top: 4px;">When the event ends (used for hotel calculations)</div>
+        </div>
+
+        <div>
           <label for="submission_deadline" style="display: block; font-weight: 600; margin-bottom: 6px;">Submission Deadline</label>
           <input id="submission_deadline" name="submission_deadline" type="date"
                  value="{{ cycle.submission_deadline.isoformat() if cycle and cycle.submission_deadline else '' }}" />

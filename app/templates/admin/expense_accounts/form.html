@@ -3,171 +3,328 @@
 {% block title %}{% if account %}Edit Expense Account{% else %}New Expense Account{% endif %} - Admin{% endblock %}
 
 {% block content %}
-<h1>{% if account %}Edit Expense Account{% else %}New Expense Account{% endif %}</h1>
-<div class="muted" style="margin: 8px 0 16px;">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+  <div>
+    <h1 style="margin: 0;">{% if account %}Edit Expense Account{% else %}New Expense Account{% endif %}</h1>
+    <div class="muted" style="margin-top: 4px;">
+      {% if account %}
+        <strong>{{ account.code }}</strong>
+        {% if line_count %}
+          <span class="pill" style="margin-left: 8px;">{{ line_count }} line(s) reference this account</span>
+        {% endif %}
+      {% else %}
+        Create a new expense account for the chart of accounts.
+      {% endif %}
+    </div>
+  </div>
   {% if account %}
-    Editing account: <strong>{{ account.code }}</strong>
-    {% if line_count %}
-      <span class="pill" style="margin-left: 8px;">{{ line_count }} line(s) reference this account</span>
-    {% endif %}
-  {% else %}
-    Create a new expense account for the chart of accounts.
+    <label style="display: flex; gap: 8px; align-items: center; font-weight: normal; font-size: 14px;">
+      <input type="checkbox" form="account-form" name="is_active" value="1"
+             {% if account.is_active %}checked{% endif %}
+             {% if not can_modify %}disabled{% endif %} />
+      Active
+    </label>
   {% endif %}
 </div>
 
 {% if not can_modify %}
-<div class="callout callout-danger" style="margin-bottom: 16px;">
-  <strong>Modification Blocked</strong>
-  <div class="small muted">{{ can_modify }}|{{ modify_reason }}|{{ account }}|{{ account_id }}</div>
+<div class="callout callout-warning" style="margin-bottom: 16px;">
+  <strong>Modification Limited</strong>: This account is referenced by submitted budget lines. Some fields cannot be changed.
 </div>
 {% endif %}
 
-<div class="card" style="max-width: 900px;">
-  <form method="post"
-    action="{% if account %}{{ url_for('admin_config.expense_accounts.update_expense_account', account_id=account.id) }}{% else %}{{ url_for('admin_config.expense_accounts.create_expense_account') }}{% endif %}"
-  >
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+<form method="post" id="account-form"
+  action="{% if account %}{{ url_for('admin_config.expense_accounts.update_expense_account', account_id=account.id) }}{% else %}{{ url_for('admin_config.expense_accounts.create_expense_account') }}{% endif %}"
+>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if not account %}
+    <input type="hidden" name="is_active" value="1">
+  {% endif %}
 
-      <div>
-        <label for="code" style="display: block; font-weight: 600; margin-bottom: 6px;">Code</label>
-        <input id="code" name="code" type="text" required
-               value="{{ account.code if account else '' }}"
-               placeholder="e.g. HTL_ROOM_REG"
-               maxlength="16"
-               {% if not can_modify %}disabled{% endif %} />
-        <div class="muted small" style="margin-top: 4px;">Unique identifier. Max 16 chars. Use prefixes: HTL, VEN, EVT, EQUIP, MERCH, WH.</div>
-      </div>
+  <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+    {# Left Column - Main Fields #}
+    <div>
+      {# Basic Info Section #}
+      <section class="card" style="margin-bottom: 16px;">
+        <h3 style="margin: 0 0 16px 0;">Basic Info</h3>
 
-      <div>
-        <label for="name" style="display: block; font-weight: 600; margin-bottom: 6px;">Name</label>
-        <input id="name" name="name" type="text" required
-               value="{{ account.name if account else '' }}"
-               placeholder="e.g. Hotel Room - Gaylord"
-               {% if not can_modify %}disabled{% endif %} />
-      </div>
-
-      <div style="grid-column: 1 / -1;">
-        <label for="quickbooks_account_name" style="display: block; font-weight: 600; margin-bottom: 6px;">Quickbooks Account Name</label>
-        <input id="quickbooks_account_name" name="quickbooks_account_name" type="text"
-               value="{{ account.quickbooks_account_name if account else '' }}"
-               placeholder="e.g. Hotel Rooms"
-               {% if not can_modify %}disabled{% endif %} />
-        <div class="muted small" style="margin-top: 4px;">Exact name matching Quickbooks. Multiple accounts can share the same QB name.</div>
-      </div>
-
-      <div style="grid-column: 1 / -1;">
-        <label for="description" style="display: block; font-weight: 600; margin-bottom: 6px;">Description</label>
-        <textarea id="description" name="description" rows="3"
-                  placeholder="Optional notes for requesters..."
-                  {% if not can_modify %}disabled{% endif %}>{{ account.description if account else '' }}</textarea>
-      </div>
-
-      <div>
-        <label for="approval_group_id" style="display: block; font-weight: 600; margin-bottom: 6px;">Approval Group</label>
-        <select id="approval_group_id" name="approval_group_id" required {% if not can_modify %}disabled{% endif %}>
-          <option value="" disabled {% if not account %}selected{% endif %}>Select...</option>
-          {% for g in approval_groups %}
-            <option value="{{ g.id }}" {% if account and account.approval_group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div>
-        <label for="sort_order" style="display: block; font-weight: 600; margin-bottom: 6px;">Sort Order</label>
-        <input id="sort_order" name="sort_order" type="number"
-               value="{{ account.sort_order if account else 0 }}"
-               {% if not can_modify %}disabled{% endif %} />
-      </div>
-
-      <div>
-        <label for="default_spend_type_id" style="display: block; font-weight: 600; margin-bottom: 6px;">Default Spend Type</label>
-        <select id="default_spend_type_id" name="default_spend_type_id" {% if not can_modify %}disabled{% endif %}>
-          <option value="">None</option>
-          {% for st in spend_types %}
-            <option value="{{ st.id }}" {% if account and account.default_spend_type_id == st.id %}selected{% endif %}>{{ st.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div>
-        <label for="spend_type_mode" style="display: block; font-weight: 600; margin-bottom: 6px;">Spend Type Mode</label>
-        <select id="spend_type_mode" name="spend_type_mode" {% if not can_modify %}disabled{% endif %}>
-          <option value="SINGLE_LOCKED" {% if not account or account.spend_type_mode == 'SINGLE_LOCKED' %}selected{% endif %}>Single Locked</option>
-          <option value="ALLOW_LIST" {% if account and account.spend_type_mode == 'ALLOW_LIST' %}selected{% endif %}>Allow List</option>
-        </select>
-        <div class="muted small" style="margin-top: 4px;">Single Locked: uses default. Allow List: user chooses.</div>
-      </div>
-
-      <div>
-        <label for="visibility_mode" style="display: block; font-weight: 600; margin-bottom: 6px;">Visibility</label>
-        <select id="visibility_mode" name="visibility_mode" {% if not can_modify %}disabled{% endif %}>
-          <option value="ALL_DEPARTMENTS" {% if not account or account.visibility_mode == 'ALL_DEPARTMENTS' %}selected{% endif %}>All Departments</option>
-          <option value="RESTRICTED" {% if account and account.visibility_mode == 'RESTRICTED' %}selected{% endif %}>Restricted</option>
-        </select>
-        <div class="muted small" style="margin-top: 4px;">Restricted: only selected departments can use.</div>
-      </div>
-
-      <div style="grid-column: 1 / -1; border-top: 1px solid #eee; padding-top: 16px; margin-top: 8px;">
-        <strong style="display: block; margin-bottom: 12px;">Fixed Cost Settings</strong>
-
-        <div class="row" style="gap: 24px;">
-          <label style="display: flex; gap: 8px; align-items: center; font-weight: normal;">
-            <input type="checkbox" name="is_fixed_cost" value="1"
-                   {% if account and account.is_fixed_cost %}checked{% endif %}
-                   {% if not can_modify %}disabled{% endif %} />
-            Fixed cost item
-          </label>
-
-          <label style="display: flex; gap: 8px; align-items: center; font-weight: normal;">
-            <input type="checkbox" name="is_active" value="1"
-                   {% if not account or account.is_active %}checked{% endif %}
-                   {% if not can_modify %}disabled{% endif %} />
-            Active (available for selection)
-          </label>
-        </div>
-
-        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;" id="fixed-cost-fields">
+        <div class="grid" style="grid-template-columns: 1fr 2fr; gap: 16px;">
           <div>
-            <label for="default_unit_price" style="display: block; font-weight: 600; margin-bottom: 6px;">Default Unit Price ($)</label>
-            <input id="default_unit_price" name="default_unit_price" type="text"
-                   value="{% if account and account.default_unit_price_cents %}{{ '%.2f'|format(account.default_unit_price_cents / 100) }}{% endif %}"
-                   placeholder="e.g. 244.00"
+            <label for="code" style="display: block; font-weight: 600; margin-bottom: 6px;">Code</label>
+            <input id="code" name="code" type="text" required
+                   value="{{ account.code if account else '' }}"
+                   placeholder="HTL_ROOM_REG"
+                   maxlength="16"
+                   style="text-transform: uppercase;"
                    {% if not can_modify %}disabled{% endif %} />
+            <div class="muted small" style="margin-top: 4px;">Unique identifier (max 16 chars)</div>
           </div>
 
           <div>
-            <label style="display: flex; gap: 8px; align-items: center; font-weight: normal; margin-top: 28px;">
-              <input type="checkbox" name="unit_price_locked" value="1"
-                     {% if account and account.unit_price_locked %}checked{% endif %}
+            <label for="name" style="display: block; font-weight: 600; margin-bottom: 6px;">Name</label>
+            <input id="name" name="name" type="text" required
+                   value="{{ account.name if account else '' }}"
+                   placeholder="Hotel Room - Regular"
+                   {% if not can_modify %}disabled{% endif %} />
+          </div>
+        </div>
+
+        <div style="margin-top: 16px;">
+          <label for="description" style="display: block; font-weight: 600; margin-bottom: 6px;">Description</label>
+          <textarea id="description" name="description" rows="2"
+                    placeholder="Optional notes shown to requesters..."
+                    {% if not can_modify %}disabled{% endif %}>{{ account.description if account else '' }}</textarea>
+        </div>
+
+        <div style="margin-top: 16px;">
+          <label for="quickbooks_account_name" style="display: block; font-weight: 600; margin-bottom: 6px;">QuickBooks Account Name</label>
+          <input id="quickbooks_account_name" name="quickbooks_account_name" type="text"
+                 value="{{ account.quickbooks_account_name if account else '' }}"
+                 placeholder="Exact name from QuickBooks"
+                 {% if not can_modify %}disabled{% endif %} />
+          <div class="muted small" style="margin-top: 4px;">For export/integration. Multiple accounts can share the same QB name.</div>
+        </div>
+      </section>
+
+      {# Account Type & Pricing Section #}
+      <section class="card" style="margin-bottom: 16px;">
+        <h3 style="margin: 0 0 16px 0;">Account Type</h3>
+
+        <div>
+          <label for="account_type" style="display: block; font-weight: 600; margin-bottom: 6px;">Type</label>
+          <select id="account_type" name="account_type" {% if not can_modify %}disabled{% endif %} style="max-width: 300px;">
+            {% set current_type = 'standard' %}
+            {% if account %}
+              {% if account.ui_display_group == 'HOTEL_SERVICES' %}
+                {% set current_type = 'hotel_service' %}
+              {% elif account.is_fixed_cost %}
+                {% set current_type = 'fixed_cost' %}
+              {% endif %}
+            {% endif %}
+            <option value="standard" {% if current_type == 'standard' %}selected{% endif %}>Standard</option>
+            <option value="fixed_cost" {% if current_type == 'fixed_cost' %}selected{% endif %}>Fixed Cost</option>
+            <option value="hotel_service" {% if current_type == 'hotel_service' %}selected{% endif %}>Hotel/Gaylord Service</option>
+          </select>
+          <div class="muted small" style="margin-top: 4px;">
+            <strong>Standard:</strong> User enters price and quantity.<br>
+            <strong>Fixed Cost:</strong> Price is set by admin; user only enters quantity. Shows in Fixed Costs tab.<br>
+            <strong>Hotel/Gaylord:</strong> Same as Fixed Cost, but shows in Hotel tab with duration calculator.
+          </div>
+        </div>
+
+        <div id="pricing-section" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee; {% if not account or not account.is_fixed_cost %}display: none;{% endif %}">
+          <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div>
+              <label for="default_unit_price" style="display: block; font-weight: 600; margin-bottom: 6px;">Unit Price ($)</label>
+              <input id="default_unit_price" name="default_unit_price" type="text"
+                     value="{% if account and account.default_unit_price_cents %}{{ '%.2f'|format(account.default_unit_price_cents / 100) }}{% endif %}"
+                     placeholder="0.00"
+                     style="max-width: 150px;"
                      {% if not can_modify %}disabled{% endif %} />
-              Lock unit price (user cannot edit)
-            </label>
+              <div class="muted small" style="margin-top: 4px;">Price per unit (per night, per item, etc.)</div>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
+      {# Spend Types Section #}
+      <section class="card" style="margin-bottom: 16px;">
+        <h3 style="margin: 0 0 8px 0;">Allowed Spend Types</h3>
+        <div class="muted" style="margin-bottom: 16px;">
+          Select which spend types can be used with this account. If only one is selected, it will be locked.
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px;">
+          {% for st in spend_types %}
+            {% set is_allowed = account and st in account.allowed_spend_types %}
+            {% set is_default = account and account.default_spend_type_id == st.id %}
+            <label style="display: flex; gap: 8px; align-items: center; padding: 8px; background: {% if is_default %}#e3f2fd{% else %}#f8f9fa{% endif %}; border-radius: 4px; cursor: pointer;">
+              <input type="checkbox" name="allowed_spend_types" value="{{ st.id }}"
+                     {% if is_allowed or is_default %}checked{% endif %}
+                     data-spend-type-id="{{ st.id }}"
+                     class="spend-type-checkbox"
+                     {% if not can_modify %}disabled{% endif %} />
+              <span style="flex: 1;">{{ st.name }}</span>
+              <input type="radio" name="default_spend_type_id" value="{{ st.id }}"
+                     {% if is_default %}checked{% endif %}
+                     title="Set as default"
+                     class="spend-type-default"
+                     data-spend-type-id="{{ st.id }}"
+                     {% if not can_modify %}disabled{% endif %} />
+            </label>
+          {% endfor %}
+        </div>
+        <div class="muted small" style="margin-top: 8px;">
+          Check to allow, select radio to set default. Default is auto-selected for new lines.
+        </div>
+      </section>
     </div>
 
-    <div class="btn-row" style="margin-top: 20px;">
-      {% if can_modify %}
-        <button class="btn btn-primary" type="submit">{% if account %}Save Changes{% else %}Create Account{% endif %}</button>
-      {% endif %}
-      <a class="btn" href="{{ url_for('admin_config.expense_accounts.list_expense_accounts') }}">Cancel</a>
-      {% if account and can_modify %}
-        {% if account.is_active %}
-          <form method="post" action="{{ url_for('admin_config.expense_accounts.archive_expense_account', account_id=account.id) }}" style="display: inline;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn" type="submit" onclick="return confirm('Archive this expense account?')">Archive</button>
-          </form>
-        {% else %}
-          <form method="post" action="{{ url_for('admin_config.expense_accounts.restore_expense_account', account_id=account.id) }}" style="display: inline;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn" type="submit">Restore</button>
-          </form>
-        {% endif %}
-      {% endif %}
+    {# Right Column - Settings #}
+    <div>
+      {# Routing Section #}
+      <section class="card" style="margin-bottom: 16px;">
+        <h3 style="margin: 0 0 16px 0;">Approval Routing</h3>
+
+        <div>
+          <label for="approval_group_id" style="display: block; font-weight: 600; margin-bottom: 6px;">Approval Group</label>
+          <select id="approval_group_id" name="approval_group_id" required {% if not can_modify %}disabled{% endif %}>
+            <option value="" disabled {% if not account %}selected{% endif %}>Select...</option>
+            {% for g in approval_groups %}
+              <option value="{{ g.id }}" {% if account and account.approval_group_id == g.id %}selected{% endif %}>{{ g.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="muted small" style="margin-top: 4px;">Who reviews budget lines for this account</div>
+        </div>
+      </section>
+
+      {# Visibility Section #}
+      <section class="card" style="margin-bottom: 16px;">
+        <h3 style="margin: 0 0 16px 0;">Visibility</h3>
+
+        <div>
+          <label for="visibility_mode" style="display: block; font-weight: 600; margin-bottom: 6px;">Who can use this account?</label>
+          <select id="visibility_mode" name="visibility_mode" {% if not can_modify %}disabled{% endif %}>
+            <option value="ALL_DEPARTMENTS" {% if not account or account.visibility_mode == 'ALL_DEPARTMENTS' %}selected{% endif %}>All Departments</option>
+            <option value="RESTRICTED" {% if account and account.visibility_mode == 'RESTRICTED' %}selected{% endif %}>Specific Departments Only</option>
+          </select>
+        </div>
+
+        <div id="department-selection" style="margin-top: 16px; {% if not account or account.visibility_mode != 'RESTRICTED' %}display: none;{% endif %}">
+          <label style="display: block; font-weight: 600; margin-bottom: 8px;">Select Departments</label>
+          <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 8px;">
+            {% for dept in departments %}
+              <label style="display: flex; gap: 8px; align-items: center; padding: 4px 0;">
+                <input type="checkbox" name="visible_departments" value="{{ dept.id }}"
+                       {% if account and dept in account.visible_to_departments %}checked{% endif %}
+                       {% if not can_modify %}disabled{% endif %} />
+                {{ dept.name }}
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      {# Display Settings Section #}
+      <section class="card" style="margin-bottom: 16px;">
+        <h3 style="margin: 0 0 16px 0;">Display</h3>
+
+        <div>
+          <label for="sort_order" style="display: block; font-weight: 600; margin-bottom: 6px;">Sort Order</label>
+          <input id="sort_order" name="sort_order" type="number"
+                 value="{{ account.sort_order if account else 0 }}"
+                 style="max-width: 100px;"
+                 {% if not can_modify %}disabled{% endif %} />
+          <div class="muted small" style="margin-top: 4px;">Lower numbers appear first</div>
+        </div>
+      </section>
+
+      {# Admin Settings (collapsible or less prominent) #}
+      <section class="card" style="margin-bottom: 16px; background: #f8f9fa;">
+        <details>
+          <summary style="font-weight: 600; cursor: pointer;">Advanced Settings</summary>
+          <div style="margin-top: 16px;">
+            <label style="display: flex; gap: 8px; align-items: center; font-weight: normal; margin-bottom: 12px;">
+              <input type="checkbox" name="is_contract_eligible" value="1"
+                     {% if account and account.is_contract_eligible %}checked{% endif %}
+                     {% if not can_modify %}disabled{% endif %} />
+              Contract-eligible (approved budget counts toward contracts module)
+            </label>
+
+            <div>
+              <label for="prompt_mode" style="display: block; font-weight: 600; margin-bottom: 6px;">Prompt Mode</label>
+              <select id="prompt_mode" name="prompt_mode" {% if not can_modify %}disabled{% endif %}>
+                <option value="NONE" {% if not account or account.prompt_mode == 'NONE' %}selected{% endif %}>None</option>
+                <option value="SUGGEST" {% if account and account.prompt_mode == 'SUGGEST' %}selected{% endif %}>Suggest</option>
+                <option value="REQUIRE_EXPLICIT_NA" {% if account and account.prompt_mode == 'REQUIRE_EXPLICIT_NA' %}selected{% endif %}>Require Explicit N/A</option>
+              </select>
+              <div class="muted small" style="margin-top: 4px;">Controls how this account is prompted during budget entry</div>
+            </div>
+          </div>
+        </details>
+      </section>
     </div>
-  </form>
-</div>
+  </div>
+
+  {# Actions #}
+  <div class="btn-row" style="margin-top: 8px; padding-top: 16px; border-top: 1px solid #eee;">
+    {% if can_modify %}
+      <button class="btn btn-primary" type="submit">{% if account %}Save Changes{% else %}Create Account{% endif %}</button>
+    {% endif %}
+    <a class="btn" href="{{ url_for('admin_config.expense_accounts.list_expense_accounts') }}">Cancel</a>
+    {% if account and can_modify %}
+      {% if account.is_active %}
+        <form method="post" action="{{ url_for('admin_config.expense_accounts.archive_expense_account', account_id=account.id) }}" style="display: inline; margin-left: auto;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn" type="submit" onclick="return confirm('Archive this expense account? It will no longer be available for selection.')">Archive</button>
+        </form>
+      {% else %}
+        <form method="post" action="{{ url_for('admin_config.expense_accounts.restore_expense_account', account_id=account.id) }}" style="display: inline; margin-left: auto;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn" type="submit">Restore</button>
+        </form>
+      {% endif %}
+    {% endif %}
+  </div>
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Account Type toggle - show/hide pricing section
+  const accountTypeSelect = document.getElementById('account_type');
+  const pricingSection = document.getElementById('pricing-section');
+
+  function updatePricingVisibility() {
+    const type = accountTypeSelect.value;
+    if (type === 'fixed_cost' || type === 'hotel_service') {
+      pricingSection.style.display = 'block';
+    } else {
+      pricingSection.style.display = 'none';
+    }
+  }
+
+  accountTypeSelect.addEventListener('change', updatePricingVisibility);
+
+  // Visibility mode toggle - show/hide department selection
+  const visibilitySelect = document.getElementById('visibility_mode');
+  const departmentSection = document.getElementById('department-selection');
+
+  function updateDepartmentVisibility() {
+    if (visibilitySelect.value === 'RESTRICTED') {
+      departmentSection.style.display = 'block';
+    } else {
+      departmentSection.style.display = 'none';
+    }
+  }
+
+  visibilitySelect.addEventListener('change', updateDepartmentVisibility);
+
+  // Spend type checkboxes - auto-check when setting as default
+  document.querySelectorAll('.spend-type-default').forEach(function(radio) {
+    radio.addEventListener('change', function() {
+      if (this.checked) {
+        const spendTypeId = this.dataset.spendTypeId;
+        const checkbox = document.querySelector(`.spend-type-checkbox[data-spend-type-id="${spendTypeId}"]`);
+        if (checkbox) {
+          checkbox.checked = true;
+        }
+      }
+    });
+  });
+
+  // Spend type checkboxes - uncheck default if unchecking the checkbox
+  document.querySelectorAll('.spend-type-checkbox').forEach(function(checkbox) {
+    checkbox.addEventListener('change', function() {
+      if (!this.checked) {
+        const spendTypeId = this.dataset.spendTypeId;
+        const radio = document.querySelector(`.spend-type-default[data-spend-type-id="${spendTypeId}"]`);
+        if (radio && radio.checked) {
+          radio.checked = false;
+        }
+      }
+    });
+  });
+</script>
 {% endblock %}

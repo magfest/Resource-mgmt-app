@@ -25,6 +25,7 @@ from app.models import (
     PROMPT_MODE_SUGGEST,
     PROMPT_MODE_REQUIRE_EXPLICIT_NA,
     UI_GROUP_KNOWN_COSTS,
+    UI_GROUP_HOTEL_SERVICES,
     WORK_ITEM_STATUS_DRAFT,
     CONFIG_AUDIT_CREATE,
     CONFIG_AUDIT_UPDATE,
@@ -107,19 +108,6 @@ def _get_form_context():
         "spend_types": spend_types,
         "departments": departments,
         "frequencies": frequencies,
-        "spend_type_modes": [
-            (SPEND_TYPE_MODE_SINGLE_LOCKED, "Single (Locked)"),
-            (SPEND_TYPE_MODE_ALLOW_LIST, "Allow List"),
-        ],
-        "visibility_modes": [
-            (VISIBILITY_MODE_ALL, "All Departments"),
-            (VISIBILITY_MODE_RESTRICTED, "Restricted"),
-        ],
-        "prompt_modes": [
-            (PROMPT_MODE_NONE, "None"),
-            (PROMPT_MODE_SUGGEST, "Suggest"),
-            (PROMPT_MODE_REQUIRE_EXPLICIT_NA, "Require Explicit N/A"),
-        ],
     }
 
 
@@ -231,6 +219,14 @@ def create_expense_account():
         flash(f"An expense account with code '{code}' already exists", "error")
         return redirect(url_for(".new_expense_account"))
 
+    # Derive fields from account_type
+    account_type = request.form.get("account_type") or "standard"
+    is_fixed_cost, ui_display_group, unit_price_locked = _parse_account_type(account_type)
+
+    # Derive spend_type_mode from number of allowed spend types
+    allowed_spend_type_ids = request.form.getlist("allowed_spend_types")
+    spend_type_mode = SPEND_TYPE_MODE_SINGLE_LOCKED if len(allowed_spend_type_ids) <= 1 else SPEND_TYPE_MODE_ALLOW_LIST
+
     # Parse form data
     account = ExpenseAccount(
         code=code,
@@ -239,17 +235,17 @@ def create_expense_account():
         description=(request.form.get("description") or "").strip() or None,
         is_active=request.form.get("is_active") == "1",
         is_contract_eligible=request.form.get("is_contract_eligible") == "1",
-        spend_type_mode=request.form.get("spend_type_mode") or SPEND_TYPE_MODE_ALLOW_LIST,
+        spend_type_mode=spend_type_mode,
         default_spend_type_id=safe_int_or_none(request.form.get("default_spend_type_id")),
         visibility_mode=request.form.get("visibility_mode") or VISIBILITY_MODE_ALL,
         approval_group_id=approval_group_id,
-        is_fixed_cost=request.form.get("is_fixed_cost") == "1",
+        is_fixed_cost=is_fixed_cost,
         default_unit_price_cents=_parse_price_cents(request.form.get("default_unit_price")),
-        unit_price_locked=request.form.get("unit_price_locked") == "1",
+        unit_price_locked=unit_price_locked,
         default_frequency_id=safe_int_or_none(request.form.get("default_frequency_id")),
-        frequency_locked=request.form.get("frequency_locked") == "1",
-        warehouse_default=request.form.get("warehouse_default") == "1",
-        ui_display_group=request.form.get("ui_display_group") or None,
+        frequency_locked=False,
+        warehouse_default=False,
+        ui_display_group=ui_display_group,
         prompt_mode=request.form.get("prompt_mode") or PROMPT_MODE_NONE,
         sort_order=safe_int(request.form.get("sort_order")),
         created_by_user_id=h.get_active_user_id(),
@@ -289,12 +285,20 @@ def edit_expense_account(account_id: int):
     account = _get_expense_account_or_404(account_id)
     can_modify, reason = _can_modify_expense_account(account_id)
 
+    # Count how many budget lines reference this account
+    line_count = (
+        db.session.query(BudgetLineDetail)
+        .filter(BudgetLineDetail.expense_account_id == account_id)
+        .count()
+    )
+
     return render_admin_config_page(
         "admin/expense_accounts/form.html",
         account_id=f"accountid: {account_id}",
         account=account,
         can_modify=can_modify,
         modify_reason=reason,
+        line_count=line_count,
         **_get_form_context(),
     )
 
@@ -340,23 +344,28 @@ def update_expense_account(account_id: int):
         flash(f"An expense account with code '{code}' already exists", "error")
         return redirect(url_for(".edit_expense_account", account_id=account_id))
 
+    # Derive fields from account_type
+    account_type = request.form.get("account_type") or "standard"
+    is_fixed_cost, ui_display_group, unit_price_locked = _parse_account_type(account_type)
+
+    # Derive spend_type_mode from number of allowed spend types
+    allowed_spend_type_ids = request.form.getlist("allowed_spend_types")
+    spend_type_mode = SPEND_TYPE_MODE_SINGLE_LOCKED if len(allowed_spend_type_ids) <= 1 else SPEND_TYPE_MODE_ALLOW_LIST
+
     account.code = code
     account.name = name
     account.quickbooks_account_name = (request.form.get("quickbooks_account_name") or "").strip() or None
     account.description = (request.form.get("description") or "").strip() or None
     account.is_active = request.form.get("is_active") == "1"
     account.is_contract_eligible = request.form.get("is_contract_eligible") == "1"
-    account.spend_type_mode = request.form.get("spend_type_mode") or SPEND_TYPE_MODE_ALLOW_LIST
+    account.spend_type_mode = spend_type_mode
     account.default_spend_type_id = safe_int_or_none(request.form.get("default_spend_type_id"))
     account.visibility_mode = request.form.get("visibility_mode") or VISIBILITY_MODE_ALL
     account.approval_group_id = approval_group_id
-    account.is_fixed_cost = request.form.get("is_fixed_cost") == "1"
+    account.is_fixed_cost = is_fixed_cost
     account.default_unit_price_cents = _parse_price_cents(request.form.get("default_unit_price"))
-    account.unit_price_locked = request.form.get("unit_price_locked") == "1"
-    account.default_frequency_id = safe_int_or_none(request.form.get("default_frequency_id"))
-    account.frequency_locked = request.form.get("frequency_locked") == "1"
-    account.warehouse_default = request.form.get("warehouse_default") == "1"
-    account.ui_display_group = request.form.get("ui_display_group") or None
+    account.unit_price_locked = unit_price_locked
+    account.ui_display_group = ui_display_group
     account.prompt_mode = request.form.get("prompt_mode") or PROMPT_MODE_NONE
     account.sort_order = safe_int(request.form.get("sort_order"))
     account.updated_by_user_id = h.get_active_user_id()
@@ -658,3 +667,21 @@ def _parse_optional_bool(value: str | None) -> bool | None:
     if value is None or value == "":
         return None
     return value == "1"
+
+
+def _parse_account_type(account_type: str) -> tuple[bool, str | None, bool]:
+    """
+    Parse the account_type form field into derived model fields.
+
+    Args:
+        account_type: One of "standard", "fixed_cost", "hotel_service"
+
+    Returns:
+        Tuple of (is_fixed_cost, ui_display_group, unit_price_locked)
+    """
+    if account_type == "hotel_service":
+        return True, UI_GROUP_HOTEL_SERVICES, True
+    elif account_type == "fixed_cost":
+        return True, UI_GROUP_KNOWN_COSTS, True
+    else:  # standard
+        return False, None, False

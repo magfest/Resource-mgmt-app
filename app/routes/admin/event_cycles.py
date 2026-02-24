@@ -46,6 +46,7 @@ def _cycle_to_dict(cycle: EventCycle) -> dict:
         "is_default": cycle.is_default,
         "sort_order": cycle.sort_order,
         "event_start_date": cycle.event_start_date.isoformat() if cycle.event_start_date else None,
+        "event_end_date": cycle.event_end_date.isoformat() if cycle.event_end_date else None,
         "submission_deadline": cycle.submission_deadline.isoformat() if cycle.submission_deadline else None,
         "approval_target_date": cycle.approval_target_date.isoformat() if cycle.approval_target_date else None,
         "finalization_date": cycle.finalization_date.isoformat() if cycle.finalization_date else None,
@@ -136,6 +137,7 @@ def create_event_cycle():
         is_default=is_default,
         sort_order=safe_int(request.form.get("sort_order")),
         event_start_date=_parse_date(request.form.get("event_start_date")),
+        event_end_date=_parse_date(request.form.get("event_end_date")),
         submission_deadline=_parse_date(request.form.get("submission_deadline")),
         approval_target_date=_parse_date(request.form.get("approval_target_date")),
         finalization_date=_parse_date(request.form.get("finalization_date")),
@@ -216,6 +218,7 @@ def update_event_cycle(cycle_id: int):
     cycle.is_default = is_default
     cycle.sort_order = safe_int(request.form.get("sort_order"))
     cycle.event_start_date = _parse_date(request.form.get("event_start_date"))
+    cycle.event_end_date = _parse_date(request.form.get("event_end_date"))
     cycle.submission_deadline = _parse_date(request.form.get("submission_deadline"))
     cycle.approval_target_date = _parse_date(request.form.get("approval_target_date"))
     cycle.finalization_date = _parse_date(request.form.get("finalization_date"))

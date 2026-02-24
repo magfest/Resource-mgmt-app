@@ -38,6 +38,7 @@ from app.models import (
     PROMPT_MODE_SUGGEST,
     PROMPT_MODE_REQUIRE_EXPLICIT_NA,
     UI_GROUP_KNOWN_COSTS,
+    UI_GROUP_HOTEL_SERVICES,
 )
 from app.routes import h
 from .helpers import (
@@ -1290,12 +1291,14 @@ FINANCE,Finance,SUPPORT,"Financial operations and budgeting",finance@example.org
 @require_super_admin
 def download_expense_accounts_template():
     """Download a CSV template for expense accounts."""
-    csv_content = """code,name,description,quickbooks_account_name,approval_group,spend_type,spend_type_mode,is_fixed_cost,unit_price,price_locked,frequency,is_active
-RADIO_RENTAL,Radios (Rental),"Handheld radios rental for operations",Equipment Rental,TECH,DIVVY,SINGLE_LOCKED,yes,50.00,yes,ONE_TIME,yes
-LAPTOP_RENTAL,iPads / Laptops (Rental),"Hartford rental computing devices",Equipment Rental,TECH,DIVVY,SINGLE_LOCKED,yes,150.00,yes,ONE_TIME,yes
-ETHERNET_DROPS,Ethernet Drops,"Hardline internet drops from venue",Network Services,HOTEL,HOTEL_FEE,SINGLE_LOCKED,yes,75.00,yes,ONE_TIME,yes
-OFFICE_SUPPLIES,Office Supplies,"General office supplies",Office Supplies,OTHER,BANK,ALLOW_LIST,no,,no,ONE_TIME,yes
-CONTRACTOR,Contractor Services,"External contractor payments",Professional Services,OTHER,,ALLOW_LIST,no,,no,ONE_TIME,yes
+    # ui_display_group options: KNOWN_COSTS (Fixed Costs tab), HOTEL_SERVICES (Hotel/Gaylord tab), or blank (standard)
+    csv_content = """code,name,description,quickbooks_account_name,approval_group,spend_type,spend_type_mode,is_fixed_cost,unit_price,price_locked,ui_display_group,is_active
+RADIO_RENTAL,Radios (Rental),"Handheld radios rental for operations",Equipment Rental,TECH,DIVVY,SINGLE_LOCKED,yes,50.00,yes,KNOWN_COSTS,yes
+LAPTOP_RENTAL,iPads / Laptops (Rental),"Hartford rental computing devices",Equipment Rental,TECH,DIVVY,SINGLE_LOCKED,yes,150.00,yes,KNOWN_COSTS,yes
+HTL_ROOM_REG,Hotel Room - Regular,"Standard hotel room",Hotel Rooms,HOTEL,BANK,SINGLE_LOCKED,yes,244.00,yes,HOTEL_SERVICES,yes
+PARKING_GNH,Parking - Gaylord,"Gaylord hotel parking per day",Hotel Parking,HOTEL,DIVVY,SINGLE_LOCKED,yes,19.00,yes,HOTEL_SERVICES,yes
+OFFICE_SUPPLIES,Office Supplies,"General office supplies",Office Supplies,OTHER,BANK,ALLOW_LIST,no,,,yes
+CONTRACTOR,Contractor Services,"External contractor payments",Professional Services,OTHER,,ALLOW_LIST,no,,,yes
 """
     return _make_csv_response(csv_content, 'expense_accounts_template.csv')
 

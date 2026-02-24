@@ -55,6 +55,7 @@ VISIBILITY_MODE_RESTRICTED = "RESTRICTED"
 
 # Optional UI grouping
 UI_GROUP_KNOWN_COSTS = "KNOWN_COSTS"
+UI_GROUP_HOTEL_SERVICES = "HOTEL_SERVICES"
 
 # Optional prompt modes for "Known Costs" prompting behavior
 PROMPT_MODE_NONE = "NONE"
@@ -114,6 +115,7 @@ class EventCycle(db.Model):
 
     # Key dates for the budget cycle
     event_start_date = db.Column(db.Date, nullable=True)          # When the event starts
+    event_end_date = db.Column(db.Date, nullable=True)            # When the event ends
     submission_deadline = db.Column(db.Date, nullable=True)       # Budget submission deadline
     approval_target_date = db.Column(db.Date, nullable=True)      # Target for completing approvals
     finalization_date = db.Column(db.Date, nullable=True)         # When budgets are locked/finalized

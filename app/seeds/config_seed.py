@@ -39,6 +39,7 @@ from app.models import (
     PROMPT_MODE_NONE,
     PROMPT_MODE_REQUIRE_EXPLICIT_NA,
     UI_GROUP_KNOWN_COSTS,
+    UI_GROUP_HOTEL_SERVICES,
     ROUTING_STRATEGY_EXPENSE_ACCOUNT,
     ROUTING_STRATEGY_CONTRACT_TYPE,
     ROUTING_STRATEGY_CATEGORY,
@@ -653,6 +654,7 @@ def seed_expense_accounts_from_spreadsheet(
                     default_unit_price_cents=price_cents,
                     office_dept=office_dept,
                     sort_order=sort_order,
+                    ui_display_group=UI_GROUP_HOTEL_SERVICES,
                 )
                 sort_order += 10
                 accounts_created += 1
@@ -680,6 +682,7 @@ def seed_expense_accounts_from_spreadsheet(
                     office_dept=office_dept,
                     sort_order=sort_order,
                     prompt_mode_override=PROMPT_MODE_NONE,  # Don't prompt - these are optional
+                    ui_display_group=UI_GROUP_HOTEL_SERVICES,
                 )
                 sort_order += 10
                 accounts_created += 1
@@ -720,6 +723,7 @@ def seed_expense_accounts_from_spreadsheet(
                 default_unit_price_cents=1900,  # $19/night
                 office_dept=office_dept,
                 sort_order=sort_order,
+                ui_display_group=UI_GROUP_HOTEL_SERVICES,
             )
             sort_order += 10
             accounts_created += 1
@@ -776,6 +780,7 @@ def create_expense_account(
     office_dept: Optional[Department],
     sort_order: int,
     prompt_mode_override: Optional[str] = None,
+    ui_display_group: Optional[str] = None,
 ) -> ExpenseAccount:
     """Create an expense account with proper settings."""
 
@@ -796,8 +801,9 @@ def create_expense_account(
     else:
         prompt_mode = PROMPT_MODE_REQUIRE_EXPLICIT_NA if is_fixed_cost else PROMPT_MODE_NONE
 
-    # Determine UI group
-    ui_display_group = UI_GROUP_KNOWN_COSTS if is_fixed_cost else None
+    # Determine UI group (use override if provided, otherwise derive from is_fixed_cost)
+    if ui_display_group is None:
+        ui_display_group = UI_GROUP_KNOWN_COSTS if is_fixed_cost else None
 
     account = ExpenseAccount(
         code=code,

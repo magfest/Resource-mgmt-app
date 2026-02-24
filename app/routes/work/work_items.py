@@ -39,6 +39,8 @@ from .helpers import (
     format_currency,
     get_visible_expense_accounts,
     get_fixed_cost_expense_accounts,
+    get_hotel_service_expense_accounts,
+    get_non_hotel_fixed_cost_accounts,
     get_effective_fixed_cost_settings,
     get_allowed_spend_types,
     get_confidence_levels,
@@ -106,7 +108,7 @@ def primary_new(event: str, dept: str):
         if existing:
             flash("A Primary Budget Request already exists for this portfolio.", "warning")
             return redirect(url_for(
-                "budget.work_item_detail",
+                "work.work_item_detail",
                 event=event,
                 dept=dept,
                 public_id=existing.public_id
@@ -139,7 +141,7 @@ def primary_create(event: str, dept: str):
     if existing:
         flash("A Primary Budget Request already exists for this portfolio.", "warning")
         return redirect(url_for(
-            "budget.work_item_detail",
+            "work.work_item_detail",
             event=event,
             dept=dept,
             public_id=existing.public_id
@@ -162,7 +164,7 @@ def primary_create(event: str, dept: str):
 
     flash("Primary Budget Request created successfully.", "success")
     return redirect(url_for(
-        "budget.work_item_edit",
+        "work.work_item_edit",
         event=event,
         dept=dept,
         public_id=work_item.public_id
@@ -268,21 +270,31 @@ def work_item_comment(event: str, dept: str, public_id: str):
 # Work Item Edit Routes
 # ============================================================
 
+def _calculate_event_nights(start_date, end_date):
+    """Calculate the number of nights between start and end dates."""
+    if not start_date or not end_date:
+        return None
+    return max(0, (end_date - start_date).days)
+
+
 @work_bp.get("/<event>/<dept>/budget/item/<public_id>/edit")
 def work_item_edit(event: str, dept: str, public_id: str):
     """
     Edit form for a DRAFT work item.
     """
+    from app.models import UI_GROUP_HOTEL_SERVICES
+
     work_item, ctx = get_work_item_by_public_id(event, dept, public_id)
     perms = require_work_item_edit(work_item, ctx)
 
     # Compute totals
     totals = compute_work_item_totals(work_item)
 
-    # Get lines - separate fixed-cost lines from regular lines
+    # Get lines - separate into regular, fixed-cost, and hotel lines
     all_lines = work_item.lines
     regular_lines = []
     fixed_cost_lines = []
+    hotel_lines = []
 
     for line in all_lines:
         # Lines without budget details go to regular section
@@ -290,8 +302,12 @@ def work_item_edit(event: str, dept: str, public_id: str):
             regular_lines.append(line)
             continue
 
-        # Lines with fixed-cost accounts go to fixed section
-        if line.budget_detail.expense_account.is_fixed_cost:
+        acc = line.budget_detail.expense_account
+        # Lines with hotel service accounts go to hotel section
+        if acc.is_fixed_cost and acc.ui_display_group == UI_GROUP_HOTEL_SERVICES:
+            hotel_lines.append(line)
+        # Lines with other fixed-cost accounts go to fixed section
+        elif acc.is_fixed_cost:
             fixed_cost_lines.append(line)
         else:
             regular_lines.append(line)
@@ -308,21 +324,33 @@ def work_item_edit(event: str, dept: str, public_id: str):
         acc.id: get_allowed_spend_types(acc) for acc in expense_accounts
     }
 
-    # Get fixed-cost expense accounts
-    fixed_cost_accounts = get_fixed_cost_expense_accounts(
+    # Get non-hotel fixed-cost expense accounts (for Fixed Costs tab)
+    non_hotel_fixed_accounts = get_non_hotel_fixed_cost_accounts(
         department_id=ctx.department.id,
         event_cycle_id=ctx.event_cycle.id,
     )
 
-    # Build fixed-cost data with effective settings and existing quantities
-    fixed_cost_data = []
+    # Get hotel service expense accounts (for Hotel/Gaylord tab)
+    hotel_accounts = get_hotel_service_expense_accounts(
+        department_id=ctx.department.id,
+        event_cycle_id=ctx.event_cycle.id,
+    )
+
+    # Build map of existing lines by account ID (for both fixed-cost and hotel)
     existing_fixed_by_account_id = {
         line.budget_detail.expense_account_id: line
         for line in fixed_cost_lines
         if line.budget_detail
     }
+    existing_hotel_by_account_id = {
+        line.budget_detail.expense_account_id: line
+        for line in hotel_lines
+        if line.budget_detail
+    }
 
-    for acc in fixed_cost_accounts:
+    # Build fixed-cost data (non-hotel) with effective settings and existing quantities
+    fixed_cost_data = []
+    for acc in non_hotel_fixed_accounts:
         settings = get_effective_fixed_cost_settings(acc, ctx.event_cycle.id)
         existing_line = existing_fixed_by_account_id.get(acc.id)
 
@@ -341,6 +369,37 @@ def work_item_edit(event: str, dept: str, public_id: str):
             "existing_quantity": existing_quantity,
         })
 
+    # Build hotel data with effective settings and existing quantities
+    hotel_data = []
+    for acc in hotel_accounts:
+        settings = get_effective_fixed_cost_settings(acc, ctx.event_cycle.id)
+        existing_line = existing_hotel_by_account_id.get(acc.id)
+
+        # Get existing quantity if line exists with budget detail
+        if existing_line and existing_line.budget_detail:
+            existing_quantity = existing_line.budget_detail.quantity
+        else:
+            existing_quantity = None
+
+        hotel_data.append({
+            "account": acc,
+            "unit_price_cents": settings["unit_price_cents"],
+            "frequency_id": settings["frequency_id"],
+            "warehouse_default": settings["warehouse_default"],
+            "existing_line": existing_line,
+            "existing_quantity": existing_quantity,
+        })
+
+    # Calculate event nights for hotel calculator
+    event_nights = _calculate_event_nights(
+        ctx.event_cycle.event_start_date,
+        ctx.event_cycle.event_end_date
+    )
+
+    # Count items in each section for badge display
+    fixed_cost_count = sum(1 for item in fixed_cost_data if item["existing_quantity"])
+    hotel_count = sum(1 for item in hotel_data if item["existing_quantity"])
+
     return render_template(
         "budget/work_item_edit.html",
         ctx=ctx,
@@ -348,7 +407,14 @@ def work_item_edit(event: str, dept: str, public_id: str):
         work_item=work_item,
         lines=regular_lines,
         fixed_cost_lines=fixed_cost_lines,
+        hotel_lines=hotel_lines,
         fixed_cost_data=fixed_cost_data,
+        hotel_data=hotel_data,
+        fixed_cost_count=fixed_cost_count,
+        hotel_count=hotel_count,
+        event_nights=event_nights,
+        event_start_date=ctx.event_cycle.event_start_date,
+        event_end_date=ctx.event_cycle.event_end_date,
         totals=totals,
         expense_accounts=expense_accounts,
         spend_types_by_account=spend_types_by_account,
@@ -394,7 +460,7 @@ def work_item_edit_save(event: str, dept: str, public_id: str):
 
     flash("Changes saved.", "success")
     return redirect(url_for(
-        "budget.work_item_edit",
+        "work.work_item_edit",
         event=event,
         dept=dept,
         public_id=public_id
@@ -535,7 +601,7 @@ def work_item_fixed_costs_save(event: str, dept: str, public_id: str):
 
     flash("Fixed-cost items updated.", "success")
     return redirect(url_for(
-        "budget.work_item_edit",
+        "work.work_item_edit",
         event=event,
         dept=dept,
         public_id=public_id
@@ -558,7 +624,7 @@ def work_item_submit(event: str, dept: str, public_id: str):
     if work_item.status != WORK_ITEM_STATUS_DRAFT:
         flash("Only DRAFT requests can be submitted.", "error")
         return redirect(url_for(
-            "budget.work_item_detail",
+            "work.work_item_detail",
             event=event,
             dept=dept,
             public_id=public_id
@@ -568,7 +634,7 @@ def work_item_submit(event: str, dept: str, public_id: str):
     if len(work_item.lines) == 0:
         flash("Cannot submit: request has no lines.", "error")
         return redirect(url_for(
-            "budget.work_item_edit",
+            "work.work_item_edit",
             event=event,
             dept=dept,
             public_id=public_id
@@ -579,7 +645,7 @@ def work_item_submit(event: str, dept: str, public_id: str):
         if not line.budget_detail:
             flash(f"Cannot submit: line {line.line_number} is missing budget details.", "error")
             return redirect(url_for(
-                "budget.work_item_edit",
+                "work.work_item_edit",
                 event=event,
                 dept=dept,
                 public_id=public_id
@@ -589,7 +655,7 @@ def work_item_submit(event: str, dept: str, public_id: str):
         if not expense_account:
             flash(f"Cannot submit: line {line.line_number} has no expense account.", "error")
             return redirect(url_for(
-                "budget.work_item_edit",
+                "work.work_item_edit",
                 event=event,
                 dept=dept,
                 public_id=public_id
@@ -601,7 +667,7 @@ def work_item_submit(event: str, dept: str, public_id: str):
                 "error"
             )
             return redirect(url_for(
-                "budget.work_item_edit",
+                "work.work_item_edit",
                 event=event,
                 dept=dept,
                 public_id=public_id
@@ -640,7 +706,7 @@ def work_item_submit(event: str, dept: str, public_id: str):
 
     flash("Budget request submitted for review.", "success")
     return redirect(url_for(
-        "budget.work_item_detail",
+        "work.work_item_detail",
         event=event,
         dept=dept,
         public_id=public_id
@@ -671,7 +737,7 @@ def supplementary_new(event: str, dept: str):
         if not existing:
             flash("A Primary Budget Request must exist before creating a supplementary.", "warning")
             return redirect(url_for(
-                "budget.portfolio_landing",
+                "work.portfolio_landing",
                 event=event,
                 dept=dept,
             ))
@@ -679,7 +745,7 @@ def supplementary_new(event: str, dept: str):
         if existing.status != WORK_ITEM_STATUS_FINALIZED:
             flash("The Primary Budget Request must be finalized before creating a supplementary.", "warning")
             return redirect(url_for(
-                "budget.work_item_detail",
+                "work.work_item_detail",
                 event=event,
                 dept=dept,
                 public_id=existing.public_id
@@ -720,7 +786,7 @@ def supplementary_create(event: str, dept: str):
     if not existing_primary:
         flash("A Primary Budget Request must exist before creating a supplementary.", "warning")
         return redirect(url_for(
-            "budget.portfolio_landing",
+            "work.portfolio_landing",
             event=event,
             dept=dept,
         ))
@@ -728,7 +794,7 @@ def supplementary_create(event: str, dept: str):
     if existing_primary.status != WORK_ITEM_STATUS_FINALIZED:
         flash("The Primary Budget Request must be finalized before creating a supplementary.", "warning")
         return redirect(url_for(
-            "budget.work_item_detail",
+            "work.work_item_detail",
             event=event,
             dept=dept,
             public_id=existing_primary.public_id
@@ -751,7 +817,7 @@ def supplementary_create(event: str, dept: str):
 
     flash("Supplementary Budget Request created successfully.", "success")
     return redirect(url_for(
-        "budget.work_item_edit",
+        "work.work_item_edit",
         event=event,
         dept=dept,
         public_id=work_item.public_id
@@ -773,7 +839,7 @@ def work_item_checkout(event: str, dept: str, public_id: str):
     if not perms.can_checkout:
         flash("You cannot checkout this work item.", "error")
         return redirect(url_for(
-            "budget.work_item_detail",
+            "work.work_item_detail",
             event=event,
             dept=dept,
             public_id=public_id
@@ -787,7 +853,7 @@ def work_item_checkout(event: str, dept: str, public_id: str):
         flash("Could not checkout work item.", "error")
 
     return redirect(url_for(
-        "budget.work_item_detail",
+        "work.work_item_detail",
         event=event,
         dept=dept,
         public_id=public_id
@@ -805,7 +871,7 @@ def work_item_checkin(event: str, dept: str, public_id: str):
     if not perms.can_checkin:
         flash("You cannot release this checkout.", "error")
         return redirect(url_for(
-            "budget.work_item_detail",
+            "work.work_item_detail",
             event=event,
             dept=dept,
             public_id=public_id
@@ -820,7 +886,7 @@ def work_item_checkin(event: str, dept: str, public_id: str):
         flash("Could not release lock.", "error")
 
     return redirect(url_for(
-        "budget.work_item_detail",
+        "work.work_item_detail",
         event=event,
         dept=dept,
         public_id=public_id
@@ -842,7 +908,7 @@ def work_item_request_info(event: str, dept: str, public_id: str):
     if not perms.can_request_info:
         flash("You cannot request information on this work item.", "error")
         return redirect(url_for(
-            "budget.work_item_detail",
+            "work.work_item_detail",
             event=event,
             dept=dept,
             public_id=public_id
@@ -852,7 +918,7 @@ def work_item_request_info(event: str, dept: str, public_id: str):
     if not message:
         flash("A message is required when requesting information.", "error")
         return redirect(url_for(
-            "budget.work_item_detail",
+            "work.work_item_detail",
             event=event,
             dept=dept,
             public_id=public_id
@@ -881,7 +947,7 @@ def work_item_request_info(event: str, dept: str, public_id: str):
 
     flash("Information requested. The requester has been notified.", "success")
     return redirect(url_for(
-        "budget.work_item_detail",
+        "work.work_item_detail",
         event=event,
         dept=dept,
         public_id=public_id
@@ -899,7 +965,7 @@ def work_item_respond_info(event: str, dept: str, public_id: str):
     if not perms.can_respond_to_info:
         flash("You cannot respond to this information request.", "error")
         return redirect(url_for(
-            "budget.work_item_detail",
+            "work.work_item_detail",
             event=event,
             dept=dept,
             public_id=public_id
@@ -909,7 +975,7 @@ def work_item_respond_info(event: str, dept: str, public_id: str):
     if not response:
         flash("A response is required.", "error")
         return redirect(url_for(
-            "budget.work_item_detail",
+            "work.work_item_detail",
             event=event,
             dept=dept,
             public_id=public_id
@@ -935,7 +1001,7 @@ def work_item_respond_info(event: str, dept: str, public_id: str):
 
     flash("Response submitted. The request is back in review.", "success")
     return redirect(url_for(
-        "budget.work_item_detail",
+        "work.work_item_detail",
         event=event,
         dept=dept,
         public_id=public_id
