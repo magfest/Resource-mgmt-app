@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
-from flask import Flask, session, render_template
+import secrets as stdlib_secrets  # Avoid conflict with app.secrets
+from datetime import timedelta
+from flask import Flask, session, render_template, g
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf.csrf import CSRFProtect
@@ -50,6 +52,12 @@ def create_app() -> Flask:
     app.config["SESSION_COOKIE_SECURE"] = is_production  # HTTPS only in production
     app.config["SESSION_COOKIE_HTTPONLY"] = True  # Prevent JS access
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # CSRF protection
+
+    # --- Session Timeout (Auto Sign-Out) ---
+    # Sessions expire after 30 minutes of inactivity in production, 60 minutes in dev
+    session_timeout_minutes = int(os.environ.get("SESSION_TIMEOUT_MINUTES", "30" if is_production else "60"))
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=session_timeout_minutes)
+    app.config["SESSION_REFRESH_EACH_REQUEST"] = True  # Reset timeout on each request (sliding window)
 
     # --- Beta Testing Mode ---
     # Enables role override dropdown for super-admins to test different permission levels
@@ -132,6 +140,68 @@ def create_app() -> Flask:
 
     # Import models so migrations can detect them
     from . import models  # noqa: F401
+
+    # --- Security Headers Middleware ---
+    @app.after_request
+    def add_security_headers(response):
+        """Add security headers to all responses."""
+        # Prevent clickjacking - don't allow embedding in iframes
+        response.headers["X-Frame-Options"] = "DENY"
+
+        # Prevent MIME type sniffing
+        response.headers["X-Content-Type-Options"] = "nosniff"
+
+        # XSS protection (legacy but still useful for older browsers)
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+
+        # Control referrer information
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+        # Permissions Policy (formerly Feature-Policy) - disable sensitive features
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+
+        # Content Security Policy - restrict resource loading
+        # Scripts require a nonce; styles allow inline (industry-standard compromise)
+        # See docs/security.md for developer guidance on CSP nonces
+        nonce = getattr(g, 'csp_nonce', '')
+        csp_directives = [
+            "default-src 'self'",
+            f"script-src 'self' 'nonce-{nonce}'",  # Nonce required for inline scripts
+            "style-src 'self' 'unsafe-inline'",    # Inline styles allowed (low risk)
+            "img-src 'self' data:",
+            "font-src 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+            "base-uri 'self'",
+            "object-src 'none'",
+        ]
+        response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
+
+        # HSTS - force HTTPS (only in production)
+        if is_production:
+            # max-age=31536000 = 1 year; includeSubDomains for all subdomains
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+        return response
+
+    # --- Session Management ---
+    @app.before_request
+    def make_session_permanent():
+        """Make sessions permanent so PERMANENT_SESSION_LIFETIME applies."""
+        session.permanent = True
+
+    # --- CSP Nonce Generation ---
+    @app.before_request
+    def generate_csp_nonce():
+        """Generate a unique nonce for Content Security Policy on each request.
+
+        This nonce is used to allow specific inline scripts while blocking
+        injected scripts. Each request gets a fresh nonce for security.
+
+        Access in templates via: {{ csp_nonce }}
+        Usage: <script nonce="{{ csp_nonce }}">...</script>
+        """
+        g.csp_nonce = stdlib_secrets.token_urlsafe(32)
 
     # -----------------------------
     # Helpers (demo auth + scoping)
@@ -647,6 +717,8 @@ def create_app() -> Flask:
         is_impersonating = bool(real_user_id and real_user_id != get_active_user_id())
 
         ctx = {
+            # CSP nonce for inline scripts (see docs/security.md)
+            "csp_nonce": getattr(g, 'csp_nonce', ''),
             "active_user": u,
             "active_user_id": get_active_user_id(),
             "active_user_roles": roles,
@@ -702,7 +774,7 @@ def create_app() -> Flask:
                 app.logger.warning(f"Bootstrap admins check failed (may be pre-migration): {e}")
 
     # --- Error Handlers ---
-    from flask import redirect, url_for, flash
+    from flask import redirect, url_for, flash, request
     from sqlalchemy.exc import OperationalError, DatabaseError
 
     @app.errorhandler(400)
@@ -715,6 +787,19 @@ def create_app() -> Flask:
         if not session.get('active_user_id') and not app.config.get('DEV_LOGIN_ENABLED'):
             flash('Please sign in to continue.', 'info')
             return redirect(url_for('auth.login_page'))
+
+        # Log access denied event
+        user_id = session.get('active_user_id')
+        if user_id:
+            try:
+                from app.security_audit import log_access_denied
+                log_access_denied(user_id, request.path, str(error.description) if hasattr(error, 'description') else None)
+                db.session.commit()
+            except Exception as e:
+                # Don't let audit logging failures break the error handler
+                app.logger.warning(f"Failed to log access denied event: {e}")
+                db.session.rollback()
+
         # User is logged in but doesn't have permission
         return render_template('errors/403.html', error=error), 403
 
@@ -754,5 +839,27 @@ def create_app() -> Flask:
             db.session.rollback()
             app.logger.error(f"Unhandled exception: {error}", exc_info=True)
             return render_template('errors/500.html', error=None), 500
+
+    # --- CLI Commands ---
+    import click
+    from datetime import datetime as dt
+
+    @app.cli.command("cleanup-audit-logs")
+    @click.option("--days", default=180, help="Delete logs older than N days (default: 180)")
+    @click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
+    def cleanup_audit_logs(days, dry_run):
+        """Delete security audit logs older than specified days."""
+        from app.models import SecurityAuditLog
+
+        cutoff = dt.utcnow() - timedelta(days=days)
+        query = SecurityAuditLog.query.filter(SecurityAuditLog.timestamp < cutoff)
+        count = query.count()
+
+        if dry_run:
+            click.echo(f"Would delete {count} audit logs older than {cutoff}")
+        else:
+            query.delete()
+            db.session.commit()
+            click.echo(f"Deleted {count} audit logs older than {cutoff}")
 
     return app

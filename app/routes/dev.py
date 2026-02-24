@@ -54,10 +54,9 @@ def dev_login_post():
     if not u or not u.is_active:
         return "Unknown or inactive user", 400
 
+    # Session fixation prevention: clear session before setting new auth
+    session.clear()
     session["active_user_id"] = u.id
-    # Clear any role override when switching users
-    session.pop("role_override", None)
-    session.pop("role_override_approval_group_id", None)
     return redirect(url_for("dev.dev_login"))
 
 
@@ -144,6 +143,7 @@ def impersonate_user_page():
 def impersonate_user():
     """Start impersonating another user."""
     from app.models import User
+    from app.security_audit import log_impersonation_start
 
     # Only real super-admins in beta mode can impersonate
     if not current_app.config.get("BETA_TESTING_MODE"):
@@ -170,6 +170,10 @@ def impersonate_user():
         # Only set real_user_id if not already impersonating
         session["real_user_id"] = current_user_id
 
+    # Log impersonation start (before switching users)
+    log_impersonation_start(current_user_id, target_user.id)
+    db.session.commit()
+
     # Switch to the target user
     session["active_user_id"] = target_user.id
 
@@ -184,11 +188,20 @@ def impersonate_user():
 @dev_bp.post("/dev/exit-impersonation")
 def exit_impersonation():
     """Stop impersonating and return to real account."""
+    from app.security_audit import log_impersonation_end
+
     real_user_id = session.get("real_user_id")
 
     if not real_user_id:
         flash("Not currently impersonating anyone", "error")
         return redirect(url_for("home.index"))
+
+    # Get impersonated user ID before restoring
+    impersonated_user_id = session.get("active_user_id")
+
+    # Log impersonation end
+    log_impersonation_end(real_user_id, impersonated_user_id)
+    db.session.commit()
 
     # Restore the real user
     session["active_user_id"] = real_user_id

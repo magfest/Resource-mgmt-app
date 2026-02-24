@@ -109,7 +109,7 @@
         {% if user.is_active %}
           <form method="post" action="{{ url_for('admin_config.users.archive_user', user_id=user.id) }}" style="display: inline;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn" type="submit" onclick="return confirm('Deactivate this user?')">Deactivate</button>
+            <button class="btn" type="submit" data-confirm="Deactivate this user?">Deactivate</button>
           </form>
         {% else %}
           <form method="post" action="{{ url_for('admin_config.users.restore_user', user_id=user.id) }}" style="display: inline;">

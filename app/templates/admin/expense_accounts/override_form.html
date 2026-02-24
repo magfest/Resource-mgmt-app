@@ -108,7 +108,7 @@
       {% if override %}
         <form method="post" action="{{ url_for('admin_config.expense_accounts.delete_override', account_id=account.id, override_id=override.id) }}" style="display: inline;">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn" type="submit" onclick="return confirm('Delete this override?')" style="color: #c00;">Delete</button>
+          <button class="btn" type="submit" data-confirm="Delete this override?" style="color: #c00;">Delete</button>
         </form>
       {% endif %}
     </div>

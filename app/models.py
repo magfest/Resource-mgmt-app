@@ -1209,6 +1209,34 @@ class ConfigAuditEvent(db.Model):
     )
 
 
+class SecurityAuditLog(db.Model):
+    """Security audit log for authentication and sensitive operations."""
+    __tablename__ = "security_audit_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # When & Who
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    user_id = db.Column(db.String(64), nullable=True, index=True)  # Null for failed logins
+
+    # Request context
+    ip_address = db.Column(db.String(45), nullable=True)  # IPv6 max length
+    user_agent = db.Column(db.String(512), nullable=True)
+
+    # Event details
+    event_type = db.Column(db.String(32), nullable=False, index=True)
+    event_category = db.Column(db.String(32), nullable=False, index=True)  # AUTH, ADMIN, ACCESS
+    severity = db.Column(db.String(16), nullable=False, default="INFO")  # INFO, WARNING, ALERT
+
+    # Context data (JSON)
+    details = db.Column(db.Text, nullable=True)  # JSON with event-specific data
+
+    __table_args__ = (
+        db.Index("ix_security_audit_timestamp_category", "timestamp", "event_category"),
+        db.Index("ix_security_audit_user_timestamp", "user_id", "timestamp"),
+    )
+
+
 class ExpenseAccountEventOverride(db.Model):
     __tablename__ = "expense_account_event_overrides"
 

@@ -66,7 +66,7 @@
         {% if division.is_active %}
           <form method="post" action="{{ url_for('admin_config.divisions.archive_division', division_id=division.id) }}" style="display: inline;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn" type="submit" onclick="return confirm('Archive this division?')">Archive</button>
+            <button class="btn" type="submit" data-confirm="Archive this division?">Archive</button>
           </form>
         {% else %}
           <form method="post" action="{{ url_for('admin_config.divisions.restore_division', division_id=division.id) }}" style="display: inline;">

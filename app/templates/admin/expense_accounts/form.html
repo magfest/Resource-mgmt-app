@@ -256,7 +256,7 @@
       {% if account.is_active %}
         <form method="post" action="{{ url_for('admin_config.expense_accounts.archive_expense_account', account_id=account.id) }}" style="display: inline; margin-left: auto;">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn" type="submit" onclick="return confirm('Archive this expense account? It will no longer be available for selection.')">Archive</button>
+          <button class="btn" type="submit" data-confirm="Archive this expense account? It will no longer be available for selection.">Archive</button>
         </form>
       {% else %}
         <form method="post" action="{{ url_for('admin_config.expense_accounts.restore_expense_account', account_id=account.id) }}" style="display: inline; margin-left: auto;">
@@ -271,7 +271,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // Account Type toggle - show/hide pricing section
   const accountTypeSelect = document.getElementById('account_type');
   const pricingSection = document.getElementById('pricing-section');

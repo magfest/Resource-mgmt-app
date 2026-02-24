@@ -100,7 +100,7 @@
           <form method="post" action="{{ url_for('dev.set_role_override') }}" style="display:flex; gap:6px; align-items:center;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label style="font-size:0.85em; color:#666;">Test as:</label>
-            <select name="role_override" style="font-size:0.85em; padding:4px 6px;" onchange="this.form.submit()">
+            <select name="role_override" style="font-size:0.85em; padding:4px 6px;" data-autosubmit>
               <option value="normal" {% if not role_override %}selected{% endif %}>Normal (Super Admin)</option>
               <option value="finance" {% if role_override == 'finance' %}selected{% endif %}>Finance Only</option>
               {% for group in _get_approval_groups() %}

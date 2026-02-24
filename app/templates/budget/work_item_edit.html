@@ -48,7 +48,7 @@
     {% if perms.can_submit %}
       <form method="post" action="{{ url_for('work.work_item_submit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-primary" onclick="return confirm('Submit this request for review?');">
+        <button type="submit" class="btn btn-primary" data-confirm="Submit this request for review?">
           Submit for Review
         </button>
       </form>
@@ -412,7 +412,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // Tab switching
   document.querySelectorAll('.tab-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {

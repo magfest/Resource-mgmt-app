@@ -131,6 +131,7 @@ def callback():
 def _handle_google_callback():
     """Handle Google OAuth callback."""
     from app.models import User
+    from app.security_audit import log_login_failure
 
     oauth = get_oauth()
 
@@ -138,6 +139,8 @@ def _handle_google_callback():
         token = oauth.google.authorize_access_token()
     except Exception as e:
         current_app.logger.error(f'Google OAuth error: {e}')
+        log_login_failure("oauth_error", provider="google")
+        db.session.commit()
         flash('Authentication failed. Please try again.', 'error')
         return redirect(url_for('home.index'))
 
@@ -149,6 +152,8 @@ def _handle_google_callback():
 
     email = user_info.get('email', '').lower().strip()
     if not email:
+        log_login_failure("missing_email", provider="google")
+        db.session.commit()
         flash('Could not retrieve email from Google account', 'error')
         return redirect(url_for('home.index'))
 
@@ -157,6 +162,8 @@ def _handle_google_callback():
     if allowed_domains:
         email_domain = email.split('@')[-1] if '@' in email else ''
         if email_domain not in allowed_domains:
+            log_login_failure("domain_restricted", email=email, provider="google")
+            db.session.commit()
             flash(f'Sign-in is restricted to authorized email domains. '
                   f'Please use your organization email.', 'error')
             return redirect(url_for('auth.login_page'))
@@ -170,6 +177,7 @@ def _handle_google_callback():
 def _handle_keycloak_callback():
     """Handle Keycloak OAuth callback."""
     from app.models import User
+    from app.security_audit import log_login_failure
 
     oauth = get_oauth()
 
@@ -177,6 +185,8 @@ def _handle_keycloak_callback():
         token = oauth.keycloak.authorize_access_token()
     except Exception as e:
         current_app.logger.error(f'Keycloak OAuth error: {e}')
+        log_login_failure("oauth_error", provider="keycloak")
+        db.session.commit()
         flash('Authentication failed. Please try again.', 'error')
         return redirect(url_for('home.index'))
 
@@ -188,6 +198,8 @@ def _handle_keycloak_callback():
 
     email = user_info.get('email', '').lower().strip()
     if not email:
+        log_login_failure("missing_email", provider="keycloak")
+        db.session.commit()
         flash('Could not retrieve email from Keycloak account', 'error')
         return redirect(url_for('home.index'))
 
@@ -211,6 +223,7 @@ def _complete_login(email: str, subject: str, display_name: str, provider: str):
     This is shared logic for all OAuth providers.
     """
     from app.models import User
+    from app.security_audit import log_login_success, log_login_failure
     import uuid
 
     # Try to find existing user by email
@@ -225,10 +238,19 @@ def _complete_login(email: str, subject: str, display_name: str, provider: str):
             db.session.commit()
 
         if not user.is_active:
+            log_login_failure("inactive_user", email=email, provider=provider)
+            db.session.commit()
             flash('Your account is inactive. Please contact an administrator.', 'error')
             return redirect(url_for('home.index'))
 
+        # Session fixation prevention: clear session before setting new auth
+        session.clear()
         session['active_user_id'] = user.id
+
+        # Log successful login
+        log_login_success(user.id, provider, email)
+        db.session.commit()
+
         flash(f'Welcome back, {user.display_name}!', 'success')
     else:
         # New user - create with no permissions
@@ -242,15 +264,17 @@ def _complete_login(email: str, subject: str, display_name: str, provider: str):
             is_active=True,
         )
         db.session.add(user)
+
+        # Session fixation prevention: clear session before setting new auth
+        session.clear()
+        session['active_user_id'] = user.id
+
+        # Log successful login (new user creation)
+        log_login_success(user.id, provider, email)
         db.session.commit()
 
-        session['active_user_id'] = user.id
         flash(f'Welcome, {user.display_name}! Your account has been created. '
               'Contact an administrator to get access to departments.', 'info')
-
-    # Clear any role override from previous session
-    session.pop('role_override', None)
-    session.pop('role_override_approval_group_id', None)
 
     return redirect(url_for('home.index'))
 
@@ -258,7 +282,15 @@ def _complete_login(email: str, subject: str, display_name: str, provider: str):
 @auth_bp.get('/auth/logout')
 def logout():
     """Log out the current user."""
+    from app.security_audit import log_logout
+
     auth_provider = current_app.config.get('AUTH_PROVIDER')
+
+    # Log logout before clearing session (we need the user_id)
+    user_id = session.get('active_user_id')
+    if user_id:
+        log_logout(user_id)
+        db.session.commit()
 
     # Clear session
     session.pop('active_user_id', None)

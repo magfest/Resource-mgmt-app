@@ -65,7 +65,7 @@
             <a class="btn" href="{{ url_for('admin_config.departments.edit_member', dept_id=department.id, membership_id=m.id) }}">Edit</a>
             <form method="post" action="{{ url_for('admin_config.departments.delete_member', dept_id=department.id, membership_id=m.id) }}" style="display: inline;">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn" type="submit" onclick="return confirm('Remove this member?')">Remove</button>
+              <button class="btn" type="submit" data-confirm="Remove this member?">Remove</button>
             </form>
           </div>
         </td>

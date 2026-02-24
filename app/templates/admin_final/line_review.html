@@ -176,7 +176,7 @@
           {# Reset option #}
           <form method="post" action="{{ url_for('admin_final.line_reset', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="margin-top: 12px;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn" onclick="return confirm('Reset this line for re-review?');">
+            <button type="submit" class="btn" data-confirm="Reset this line for re-review?">
               Reset for Re-review
             </button>
           </form>
@@ -233,7 +233,7 @@
               <input type="hidden" name="approved_amount" class="amount-field" />
               <input type="hidden" name="note" class="note-field" />
               <input type="hidden" name="admin_only" class="admin-only-field" />
-              <button type="submit" class="btn btn-primary" onclick="return confirmAdminAction(this, 'Approve this line?')">
+              <button type="submit" class="btn btn-primary" data-admin-action="Approve this line?">
                 Approve
               </button>
             </form>
@@ -242,7 +242,7 @@
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="note" class="note-field" />
               <input type="hidden" name="admin_only" class="admin-only-field" />
-              <button type="submit" class="btn" style="border-color: #dc3545; color: #dc3545;" onclick="return confirmAdminAction(this, 'Reject this line?', true)">
+              <button type="submit" class="btn" style="border-color: #dc3545; color: #dc3545;" data-admin-action="Reject this line?" data-require-note>
                 Reject
               </button>
             </form>
@@ -251,7 +251,7 @@
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="hidden" name="note" class="note-field" />
               <input type="hidden" name="admin_only" class="admin-only-field" />
-              <button type="submit" class="btn" onclick="return confirmAdminAction(this, 'Request more info?', true)">
+              <button type="submit" class="btn" data-admin-action="Request more info?" data-require-note>
                 Need Info
               </button>
             </form>
@@ -289,35 +289,44 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-function confirmAdminAction(button, message, requireNote) {
-  const noteField = document.getElementById('admin_note');
-  const amountField = document.getElementById('approved_amount');
-  const adminOnlyField = document.getElementById('admin_only_checkbox');
-  const note = noteField ? noteField.value.trim() : '';
-  const amount = amountField ? amountField.value.trim() : '';
-  const adminOnly = adminOnlyField && adminOnlyField.checked ? '1' : '';
+<script nonce="{{ csp_nonce }}">
+(function() {
+  // Handle admin action buttons via data attributes
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-admin-action]');
+    if (!btn) return;
 
-  if (requireNote && !note) {
-    alert('A note is required for this action.');
-    return false;
-  }
+    var message = btn.getAttribute('data-admin-action');
+    var requireNote = btn.hasAttribute('data-require-note');
 
-  if (!confirm(message)) {
-    return false;
-  }
+    var noteField = document.getElementById('admin_note');
+    var amountField = document.getElementById('approved_amount');
+    var adminOnlyField = document.getElementById('admin_only_checkbox');
+    var note = noteField ? noteField.value.trim() : '';
+    var amount = amountField ? amountField.value.trim() : '';
+    var adminOnly = adminOnlyField && adminOnlyField.checked ? '1' : '';
 
-  // Copy values to the form's hidden fields
-  const form = button.closest('form');
-  const noteHidden = form.querySelector('.note-field');
-  const amountHidden = form.querySelector('.amount-field');
-  const adminOnlyHidden = form.querySelector('.admin-only-field');
+    if (requireNote && !note) {
+      alert('A note is required for this action.');
+      e.preventDefault();
+      return;
+    }
 
-  if (noteHidden) noteHidden.value = note;
-  if (amountHidden) amountHidden.value = amount;
-  if (adminOnlyHidden) adminOnlyHidden.value = adminOnly;
+    if (!confirm(message)) {
+      e.preventDefault();
+      return;
+    }
 
-  return true;
-}
+    // Copy values to the form's hidden fields
+    var form = btn.closest('form');
+    var noteHidden = form.querySelector('.note-field');
+    var amountHidden = form.querySelector('.amount-field');
+    var adminOnlyHidden = form.querySelector('.admin-only-field');
+
+    if (noteHidden) noteHidden.value = note;
+    if (amountHidden) amountHidden.value = amount;
+    if (adminOnlyHidden) adminOnlyHidden.value = adminOnly;
+  });
+})();
 </script>
 {% endblock %}

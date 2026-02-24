@@ -146,7 +146,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   // Spend types data from server
   const spendTypesByAccount = {{ spend_types_by_account | tojson | safe }};
 

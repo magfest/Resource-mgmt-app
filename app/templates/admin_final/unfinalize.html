@@ -106,7 +106,7 @@
       </div>
 
       <div class="btn-row">
-        <button type="submit" class="btn" style="border-color: #dc3545; color: #dc3545;" onclick="return confirm('Are you sure you want to unfinalize this request?');">
+        <button type="submit" class="btn" style="border-color: #dc3545; color: #dc3545;" data-confirm="Are you sure you want to unfinalize this request?">
           Unfinalize Request
         </button>
         <a class="btn" href="{{ url_for('admin_final.dashboard') }}">Cancel</a>

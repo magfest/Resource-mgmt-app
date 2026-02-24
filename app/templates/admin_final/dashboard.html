@@ -270,7 +270,7 @@
               <td class="right num">{{ format_currency(summary.total_approved_cents) }}</td>
               <td>
                 <button type="button" class="btn btn-primary" style="padding: 4px 8px; font-size: 12px;"
-                        onclick="openFinalizeModal('{{ wi.id }}', '{{ wi.public_id }}', {{ summary.pending_lines }})">
+                        data-finalize-modal data-work-item-id="{{ wi.id }}" data-public-id="{{ wi.public_id }}" data-pending-count="{{ summary.pending_lines }}">
                   Finalize
                 </button>
               </td>
@@ -363,7 +363,7 @@
         </div>
         <div class="btn-row">
           <button type="submit" class="btn btn-primary">Confirm Finalization</button>
-          <button type="button" class="btn" onclick="closeFinalizeModal()">Cancel</button>
+          <button type="button" class="btn" data-modal-close="finalize-modal">Cancel</button>
         </div>
       </form>
     </div>
@@ -372,40 +372,45 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-function openFinalizeModal(workItemId, publicId, pendingCount) {
-  const modal = document.getElementById('finalize-modal');
-  const form = document.getElementById('finalize-form');
-  const publicIdSpan = document.getElementById('modal-public-id');
-  const pendingWarning = document.getElementById('modal-pending-warning');
-  const pendingCountSpan = document.getElementById('modal-pending-count');
-  const noteField = document.getElementById('modal-note');
+<script nonce="{{ csp_nonce }}">
+(function() {
+  var modal = document.getElementById('finalize-modal');
+  var form = document.getElementById('finalize-form');
+  var publicIdSpan = document.getElementById('modal-public-id');
+  var pendingWarning = document.getElementById('modal-pending-warning');
+  var pendingCountSpan = document.getElementById('modal-pending-count');
+  var noteField = document.getElementById('modal-note');
 
-  form.action = '/admin/final-review/finalize/' + workItemId;
-  publicIdSpan.textContent = publicId;
-  noteField.value = '';
+  // Handle finalize modal open via data attributes
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-finalize-modal]');
+    if (btn) {
+      var workItemId = btn.getAttribute('data-work-item-id');
+      var publicId = btn.getAttribute('data-public-id');
+      var pendingCount = parseInt(btn.getAttribute('data-pending-count'), 10) || 0;
 
-  if (pendingCount > 0) {
-    pendingWarning.style.display = 'block';
-    pendingCountSpan.textContent = pendingCount;
-  } else {
-    pendingWarning.style.display = 'none';
-  }
+      form.action = '/admin/final-review/finalize/' + workItemId;
+      publicIdSpan.textContent = publicId;
+      noteField.value = '';
 
-  modal.style.display = 'flex';
-  noteField.focus();
-}
+      if (pendingCount > 0) {
+        pendingWarning.style.display = 'block';
+        pendingCountSpan.textContent = pendingCount;
+      } else {
+        pendingWarning.style.display = 'none';
+      }
 
-function closeFinalizeModal() {
-  document.getElementById('finalize-modal').style.display = 'none';
-}
+      modal.style.display = 'flex';
+      noteField.focus();
+    }
+  });
 
-// Close modal on escape key or clicking outside
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeFinalizeModal();
-});
-document.getElementById('finalize-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeFinalizeModal();
-});
+  // Close modal on clicking outside
+  modal.addEventListener('click', function(e) {
+    if (e.target === this) {
+      modal.style.display = 'none';
+    }
+  });
+})();
 </script>
 {% endblock %}

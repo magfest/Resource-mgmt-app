@@ -83,7 +83,7 @@
     {% if perms.can_submit %}
       <form method="post" action="{{ url_for('work.work_item_submit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-primary" onclick="return confirm('Submit this request for review?');">
+        <button type="submit" class="btn btn-primary" data-confirm="Submit this request for review?">
           Submit for Review
         </button>
       </form>
@@ -103,7 +103,7 @@
     {% if perms.can_checkin %}
       <form method="post" action="{{ url_for('work.work_item_checkin', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn" onclick="return confirm('Release your checkout lock?');">
+        <button type="submit" class="btn" data-confirm="Release your checkout lock?">
           {% if perms.is_checked_out_by_current_user %}
             Release Lock
           {% else %}
@@ -177,7 +177,7 @@
         </div>
       {% elif can_finalize %}
         <div id="finalize-section">
-          <button type="button" class="btn btn-primary" onclick="document.getElementById('finalize-form-container').style.display='block'; this.style.display='none';">
+          <button type="button" class="btn btn-primary" data-show="finalize-form-container" data-hide-self>
             Finalize Request
           </button>
           <span class="muted" style="margin-left: 8px;">
@@ -201,10 +201,10 @@
                 </div>
               </div>
               <div class="btn-row">
-                <button type="submit" class="btn btn-primary" onclick="return confirm('Finalize this request? This action will lock in all approved amounts.');">
+                <button type="submit" class="btn btn-primary" data-confirm="Finalize this request? This action will lock in all approved amounts.">
                   Confirm Finalization
                 </button>
-                <button type="button" class="btn" onclick="document.getElementById('finalize-form-container').style.display='none'; document.querySelector('#finalize-section > button').style.display='inline-block';">
+                <button type="button" class="btn" data-hide="finalize-form-container" data-show-selector="#finalize-section > button">
                   Cancel
                 </button>
               </div>
@@ -279,7 +279,7 @@
           <label for="message"><strong>What information do you need?</strong></label>
           <textarea name="message" id="message" rows="3" style="width: 100%; margin-top: 4px;" placeholder="Describe what additional information you need from the requester..." required></textarea>
         </div>
-        <button type="submit" class="btn" onclick="return confirm('Request information? This will change the status to NEEDS_INFO and release your lock.');">
+        <button type="submit" class="btn" data-confirm="Request information? This will change the status to NEEDS_INFO and release your lock.">
           Request Information
         </button>
       </form>

@@ -16,7 +16,7 @@
   {% if expired_count > 0 %}
     <form method="post" action="{{ url_for('admin_config.locks.release_expired') }}" style="display: inline;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="btn btn-primary" onclick="return confirm('Release all {{ expired_count }} expired lock(s)?');">
+      <button type="submit" class="btn btn-primary" data-confirm="Release all {{ expired_count }} expired lock(s)?">
         Release {{ expired_count }} Expired Lock(s)
       </button>
     </form>
@@ -75,7 +75,7 @@
           <td>
             <form method="post" action="{{ url_for('admin_config.locks.release_lock', work_item_id=lock.work_item.id) }}" style="display: inline;">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit" class="btn" onclick="return confirm('Release this lock?');">Release</button>
+              <button type="submit" class="btn" data-confirm="Release this lock?">Release</button>
             </form>
           </td>
         </tr>

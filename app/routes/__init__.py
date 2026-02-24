@@ -83,6 +83,7 @@ def register_all_routes(app: Flask, helpers: RouteHelpers) -> None:
     # Current/active routes
     from .home import home_bp
     from .admin import admin_config_bp
+    from .admin.security_logs import security_logs_bp
     from .work import work_bp
     from .approvals import approvals_bp
     from .admin_final import admin_final_bp
@@ -91,6 +92,7 @@ def register_all_routes(app: Flask, helpers: RouteHelpers) -> None:
 
     app.register_blueprint(home_bp)
     app.register_blueprint(admin_config_bp)
+    app.register_blueprint(security_logs_bp)
     app.register_blueprint(work_bp)
     app.register_blueprint(approvals_bp)
     app.register_blueprint(admin_final_bp)

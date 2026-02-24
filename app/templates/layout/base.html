@@ -450,5 +450,95 @@
 
 {% block content %}{% endblock %}
 {% block scripts %}{% endblock %}
+
+{# Core JS for CSP-compliant event handling. See docs/security.md #}
+<script nonce="{{ csp_nonce }}">
+(function() {
+  // Handle confirm dialogs via data attributes
+  // Usage: <button data-confirm="Are you sure?">Delete</button>
+  document.addEventListener('click', function(e) {
+    var target = e.target.closest('[data-confirm]');
+    if (target) {
+      var message = target.getAttribute('data-confirm');
+      if (!confirm(message)) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    }
+  });
+
+  // Handle modal open/close via data attributes
+  // Usage: <button data-modal-open="modal-id">Open</button>
+  //        <button data-modal-close="modal-id">Close</button>
+  document.addEventListener('click', function(e) {
+    var openBtn = e.target.closest('[data-modal-open]');
+    if (openBtn) {
+      var modalId = openBtn.getAttribute('data-modal-open');
+      var modal = document.getElementById(modalId);
+      if (modal) modal.style.display = 'flex';
+    }
+
+    var closeBtn = e.target.closest('[data-modal-close]');
+    if (closeBtn) {
+      var modalId = closeBtn.getAttribute('data-modal-close');
+      var modal = document.getElementById(modalId);
+      if (modal) modal.style.display = 'none';
+    }
+  });
+
+  // Handle show/hide element toggles via data attributes
+  // Usage: <button data-show="element-id" data-hide-self>Show form</button>
+  //        <button data-hide="element-id" data-show-selector="#some > selector">Cancel</button>
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('[data-show], [data-hide]');
+    if (!btn) return;
+
+    // Show element by ID
+    var showId = btn.getAttribute('data-show');
+    if (showId) {
+      var showEl = document.getElementById(showId);
+      if (showEl) showEl.style.display = 'block';
+    }
+
+    // Hide element by ID
+    var hideId = btn.getAttribute('data-hide');
+    if (hideId) {
+      var hideEl = document.getElementById(hideId);
+      if (hideEl) hideEl.style.display = 'none';
+    }
+
+    // Hide self
+    if (btn.hasAttribute('data-hide-self')) {
+      btn.style.display = 'none';
+    }
+
+    // Show element by selector
+    var showSelector = btn.getAttribute('data-show-selector');
+    if (showSelector) {
+      var showEl = document.querySelector(showSelector);
+      if (showEl) showEl.style.display = 'inline-block';
+    }
+  });
+
+  // Close modals on Escape key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.modal[style*="flex"]').forEach(function(m) {
+        m.style.display = 'none';
+      });
+    }
+  });
+
+  // Handle onchange auto-submit via data attribute
+  // Usage: <select data-autosubmit>...</select>
+  document.addEventListener('change', function(e) {
+    if (e.target.hasAttribute('data-autosubmit')) {
+      var form = e.target.closest('form');
+      if (form) form.submit();
+    }
+  });
+})();
+</script>
 </body>
 </html>

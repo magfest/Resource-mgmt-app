@@ -1,0 +1,185 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Security Audit Logs - Admin{% endblock %}
+
+{% block content %}
+<div class="muted" style="margin-bottom: 12px;">
+  <a href="{{ url_for('admin_final.admin_home') }}">&larr; Back to Admin</a>
+</div>
+
+<h1>Security Audit Logs</h1>
+<div class="muted" style="margin-bottom: 16px;">
+  View authentication events, admin actions, and security alerts.
+</div>
+
+{# Filter Form #}
+<div class="card" style="margin-bottom: 16px; padding: 16px;">
+  <form method="get" action="{{ url_for('security_logs.list_logs') }}">
+    <div class="row" style="gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+      <div>
+        <label class="small muted">Category</label>
+        <select name="category" style="width: 140px;">
+          <option value="">All</option>
+          {% for code, label in categories %}
+            <option value="{{ code }}" {% if selected_category == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="small muted">Event Type</label>
+        <select name="event_type" style="width: 180px;">
+          <option value="">All</option>
+          {% for code, label in event_types %}
+            <option value="{{ code }}" {% if selected_event_type == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="small muted">Severity</label>
+        <select name="severity" style="width: 100px;">
+          <option value="">All</option>
+          {% for code, label in severities %}
+            <option value="{{ code }}" {% if selected_severity == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="small muted">User ID</label>
+        <input type="text" name="user_id" value="{{ selected_user_id }}" placeholder="Search user..." style="width: 150px;" />
+      </div>
+
+      <div>
+        <label class="small muted">Date From</label>
+        <input type="date" name="date_from" value="{{ selected_date_from }}" style="width: 140px;" />
+      </div>
+
+      <div>
+        <label class="small muted">Date To</label>
+        <input type="date" name="date_to" value="{{ selected_date_to }}" style="width: 140px;" />
+      </div>
+
+      <div>
+        <button class="btn btn-primary" type="submit">Filter</button>
+        {% if selected_category or selected_event_type or selected_severity or selected_user_id or selected_date_from or selected_date_to %}
+          <a class="btn" href="{{ url_for('security_logs.list_logs') }}">Clear</a>
+        {% endif %}
+      </div>
+    </div>
+  </form>
+</div>
+
+{# Results Summary #}
+<div class="muted small" style="margin-bottom: 8px;">
+  {% if total_count > 0 %}
+    Showing {{ start_record }}-{{ end_record }} of {{ total_count }} record(s)
+  {% else %}
+    No records found
+  {% endif %}
+</div>
+
+{# Results Table #}
+<table>
+  <thead>
+    <tr>
+      <th style="width: 150px;">Timestamp</th>
+      <th style="width: 200px;">User</th>
+      <th style="width: 80px;">Category</th>
+      <th style="width: 150px;">Event Type</th>
+      <th style="width: 70px;">Severity</th>
+      <th style="width: 120px;">IP Address</th>
+      <th>Details</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for log in logs %}
+      <tr>
+        <td class="muted small" title="{{ log.timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') }}">
+          {{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}
+        </td>
+        <td>
+          {% if log.user_id %}
+            {% set user = users.get(log.user_id) %}
+            {% if user %}
+              <span title="{{ log.user_id }}">{{ user.email }}</span>
+            {% else %}
+              <span class="muted" title="User not found">{{ log.user_id[:8] }}...</span>
+            {% endif %}
+          {% else %}
+            <span class="muted">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% set cat_style, cat_label = category_colors.get(log.event_category, ('', log.event_category)) %}
+          <span class="pill" style="{{ cat_style }}">{{ cat_label }}</span>
+        </td>
+        <td class="small">
+          {{ log.event_type.replace('_', ' ').title() }}
+        </td>
+        <td>
+          {% set sev_style, sev_label = severity_colors.get(log.severity, ('', log.severity)) %}
+          <span class="pill" style="{{ sev_style }}">{{ sev_label }}</span>
+        </td>
+        <td class="muted small">
+          {{ log.ip_address or '-' }}
+        </td>
+        <td class="small">
+          {% if log.details %}
+            <details>
+              <summary class="muted" style="cursor: pointer;">View details</summary>
+              <pre style="margin: 4px 0; padding: 8px; background: #f5f5f5; font-size: 11px; overflow-x: auto; max-width: 400px;">{{ log.details }}</pre>
+            </details>
+          {% else %}
+            <span class="muted">-</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr>
+        <td colspan="7" class="muted">No security audit logs found matching the filters.</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{# Pagination #}
+{% if total_pages > 1 %}
+<div class="row" style="margin-top: 16px; gap: 8px; justify-content: center; align-items: center;">
+  {# First Page #}
+  {% if page > 1 %}
+    <a class="btn" href="{{ url_for('security_logs.list_logs', category=selected_category, event_type=selected_event_type, severity=selected_severity, user_id=selected_user_id, date_from=selected_date_from, date_to=selected_date_to, page=1) }}">&laquo; First</a>
+  {% else %}
+    <span class="btn" style="opacity: 0.5;">&laquo; First</span>
+  {% endif %}
+
+  {# Previous Page #}
+  {% if page > 1 %}
+    <a class="btn" href="{{ url_for('security_logs.list_logs', category=selected_category, event_type=selected_event_type, severity=selected_severity, user_id=selected_user_id, date_from=selected_date_from, date_to=selected_date_to, page=page-1) }}">&larr; Prev</a>
+  {% else %}
+    <span class="btn" style="opacity: 0.5;">&larr; Prev</span>
+  {% endif %}
+
+  {# Page Numbers #}
+  <span class="muted" style="margin: 0 8px;">
+    Page {{ page }} of {{ total_pages }}
+  </span>
+
+  {# Next Page #}
+  {% if page < total_pages %}
+    <a class="btn" href="{{ url_for('security_logs.list_logs', category=selected_category, event_type=selected_event_type, severity=selected_severity, user_id=selected_user_id, date_from=selected_date_from, date_to=selected_date_to, page=page+1) }}">Next &rarr;</a>
+  {% else %}
+    <span class="btn" style="opacity: 0.5;">Next &rarr;</span>
+  {% endif %}
+
+  {# Last Page #}
+  {% if page < total_pages %}
+    <a class="btn" href="{{ url_for('security_logs.list_logs', category=selected_category, event_type=selected_event_type, severity=selected_severity, user_id=selected_user_id, date_from=selected_date_from, date_to=selected_date_to, page=total_pages) }}">Last &raquo;</a>
+  {% else %}
+    <span class="btn" style="opacity: 0.5;">Last &raquo;</span>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}
