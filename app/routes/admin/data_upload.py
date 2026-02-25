@@ -77,6 +77,7 @@ EA_DESC_COLS = ['description', 'desc', 'notes']
 EA_QB_COLS = ['quickbooks', 'quickbooks_account', 'qb_account', 'quickbooks_account_name']
 EA_APPROVAL_GROUP_COLS = ['approval_group', 'group', 'approval_group_code']
 EA_SPEND_TYPE_COLS = ['spend_type', 'default_spend_type', 'spend_type_code']
+EA_ALLOWED_SPEND_TYPES_COLS = ['allowed_spend_types', 'spend_types', 'allowed_types']
 EA_SPEND_MODE_COLS = ['spend_type_mode', 'spend_mode']
 EA_FIXED_COST_COLS = ['is_fixed_cost', 'fixed_cost', 'fixed']
 EA_UNIT_PRICE_COLS = ['unit_price', 'default_unit_price', 'price']
@@ -602,6 +603,7 @@ def expense_accounts_upload():
     qb_col = _find_column(df, EA_QB_COLS)
     approval_group_col = _find_column(df, EA_APPROVAL_GROUP_COLS)
     spend_type_col = _find_column(df, EA_SPEND_TYPE_COLS)
+    allowed_spend_types_col = _find_column(df, EA_ALLOWED_SPEND_TYPES_COLS)
     spend_mode_col = _find_column(df, EA_SPEND_MODE_COLS)
     fixed_cost_col = _find_column(df, EA_FIXED_COST_COLS)
     unit_price_col = _find_column(df, EA_UNIT_PRICE_COLS)
@@ -706,6 +708,7 @@ def expense_accounts_upload():
                 "source": "bulk_upload",
             })
             updated += 1
+            account = existing
         else:
             # Create new
             account = ExpenseAccount(
@@ -738,6 +741,18 @@ def expense_accounts_upload():
                 "source": "bulk_upload",
             })
             created += 1
+
+        # Process allowed_spend_types if column is present
+        allowed_types_value = _get_cell_value(row, allowed_spend_types_col)
+        if allowed_types_value:
+            # Parse comma or pipe separated spend type codes
+            type_codes = [c.strip() for c in allowed_types_value.replace('|', ',').split(',') if c.strip()]
+            # Clear existing and add new
+            account.allowed_spend_types.clear()
+            for type_code in type_codes:
+                spend_type = _lookup_entity(type_code, spend_types_by_code, spend_types_by_name)
+                if spend_type:
+                    account.allowed_spend_types.append(spend_type)
 
     db.session.commit()
 
@@ -1262,13 +1277,16 @@ FINANCE,Finance,SUPPORT,"Financial operations and budgeting",finance@example.org
 def download_expense_accounts_template():
     """Download a CSV template for expense accounts."""
     # ui_display_group options: KNOWN_COSTS (Fixed Costs tab), HOTEL_SERVICES (Hotel/Gaylord tab), or blank (standard)
-    csv_content = """code,name,description,quickbooks_account_name,approval_group,spend_type,spend_type_mode,is_fixed_cost,unit_price,price_locked,ui_display_group,is_active
-RADIO_RENTAL,Radios (Rental),"Handheld radios rental for operations",Equipment Rental,TECH,DIVVY,SINGLE_LOCKED,yes,50.00,yes,KNOWN_COSTS,yes
-LAPTOP_RENTAL,iPads / Laptops (Rental),"Hartford rental computing devices",Equipment Rental,TECH,DIVVY,SINGLE_LOCKED,yes,150.00,yes,KNOWN_COSTS,yes
-HTL_ROOM_REG,Hotel Room - Regular,"Standard hotel room",Hotel Rooms,HOTEL,BANK,SINGLE_LOCKED,yes,244.00,yes,HOTEL_SERVICES,yes
-PARKING_GNH,Parking - Gaylord,"Gaylord hotel parking per day",Hotel Parking,HOTEL,DIVVY,SINGLE_LOCKED,yes,19.00,yes,HOTEL_SERVICES,yes
-OFFICE_SUPPLIES,Office Supplies,"General office supplies",Office Supplies,OTHER,BANK,ALLOW_LIST,no,,,yes
-CONTRACTOR,Contractor Services,"External contractor payments",Professional Services,OTHER,,ALLOW_LIST,no,,,yes
+    # spend_type_mode: SINGLE_LOCKED (one fixed type) or ALLOW_LIST (multiple allowed)
+    # prompt_mode: NONE, SUGGEST, or REQUIRE
+    # allowed_spend_types: comma-separated list of spend type codes (used when spend_type_mode is ALLOW_LIST)
+    csv_content = """code,name,description,quickbooks_account_name,approval_group,spend_type,allowed_spend_types,spend_type_mode,is_fixed_cost,unit_price,price_locked,frequency,frequency_locked,warehouse_default,prompt_mode,visibility_mode,is_contract_eligible,ui_display_group,sort_order,is_active
+RADIO_RENTAL,Radios (Rental),"Handheld radios rental for operations",Equipment Rental,TECH,DIVVY,,SINGLE_LOCKED,yes,50.00,yes,ONE_TIME,yes,no,NONE,ALL,no,KNOWN_COSTS,10,yes
+LAPTOP_RENTAL,iPads / Laptops (Rental),"Hartford rental computing devices",Equipment Rental,TECH,DIVVY,,SINGLE_LOCKED,yes,150.00,yes,ONE_TIME,yes,no,NONE,ALL,no,KNOWN_COSTS,20,yes
+HTL_ROOM_REG,Hotel Room - Regular,"Standard hotel room",Hotel Rooms,HOTEL,BANK,,SINGLE_LOCKED,yes,244.00,yes,ONE_TIME,yes,no,NONE,ALL,no,HOTEL_SERVICES,10,yes
+PARKING_GNH,Parking - Gaylord,"Gaylord hotel parking per day",Hotel Parking,HOTEL,DIVVY,,SINGLE_LOCKED,yes,19.00,yes,ONE_TIME,yes,no,NONE,ALL,no,HOTEL_SERVICES,20,yes
+OFFICE_SUPPLIES,Office Supplies,"General office supplies",Office Supplies,OTHER,BANK,"BANK,DIVVY",ALLOW_LIST,no,,,no,yes,SUGGEST,ALL,no,,0,yes
+CONTRACTOR,Contractor Services,"External contractor payments",Professional Services,OTHER,,"BANK,CHECK,DIVVY",ALLOW_LIST,no,,,no,no,REQUIRE,ALL,yes,,0,yes
 """
     return _make_csv_response(csv_content, 'expense_accounts_template.csv')
 
