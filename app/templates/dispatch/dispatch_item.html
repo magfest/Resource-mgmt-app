@@ -1,0 +1,119 @@
+{# templates/dispatch/dispatch_item.html #}
+{% extends "layout/base.html" %}
+
+{% block title %}Dispatch {{ work_item.public_id }}{% endblock %}
+
+{% block content %}
+
+  {# Header #}
+  <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap: wrap; margin-bottom: 16px;">
+    <div>
+      <h1 style="margin:0;">
+        Dispatch {{ work_item.public_id }}
+        <span class="pill pill-needs" style="margin-left: 8px; font-weight: normal;">AWAITING DISPATCH</span>
+      </h1>
+      <div class="muted" style="margin-top:4px; line-height:1.5;">
+        <strong>{{ work_item.request_kind }}</strong> &middot;
+        {{ portfolio.department.name }} &middot;
+        {{ portfolio.event_cycle.name }}
+      </div>
+      <div class="muted" style="margin-top:4px;">
+        Submitted {{ work_item.submitted_at.strftime('%Y-%m-%d %H:%M') if work_item.submitted_at else '-' }}
+      </div>
+    </div>
+
+    <div style="text-align:right;">
+      <div class="muted">{{ lines_data | length }} line{% if lines_data | length != 1 %}s{% endif %}</div>
+      <div style="margin-top: 4px;">
+        {% if all_assigned %}
+          <span class="pill pill-approved">All Assigned</span>
+        {% else %}
+          <span class="pill pill-needs">{{ assigned_count }}/{{ lines_data | length }} Assigned</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Actions #}
+  <div class="btn-row" style="margin-bottom: 16px;">
+    <a class="btn" href="{{ url_for('dispatch.dashboard') }}">
+      Back to Dispatch Queue
+    </a>
+    <a class="btn" href="{{ url_for('work.work_item_detail', event=portfolio.event_cycle.code, dept=portfolio.department.code, public_id=work_item.public_id) }}">
+      View Request Detail
+    </a>
+  </div>
+
+  {# Assignment Form #}
+  <form method="post" action="{{ url_for('dispatch.dispatch_to_queue', work_item_id=work_item.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <section class="card" style="margin-bottom: 16px;">
+      <h3 style="margin:0 0 12px 0;">Assign Approval Groups</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 60px;">#</th>
+            <th>Expense Account</th>
+            <th>Description</th>
+            <th style="width: 120px;" class="right">Amount</th>
+            <th style="width: 250px;">Approval Group</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ld in lines_data %}
+            {% set line = ld.line %}
+            {% set detail = ld.detail %}
+            {% set expense_account = ld.expense_account %}
+            <tr>
+              <td>{{ line.line_number }}</td>
+              <td>
+                {% if expense_account %}
+                  <strong>{{ expense_account.name }}</strong>
+                  {% if detail.spend_type %}
+                    <div class="muted small">{{ detail.spend_type.name }}</div>
+                  {% endif %}
+                {% else %}
+                  <span class="muted">-</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if detail.description %}
+                  {{ detail.description }}
+                {% else %}
+                  <span class="muted">-</span>
+                {% endif %}
+              </td>
+              <td class="right num">{{ format_currency(ld.line_total) }}</td>
+              <td>
+                <select name="approval_group_{{ line.id }}" style="width: 100%;">
+                  <option value="">-- Select --</option>
+                  {% for group in approval_groups %}
+                    {% set is_suggested = (group.id == ld.suggested_group_id) %}
+                    {% set is_assigned = (group.id == ld.assigned_group_id) %}
+                    <option value="{{ group.id }}"
+                            {% if is_assigned %}selected{% elif is_suggested and not ld.assigned_group_id %}selected{% endif %}>
+                      {{ group.name }}{% if is_suggested %} (suggested){% endif %}
+                    </option>
+                  {% endfor %}
+                </select>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <div class="btn-row">
+      <button type="submit" class="btn btn-primary" formaction="{{ url_for('dispatch.dispatch_to_queue', work_item_id=work_item.id) }}"
+              data-confirm="Dispatch this request to the approval queue?">
+        Dispatch to Approval Queue
+      </button>
+      <button type="submit" class="btn" formaction="{{ url_for('dispatch.assign_approval_groups', work_item_id=work_item.id) }}">
+        Save Assignments
+      </button>
+    </div>
+  </form>
+
+{% endblock %}

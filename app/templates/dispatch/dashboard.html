@@ -1,0 +1,137 @@
+{# templates/dispatch/dashboard.html #}
+{% extends "layout/base.html" %}
+
+{% block title %}Dispatch Queue{% endblock %}
+
+{% block content %}
+
+  {# Header #}
+  <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap: wrap; margin-bottom: 16px;">
+    <div>
+      <h1 style="margin:0;">Dispatch Queue</h1>
+      <div class="muted" style="margin-top:4px;">
+        Review and dispatch budget requests to approval queues
+      </div>
+    </div>
+  </div>
+
+  {# Filters #}
+  <div class="card" style="margin-bottom: 16px; background: #f8f9fa;">
+    <form method="get" action="{{ url_for('dispatch.dashboard') }}" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+      <div>
+        <label for="event" style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px;">Event Cycle</label>
+        <select name="event" id="event" style="min-width: 150px;">
+          <option value="">All Events</option>
+          {% for ec in event_cycles %}
+            <option value="{{ ec.code }}" {% if selected_event == ec.code %}selected{% endif %}>
+              {{ ec.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="dept" style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px;">Department</label>
+        <select name="dept" id="dept" style="min-width: 150px;">
+          <option value="">All Departments</option>
+          {% for d in departments %}
+            <option value="{{ d.code }}" {% if selected_dept == d.code %}selected{% endif %}>
+              {{ d.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <button type="submit" class="btn">Apply Filters</button>
+      </div>
+      {% if selected_event or selected_dept %}
+        <div>
+          <a class="btn btn-muted" href="{{ url_for('dispatch.dashboard') }}">
+            Clear Filters
+          </a>
+        </div>
+      {% endif %}
+    </form>
+  </div>
+
+  {# Summary Card #}
+  <div style="display: grid; grid-template-columns: repeat(1, 1fr); gap: 16px; margin-bottom: 24px;">
+    <div class="card" style="text-align: center;">
+      <div style="font-size: 32px; font-weight: 700; color: #d97706;">{{ queue_items | length }}</div>
+      <div class="muted">Requests Awaiting Dispatch</div>
+    </div>
+  </div>
+
+  {# Queue Table #}
+  <section class="card">
+    <h3 style="margin:0 0 12px 0;">
+      Awaiting Dispatch
+      {% if queue_items %}
+        <span class="pill pill-needs">{{ queue_items | length }}</span>
+      {% endif %}
+    </h3>
+
+    {% if queue_items %}
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 110px;">Request</th>
+            <th>Department</th>
+            <th style="width: 80px;" class="right">Lines</th>
+            <th style="width: 100px;" class="right">Assigned</th>
+            <th style="width: 120px;" class="right">Total</th>
+            <th style="width: 130px;">Submitted</th>
+            <th style="width: 100px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in queue_items %}
+            {% set wi = item.work_item %}
+            <tr>
+              <td>
+                <a href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id) }}">
+                  {{ wi.public_id }}
+                </a>
+              </td>
+              <td>
+                {{ item.department.name }}
+                <div class="muted small">{{ item.event_cycle.name }}</div>
+              </td>
+              <td class="right num">{{ item.line_count }}</td>
+              <td class="right num">
+                {% if item.assigned_count == item.line_count %}
+                  <span class="pill pill-approved">{{ item.assigned_count }}/{{ item.line_count }}</span>
+                {% elif item.assigned_count > 0 %}
+                  <span class="pill pill-needs">{{ item.assigned_count }}/{{ item.line_count }}</span>
+                {% else %}
+                  <span class="muted">{{ item.assigned_count }}/{{ item.line_count }}</span>
+                {% endif %}
+              </td>
+              <td class="right num">{{ format_currency(item.total_cents) }}</td>
+              <td class="muted small">
+                {% if wi.submitted_at %}
+                  {{ wi.submitted_at.strftime('%Y-%m-%d %H:%M') }}
+                {% endif %}
+              </td>
+              <td>
+                <a class="btn {% if item.assigned_count == item.line_count %}btn-primary{% else %}btn-muted{% endif %}"
+                   href="{{ url_for('dispatch.dispatch_item', work_item_id=wi.id) }}"
+                   style="padding: 4px 8px; font-size: 12px;">
+                  {% if item.assigned_count == item.line_count %}
+                    Dispatch
+                  {% else %}
+                    Assign
+                  {% endif %}
+                </a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="muted" style="text-align: center; padding: 24px;">
+        No requests awaiting dispatch.
+      </div>
+    {% endif %}
+  </section>
+
+{% endblock %}

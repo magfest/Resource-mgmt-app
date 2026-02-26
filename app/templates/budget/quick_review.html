@@ -1,0 +1,410 @@
+{# templates/budget/quick_review.html #}
+{% extends "layout/base.html" %}
+
+{% block title %}Quick Review - {{ work_item.public_id }}{% endblock %}
+
+{% block content %}
+
+  {# Header #}
+  <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap: wrap; margin-bottom: 16px;">
+    <div>
+      <h1 style="margin:0;">
+        Quick Review
+        <span class="muted" style="font-weight: normal; font-size: 18px;">{{ work_item.public_id }}</span>
+      </h1>
+      <div class="muted" style="margin-top:4px;">
+        {{ ctx.department.name }} &middot; {{ ctx.event_cycle.name }}
+        &middot; {{ lines | length }} lines
+      </div>
+    </div>
+    <div class="btn-row">
+      <a class="btn" href="{{ url_for('work.work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+        Back to Request
+      </a>
+    </div>
+  </div>
+
+  {# Checkout Status #}
+  {% if is_checked_out %}
+    {% if has_checkout %}
+      <div class="callout" style="margin-bottom: 16px; background: #fff3cd; border-left: 4px solid #ffc107;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+          <div>
+            <strong>You have this item checked out</strong>
+            <span class="muted">- You can make review decisions.</span>
+          </div>
+          <form method="post" action="{{ url_for('work.work_item_checkin', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="return_to" value="{{ request.url }}">
+            <button type="submit" class="btn">Release Lock</button>
+          </form>
+        </div>
+      </div>
+    {% else %}
+      <div class="callout" style="margin-bottom: 16px; background: #e7f3fe; border-left: 4px solid #2196f3;">
+        <strong>Under Active Review</strong> - Checked out by another reviewer.
+      </div>
+    {% endif %}
+  {% elif can_checkout %}
+    <div class="callout" style="margin-bottom: 16px; background: #e7f3fe; border-left: 4px solid #2196f3;">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+        <div>
+          <strong>Checkout Required</strong>
+          <span class="muted">- Check out to make review decisions.</span>
+        </div>
+        <form method="post" action="{{ url_for('work.work_item_checkout', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="return_to" value="{{ request.url }}">
+          <button type="submit" class="btn btn-primary">Checkout for Review</button>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
+  {# Review Mode Toggle for Admins #}
+  {% if user_ctx.is_admin %}
+    <div style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center;">
+      <span class="muted" style="font-size: 13px;">Review as:</span>
+      <button type="button" id="mode-ag" class="btn" style="padding: 4px 12px; font-size: 13px; background: #0a66c2; color: #fff; border-color: #0a66c2;">
+        Approval Group
+      </button>
+      <button type="button" id="mode-admin" class="btn" style="padding: 4px 12px; font-size: 13px;">
+        Admin Final
+      </button>
+    </div>
+  {% endif %}
+
+  {# Lines Table #}
+  <section class="card">
+    <table style="table-layout: auto;">
+      <thead>
+        <tr>
+          <th style="width: 50px;">#</th>
+          <th style="width: 180px;">Expense Account</th>
+          <th>Description</th>
+          <th style="width: 100px;" class="right">Amount</th>
+          <th style="width: 100px;">Status</th>
+          <th style="width: 380px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in lines %}
+          {% set line = item.line %}
+          {% set detail = item.detail %}
+          {% set review = item.review %}
+          {% set status = line.status | upper %}
+          {% set review_status = review.status | upper if review else 'PENDING' %}
+          <tr id="line-{{ line.line_number }}" data-line-num="{{ line.line_number }}" data-status="{{ status }}">
+            <td>
+              <a href="{{ url_for('approvals.line_review', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}">
+                {{ line.line_number }}
+              </a>
+            </td>
+            <td>
+              <div style="font-size: 13px;">{{ detail.expense_account.name if detail and detail.expense_account else '-' }}</div>
+            </td>
+            <td>
+              <div style="font-size: 13px; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ detail.description if detail else '' }}">
+                {{ detail.description if detail and detail.description else '-' }}
+              </div>
+            </td>
+            <td class="right num">
+              {{ format_currency(item.total_cents) }}
+            </td>
+            <td>
+              <span class="pill line-status-pill
+                {% if status == 'APPROVED' %}pill-approved
+                {% elif status in ['NEEDS_INFO', 'NEEDS_ADJUSTMENT'] %}pill-needs
+                {% elif status == 'REJECTED' %}tag-kicked
+                {% else %}pill-draft{% endif %}"
+                style="font-size: 11px;">
+                {{ status }}
+              </span>
+            </td>
+            <td class="line-actions">
+              {% if status == 'PENDING' and (has_checkout or user_ctx.is_admin) %}
+                {# Action buttons + inline note field #}
+                <div class="quick-action-row" style="display: flex; gap: 6px; align-items: flex-start; flex-wrap: wrap;">
+                  <input type="text" class="line-note" placeholder="Note (required for reject/kickback)"
+                         style="flex: 1; min-width: 120px; padding: 4px 8px; font-size: 12px;">
+
+                  {# AG Review Actions #}
+                  <div class="ag-actions" style="display: flex; gap: 4px;">
+                    <button type="button" class="btn quick-action" data-action="approve" data-mode="ag"
+                            style="padding: 4px 8px; font-size: 12px; background: #059669; color: #fff; border-color: #059669;">
+                      Approve
+                    </button>
+                    <button type="button" class="btn quick-action" data-action="reject" data-mode="ag"
+                            style="padding: 4px 8px; font-size: 12px; background: #dc3545; color: #fff; border-color: #dc3545;">
+                      Reject
+                    </button>
+                    <button type="button" class="btn quick-action" data-action="needs-info" data-mode="ag"
+                            style="padding: 4px 8px; font-size: 12px;">
+                      Info
+                    </button>
+                    <button type="button" class="btn quick-action" data-action="needs-adjustment" data-mode="ag"
+                            style="padding: 4px 8px; font-size: 12px;">
+                      Adjust
+                    </button>
+                  </div>
+
+                  {# Admin Final Actions (hidden by default) #}
+                  {% if user_ctx.is_admin %}
+                    <div class="admin-actions" style="display: none; gap: 4px;">
+                      <button type="button" class="btn quick-action" data-action="admin-approve" data-mode="admin"
+                              style="padding: 4px 8px; font-size: 12px; background: #059669; color: #fff; border-color: #059669;">
+                        Approve
+                      </button>
+                      <button type="button" class="btn quick-action" data-action="admin-reject" data-mode="admin"
+                              style="padding: 4px 8px; font-size: 12px; background: #dc3545; color: #fff; border-color: #dc3545;">
+                        Reject
+                      </button>
+                      <button type="button" class="btn quick-action" data-action="admin-needs-info" data-mode="admin"
+                              style="padding: 4px 8px; font-size: 12px;">
+                        Info
+                      </button>
+                    </div>
+                  {% endif %}
+                </div>
+              {% elif status in ['NEEDS_INFO', 'NEEDS_ADJUSTMENT'] %}
+                <span class="muted small">Awaiting requester response</span>
+              {% elif status == 'APPROVED' %}
+                <span class="muted small">
+                  {% if line.current_review_stage == 'ADMIN_FINAL' %}
+                    Final approved
+                  {% else %}
+                    AG approved
+                  {% endif %}
+                </span>
+              {% elif status == 'REJECTED' %}
+                <span class="muted small">Rejected</span>
+              {% else %}
+                <span class="muted small">-</span>
+              {% endif %}
+
+              {# Inline feedback message #}
+              <div class="action-feedback" style="display: none; margin-top: 4px; font-size: 12px;"></div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  {# Summary #}
+  <div style="margin-top: 16px; display: flex; gap: 16px; flex-wrap: wrap;">
+    <div class="card" style="flex: 1; min-width: 150px; text-align: center;">
+      <div style="font-size: 24px; font-weight: 700;" id="pending-count">{{ summary.pending }}</div>
+      <div class="muted small">Pending</div>
+    </div>
+    <div class="card" style="flex: 1; min-width: 150px; text-align: center;">
+      <div style="font-size: 24px; font-weight: 700; color: #059669;" id="approved-count">{{ summary.approved }}</div>
+      <div class="muted small">Approved</div>
+    </div>
+    <div class="card" style="flex: 1; min-width: 150px; text-align: center;">
+      <div style="font-size: 24px; font-weight: 700; color: #d97706;" id="kicked-count">{{ summary.kicked_back }}</div>
+      <div class="muted small">Kicked Back</div>
+    </div>
+    <div class="card" style="flex: 1; min-width: 150px; text-align: center;">
+      <div style="font-size: 24px; font-weight: 700; color: #dc3545;" id="rejected-count">{{ summary.rejected }}</div>
+      <div class="muted small">Rejected</div>
+    </div>
+  </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+(function() {
+  var csrfToken = '{{ csrf_token() }}';
+  var baseUrl = '{{ url_for("work.work_item_detail", event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}';
+  var eventCode = '{{ ctx.event_cycle.code }}';
+  var deptCode = '{{ ctx.department.code }}';
+  var publicId = '{{ work_item.public_id }}';
+
+  // Action URL mappings (no blueprint prefixes - routes are at root)
+  var actionUrls = {
+    'approve': '/' + eventCode + '/' + deptCode + '/budget/item/' + publicId + '/line/{line}/approve',
+    'reject': '/' + eventCode + '/' + deptCode + '/budget/item/' + publicId + '/line/{line}/reject',
+    'needs-info': '/' + eventCode + '/' + deptCode + '/budget/item/' + publicId + '/line/{line}/needs-info',
+    'needs-adjustment': '/' + eventCode + '/' + deptCode + '/budget/item/' + publicId + '/line/{line}/needs-adjustment',
+    'admin-approve': '/' + eventCode + '/' + deptCode + '/budget/item/' + publicId + '/line/{line}/admin-approve',
+    'admin-reject': '/' + eventCode + '/' + deptCode + '/budget/item/' + publicId + '/line/{line}/admin-reject',
+    'admin-needs-info': '/' + eventCode + '/' + deptCode + '/budget/item/' + publicId + '/line/{line}/admin-needs-info'
+  };
+
+  // Status labels for different actions
+  var statusMap = {
+    'approve': 'APPROVED',
+    'reject': 'REJECTED',
+    'needs-info': 'NEEDS_INFO',
+    'needs-adjustment': 'NEEDS_ADJUSTMENT',
+    'admin-approve': 'APPROVED',
+    'admin-reject': 'REJECTED',
+    'admin-needs-info': 'NEEDS_INFO'
+  };
+
+  // Actions that require notes
+  var requiresNote = ['reject', 'needs-info', 'needs-adjustment', 'admin-reject', 'admin-needs-info'];
+
+  // Handle quick action button clicks
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.quick-action');
+    if (!btn) return;
+
+    var action = btn.getAttribute('data-action');
+    var row = btn.closest('tr');
+    var lineNum = row.getAttribute('data-line-num');
+    var noteInput = row.querySelector('.line-note');
+    var note = noteInput ? noteInput.value.trim() : '';
+    var feedback = row.querySelector('.action-feedback');
+
+    // Check if note is required
+    if (requiresNote.indexOf(action) !== -1 && !note) {
+      feedback.textContent = 'Note required for this action';
+      feedback.style.display = 'block';
+      feedback.style.color = '#dc3545';
+      noteInput.focus();
+      return;
+    }
+
+    // Disable buttons while processing
+    var buttons = row.querySelectorAll('.quick-action');
+    buttons.forEach(function(b) { b.disabled = true; });
+    feedback.textContent = 'Processing...';
+    feedback.style.display = 'block';
+    feedback.style.color = '#666';
+
+    // Build URL
+    var url = actionUrls[action].replace('{line}', lineNum);
+
+    // Build form data
+    var formData = new FormData();
+    formData.append('csrf_token', csrfToken);
+    if (note) {
+      formData.append('note', note);
+      // For AG actions, use recommended_amount field name for consistency
+      if (action.indexOf('admin') === -1) {
+        formData.append('recommended_amount', '');
+      }
+    }
+    formData.append('ajax', '1');
+
+    // Send request
+    fetch(url, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Accept': 'application/json'
+      }
+    })
+    .then(function(response) {
+      return response.json();
+    })
+    .then(function(data) {
+      if (data.success) {
+        // Update row status
+        var newStatus = statusMap[action];
+        row.setAttribute('data-status', newStatus);
+
+        // Update status pill
+        var pill = row.querySelector('.line-status-pill');
+        pill.textContent = newStatus;
+        pill.className = 'pill line-status-pill';
+        if (newStatus === 'APPROVED') {
+          pill.classList.add('pill-approved');
+        } else if (newStatus === 'REJECTED') {
+          pill.classList.add('tag-kicked');
+        } else if (newStatus === 'NEEDS_INFO' || newStatus === 'NEEDS_ADJUSTMENT') {
+          pill.classList.add('pill-needs');
+        } else {
+          pill.classList.add('pill-draft');
+        }
+
+        // Update actions cell
+        var actionsCell = row.querySelector('.line-actions');
+        if (newStatus === 'APPROVED') {
+          actionsCell.innerHTML = '<span class="muted small">' + (action.indexOf('admin') !== -1 ? 'Final approved' : 'AG approved') + '</span>';
+        } else if (newStatus === 'REJECTED') {
+          actionsCell.innerHTML = '<span class="muted small">Rejected</span>';
+        } else if (newStatus === 'NEEDS_INFO' || newStatus === 'NEEDS_ADJUSTMENT') {
+          actionsCell.innerHTML = '<span class="muted small">Awaiting requester response</span>';
+        }
+
+        // Update summary counts
+        updateSummaryCounts();
+
+        feedback.textContent = 'Done!';
+        feedback.style.color = '#059669';
+      } else {
+        feedback.textContent = data.error || 'Error occurred';
+        feedback.style.color = '#dc3545';
+        buttons.forEach(function(b) { b.disabled = false; });
+      }
+    })
+    .catch(function(err) {
+      feedback.textContent = 'Network error';
+      feedback.style.color = '#dc3545';
+      buttons.forEach(function(b) { b.disabled = false; });
+    });
+  });
+
+  // Update summary counts based on current row statuses
+  function updateSummaryCounts() {
+    var rows = document.querySelectorAll('tr[data-status]');
+    var counts = { pending: 0, approved: 0, kicked: 0, rejected: 0 };
+
+    rows.forEach(function(row) {
+      var status = row.getAttribute('data-status');
+      if (status === 'PENDING') counts.pending++;
+      else if (status === 'APPROVED') counts.approved++;
+      else if (status === 'NEEDS_INFO' || status === 'NEEDS_ADJUSTMENT') counts.kicked++;
+      else if (status === 'REJECTED') counts.rejected++;
+    });
+
+    document.getElementById('pending-count').textContent = counts.pending;
+    document.getElementById('approved-count').textContent = counts.approved;
+    document.getElementById('kicked-count').textContent = counts.kicked;
+    document.getElementById('rejected-count').textContent = counts.rejected;
+  }
+
+  // Review mode toggle for admins
+  var modeAg = document.getElementById('mode-ag');
+  var modeAdmin = document.getElementById('mode-admin');
+
+  if (modeAg && modeAdmin) {
+    modeAg.addEventListener('click', function() {
+      modeAg.style.background = '#0a66c2';
+      modeAg.style.color = '#fff';
+      modeAg.style.borderColor = '#0a66c2';
+      modeAdmin.style.background = '#fff';
+      modeAdmin.style.color = '#111';
+      modeAdmin.style.borderColor = '#bbb';
+
+      document.querySelectorAll('.ag-actions').forEach(function(el) {
+        el.style.display = 'flex';
+      });
+      document.querySelectorAll('.admin-actions').forEach(function(el) {
+        el.style.display = 'none';
+      });
+    });
+
+    modeAdmin.addEventListener('click', function() {
+      modeAdmin.style.background = '#059669';
+      modeAdmin.style.color = '#fff';
+      modeAdmin.style.borderColor = '#059669';
+      modeAg.style.background = '#fff';
+      modeAg.style.color = '#111';
+      modeAg.style.borderColor = '#bbb';
+
+      document.querySelectorAll('.ag-actions').forEach(function(el) {
+        el.style.display = 'none';
+      });
+      document.querySelectorAll('.admin-actions').forEach(function(el) {
+        el.style.display = 'flex';
+      });
+    });
+  }
+})();
+</script>
+{% endblock %}
