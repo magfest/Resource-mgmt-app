@@ -27,6 +27,7 @@ from app.routes.work.helpers import (
     build_work_item_perms,
     format_currency,
     friendly_status,
+    get_comment_visibility,
     is_checked_out,
 )
 from . import approvals_bp
@@ -252,14 +253,8 @@ def _handle_review_action(event: str, dept: str, public_id: str, line_num: int, 
                 REVIEW_ACTION_NEEDS_ADJUSTMENT: "[ADJUSTMENT REQUESTED]",
                 REVIEW_ACTION_RESET: "[RESET]",
             }
-            # Check if admin requested admin-only visibility
-            admin_only_requested = request.form.get("admin_only") == "1"
-            is_admin_only = admin_only_requested and user_ctx.is_admin
-
-            if is_admin_only:
-                visibility = COMMENT_VISIBILITY_ADMIN
-            else:
-                visibility = COMMENT_VISIBILITY_PUBLIC
+            # Determine comment visibility
+            visibility = get_comment_visibility(request.form, user_ctx.is_admin)
             comment = WorkLineComment(
                 work_line_id=line.id,
                 visibility=visibility,
@@ -353,15 +348,7 @@ def line_respond(event: str, dept: str, public_id: str, line_num: int):
         flash("Response submitted. The line is back in review.", "success")
 
         # Add comment with the response
-        # Check if admin requested admin-only visibility
-        admin_only_requested = request.form.get("admin_only") == "1"
-        is_admin_only = admin_only_requested and user_ctx.is_admin
-
-        if is_admin_only:
-            visibility = COMMENT_VISIBILITY_ADMIN
-        else:
-            visibility = COMMENT_VISIBILITY_PUBLIC
-
+        visibility = get_comment_visibility(request.form, user_ctx.is_admin)
         comment = WorkLineComment(
             work_line_id=line.id,
             visibility=visibility,
@@ -532,15 +519,7 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int):
         changes_text = ", ".join(changes) if changes else "No field changes"
         comment_body = f"[ADJUSTMENT] {changes_text}\n\n{response_text}"
 
-        # Check if admin requested admin-only visibility
-        admin_only_requested = request.form.get("admin_only") == "1"
-        is_admin_only = admin_only_requested and user_ctx.is_admin
-
-        if is_admin_only:
-            visibility = COMMENT_VISIBILITY_ADMIN
-        else:
-            visibility = COMMENT_VISIBILITY_PUBLIC
-
+        visibility = get_comment_visibility(request.form, user_ctx.is_admin)
         comment = WorkLineComment(
             work_line_id=line.id,
             visibility=visibility,
@@ -581,15 +560,7 @@ def line_comment(event: str, dept: str, public_id: str, line_num: int):
         return redirect(url_for("approvals.line_review", event=event, dept=dept,
                                 public_id=public_id, line_num=line_num))
 
-    # Check if admin requested admin-only visibility
-    admin_only_requested = request.form.get("admin_only") == "1"
-    is_admin_only = admin_only_requested and user_ctx.is_admin
-
-    if is_admin_only:
-        visibility = COMMENT_VISIBILITY_ADMIN
-    else:
-        visibility = COMMENT_VISIBILITY_PUBLIC
-
+    visibility = get_comment_visibility(request.form, user_ctx.is_admin)
     comment = WorkLineComment(
         work_line_id=line.id,
         visibility=visibility,

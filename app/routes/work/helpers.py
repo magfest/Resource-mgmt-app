@@ -1127,6 +1127,26 @@ def friendly_status(status: str) -> str:
     return STATUS_LABELS.get(status.upper(), status)
 
 
+def get_comment_visibility(form_data, is_admin: bool) -> str:
+    """
+    Determine comment visibility based on form input and user permissions.
+
+    Args:
+        form_data: Flask request.form or similar dict-like object
+        is_admin: Whether the current user is an admin
+
+    Returns:
+        COMMENT_VISIBILITY_ADMIN if admin requested admin-only and is admin,
+        otherwise COMMENT_VISIBILITY_PUBLIC
+    """
+    from app.models import COMMENT_VISIBILITY_ADMIN, COMMENT_VISIBILITY_PUBLIC
+
+    admin_only_requested = form_data.get("admin_only") == "1"
+    if admin_only_requested and is_admin:
+        return COMMENT_VISIBILITY_ADMIN
+    return COMMENT_VISIBILITY_PUBLIC
+
+
 def get_next_line_number(work_item: WorkItem) -> int:
     """Get the next available line number for a work item."""
     if not work_item.lines:

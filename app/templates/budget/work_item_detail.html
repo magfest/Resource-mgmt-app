@@ -6,7 +6,7 @@
 {% block content %}
 
   {% set status = work_item.status | upper %}
-  {% set status_label = friendly_status(status) %}
+  {% set status_label = friendly_status(status) if friendly_status else status %}
   {% set status_pill_class =
     "pill-approved" if status == "FINALIZED"
     else "pill-submitted" if status == "SUBMITTED"

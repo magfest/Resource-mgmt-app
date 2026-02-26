@@ -19,6 +19,7 @@ from app.routes import get_user_ctx
 from app.routes.work.helpers import (
     get_portfolio_context,
     format_currency,
+    get_comment_visibility,
 )
 from . import admin_final_bp
 from .helpers import (
@@ -212,9 +213,7 @@ def _handle_admin_decision(event: str, dept: str, public_id: str, line_num: int,
                 REVIEW_ACTION_REJECT: "[ADMIN REJECTED]",
                 REVIEW_ACTION_NEEDS_INFO: "[ADMIN INFO REQUESTED]",
             }
-            # Check if admin-only note (admin users only)
-            admin_only = request.form.get("admin_only") == "1"
-            visibility = COMMENT_VISIBILITY_ADMIN if admin_only else COMMENT_VISIBILITY_PUBLIC
+            visibility = get_comment_visibility(request.form, user_ctx.is_admin)
             comment = WorkLineComment(
                 work_line_id=line.id,
                 visibility=visibility,

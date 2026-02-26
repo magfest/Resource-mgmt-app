@@ -39,6 +39,7 @@ from .helpers import (
     compute_work_item_totals,
     format_currency,
     friendly_status,
+    get_comment_visibility,
     get_visible_expense_accounts,
     get_fixed_cost_expense_accounts,
     get_hotel_service_expense_accounts,
@@ -265,16 +266,7 @@ def work_item_comment(event: str, dept: str, public_id: str):
         flash("Comment text is required.", "error")
         return redirect(return_to or default_redirect)
 
-    # Check if admin requested admin-only visibility
-    # Both conditions must be true: checkbox selected AND user is admin
-    admin_only_requested = request.form.get("admin_only") == "1"
-    is_admin_only = admin_only_requested and user_ctx.is_admin
-
-    if is_admin_only:
-        visibility = COMMENT_VISIBILITY_ADMIN
-    else:
-        visibility = COMMENT_VISIBILITY_PUBLIC
-
+    visibility = get_comment_visibility(request.form, user_ctx.is_admin)
     comment = WorkItemComment(
         work_item_id=work_item.id,
         visibility=visibility,

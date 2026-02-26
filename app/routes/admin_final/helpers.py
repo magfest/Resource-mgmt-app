@@ -116,6 +116,39 @@ def get_admin_final_review(line: WorkLine) -> Optional[WorkLineReview]:
     ).first()
 
 
+def batch_load_reviews_by_line(line_ids: List[int]) -> dict:
+    """
+    Batch-load all reviews for multiple lines in two queries.
+
+    Returns dict with structure:
+    {
+        line_id: {
+            'admin': WorkLineReview or None,
+            'ag': WorkLineReview or None
+        }
+    }
+    """
+    if not line_ids:
+        return {}
+
+    # Initialize result dict
+    result = {lid: {'admin': None, 'ag': None} for lid in line_ids}
+
+    # Batch query for all reviews (both stages) in one query
+    reviews = WorkLineReview.query.filter(
+        WorkLineReview.work_line_id.in_(line_ids)
+    ).all()
+
+    # Organize by line_id and stage
+    for review in reviews:
+        if review.stage == REVIEW_STAGE_ADMIN_FINAL:
+            result[review.work_line_id]['admin'] = review
+        elif review.stage == REVIEW_STAGE_APPROVAL_GROUP:
+            result[review.work_line_id]['ag'] = review
+
+    return result
+
+
 def get_or_create_admin_review(line: WorkLine, user_ctx: UserContext) -> Tuple[WorkLineReview, bool]:
     """
     Get or create an ADMIN_FINAL WorkLineReview.
@@ -159,26 +192,27 @@ def can_finalize_work_item(work_item: WorkItem) -> Tuple[bool, str]:
     if work_item.status not in (WORK_ITEM_STATUS_AWAITING_DISPATCH, WORK_ITEM_STATUS_SUBMITTED):
         return False, "Work item must be submitted before finalization."
 
-    # Check for kicked-back lines
+    # Batch-load all reviews for all lines (1 query instead of 2N)
+    line_ids = [line.id for line in work_item.lines]
+    reviews_by_line = batch_load_reviews_by_line(line_ids)
+
+    # Single pass through lines to check all conditions
+    has_any_decision = False
     for line in work_item.lines:
+        # Check for kicked-back lines
         if line.status in (WORK_LINE_STATUS_NEEDS_INFO, WORK_LINE_STATUS_NEEDS_ADJUSTMENT):
             return False, f"Line {line.line_number} is awaiting requester response."
 
-    # Check that at least one line has been reviewed
-    has_any_decision = False
-    for line in work_item.lines:
-        admin_review = get_admin_final_review(line)
-        if admin_review and admin_review.status in (REVIEW_STATUS_APPROVED, REVIEW_STATUS_REJECTED):
-            has_any_decision = True
-            break
+        # Check if this line has a decision (from either admin or AG review)
+        if not has_any_decision:
+            line_reviews = reviews_by_line.get(line.id, {})
+            admin_review = line_reviews.get('admin')
+            ag_review = line_reviews.get('ag')
 
-    if not has_any_decision:
-        # Check approval group reviews
-        for line in work_item.lines:
-            ag_review = get_approval_group_review(line)
-            if ag_review and ag_review.status in (REVIEW_STATUS_APPROVED, REVIEW_STATUS_REJECTED):
+            if admin_review and admin_review.status in (REVIEW_STATUS_APPROVED, REVIEW_STATUS_REJECTED):
                 has_any_decision = True
-                break
+            elif ag_review and ag_review.status in (REVIEW_STATUS_APPROVED, REVIEW_STATUS_REJECTED):
+                has_any_decision = True
 
     if not has_any_decision:
         return False, "At least one line must be reviewed before finalization."
@@ -431,6 +465,12 @@ def finalize_work_item(
             is_archived=False,
         ).all()
 
+        # Batch-load all reviews for all lines across all paused supplementaries (1 query)
+        all_supp_line_ids = []
+        for supp in paused_supplementary:
+            all_supp_line_ids.extend(line.id for line in supp.lines)
+        reviews_by_line = batch_load_reviews_by_line(all_supp_line_ids)
+
         for supp in paused_supplementary:
             # Validate supplementary is in a consistent state before un-pausing
             # Check that all lines have budget details and valid approval group routing
@@ -442,12 +482,9 @@ def finalize_work_item(
                 if not line.budget_detail.routed_approval_group_id:
                     can_unpause = False
                     break
-                # Check that line has a valid review record
-                ag_review = WorkLineReview.query.filter_by(
-                    work_line_id=line.id,
-                    stage=REVIEW_STAGE_APPROVAL_GROUP,
-                ).first()
-                if not ag_review:
+                # Check that line has a valid review record (from batch-loaded data)
+                line_reviews = reviews_by_line.get(line.id, {})
+                if not line_reviews.get('ag'):
                     can_unpause = False
                     break
 
