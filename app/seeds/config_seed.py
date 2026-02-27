@@ -631,21 +631,24 @@ def seed_expense_accounts_from_spreadsheet(
 
         # Check if this is Hotel Rooms (needs expansion into variants)
         if name == 'Hotel Rooms' and has_fixed_cost:
-            # Create multiple accounts for hotel room variants (MAGFest-paid)
-            # Codes abbreviated: HTL=Hotel, ATR=Atrium, EXEC=Executive, HOSP=Hospitality, REG=Regular
-            hotel_variants = [
-                ("HTL_ROOM_REG", "Hotel Room - Regular", 24400, "Regular sleeping room (king/double-double)"),
-                ("HTL_ROOM_ATR", "Hotel Room - Atrium", 28900, "Atrium sleeping room (king/double-double)"),
-                ("HTL_ROOM_EXEC", "Hotel Room - Executive Suite", 50910, "Executive suite"),
-                ("HTL_ROOM_HOSP", "Hotel Room - Hospitality Suite", 69950, "Hospitality suite"),
+            # Create hotel room expense accounts for the wizard
+            # Three room types: Standard, Executive Suite, Hospitality Suite
+            # Three payment scenarios: MAGFest Paid, Third Party (Held), Staff Crash
+            # Prices are Super 2026 rates
+
+            # MAGFest Paid variants (hits department budget)
+            magfest_paid_variants = [
+                ("HTL_STD_MAGPAID", "Standard Room (MAGFest Paid)", 25200, "Standard hotel room - MAGFest covers cost"),
+                ("HTL_EXEC_MAGPAID", "Executive Suite (MAGFest Paid)", 51500, "Executive suite - MAGFest covers cost"),
+                ("HTL_HOSP_MAGPAID", "Hospitality Suite (MAGFest Paid)", 99500, "Hospitality suite with attached bedrooms - MAGFest covers cost"),
             ]
 
-            for code, variant_name, price_cents, desc in hotel_variants:
+            for code, variant_name, price_cents, desc in magfest_paid_variants:
                 account = create_expense_account(
                     code=code,
                     name=variant_name,
                     description=desc,
-                    spend_type_codes=['BANK'],  # Hotel rooms are Bank only
+                    spend_type_codes=['BANK'],
                     spend_types=spend_types,
                     approval_group=approval_groups.get('HOTEL'),
                     is_admin_only=False,
@@ -659,29 +662,55 @@ def seed_expense_accounts_from_spreadsheet(
                 sort_order += 10
                 accounts_created += 1
 
-            # Create held room variants (not MAGFest-paid, $0 cost, informational only)
-            held_room_variants = [
-                ("HTL_HELD_REG", "Hotel Held Room - Regular", "Regular room held for participant (not MAGFest-paid)"),
-                ("HTL_HELD_ATR", "Hotel Held Room - Atrium", "Atrium room held for participant (not MAGFest-paid)"),
-                ("HTL_HELD_EXEC", "Hotel Held Room - Executive Suite", "Executive suite held for participant (not MAGFest-paid)"),
-                ("HTL_HELD_HOSP", "Hotel Held Room - Hospitality Suite", "Hospitality suite held for participant (not MAGFest-paid)"),
+            # Third Party Held variants ($0 cost - partner books and pays, we just reserve it)
+            held_variants = [
+                ("HTL_STD_HELD", "Standard Room (Third Party Pays)", "Standard room held for partner to book - no budget impact"),
+                ("HTL_EXEC_HELD", "Executive Suite (Third Party Pays)", "Executive suite held for partner to book - no budget impact"),
+                ("HTL_HOSP_HELD", "Hospitality Suite (Third Party Pays)", "Hospitality suite held for partner to book - no budget impact"),
             ]
 
-            for code, variant_name, desc in held_room_variants:
+            for code, variant_name, desc in held_variants:
                 account = create_expense_account(
                     code=code,
                     name=variant_name,
                     description=desc,
-                    spend_type_codes=['BANK'],  # Still use BANK spend type for consistency
+                    spend_type_codes=['BANK'],
                     spend_types=spend_types,
                     approval_group=approval_groups.get('HOTEL'),
                     is_admin_only=False,
-                    is_contract_eligible=False,  # Not contract eligible since no cost
-                    is_fixed_cost=True,  # Fixed at $0
-                    default_unit_price_cents=0,  # No budget impact
+                    is_contract_eligible=False,
+                    is_fixed_cost=True,
+                    default_unit_price_cents=0,
                     office_dept=office_dept,
                     sort_order=sort_order,
-                    prompt_mode_override=PROMPT_MODE_NONE,  # Don't prompt - these are optional
+                    prompt_mode_override=PROMPT_MODE_NONE,
+                    ui_display_group=UI_GROUP_HOTEL_SERVICES,
+                )
+                sort_order += 10
+                accounts_created += 1
+
+            # Staff Crash variants ($0 cost - informational, staffers pay out of pocket)
+            # No standard room for crash - only suites per policy
+            crash_variants = [
+                ("HTL_EXEC_CRASH", "Executive Suite (Staff Crash)", "Executive suite for staff crash space - paid out of pocket by staffers, not department budget"),
+                ("HTL_HOSP_CRASH", "Hospitality Suite (Staff Crash)", "Hospitality suite for staff crash space - paid out of pocket by staffers, not department budget"),
+            ]
+
+            for code, variant_name, desc in crash_variants:
+                account = create_expense_account(
+                    code=code,
+                    name=variant_name,
+                    description=desc,
+                    spend_type_codes=['BANK'],
+                    spend_types=spend_types,
+                    approval_group=approval_groups.get('HOTEL'),
+                    is_admin_only=False,
+                    is_contract_eligible=False,
+                    is_fixed_cost=True,
+                    default_unit_price_cents=0,
+                    office_dept=office_dept,
+                    sort_order=sort_order,
+                    prompt_mode_override=PROMPT_MODE_NONE,
                     ui_display_group=UI_GROUP_HOTEL_SERVICES,
                 )
                 sort_order += 10

@@ -269,151 +269,253 @@
     {% endif %}
   </div>
 
-  {# Tab 3: Hotel/Gaylord Services #}
+  {# Tab 3: Hotel Room Requests #}
   <div class="tab-panel" id="panel-hotel-services" style="display: none;">
-    {% if hotel_data %}
-    <form method="post" action="{{ url_for('work.work_item_fixed_costs_save', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-      {# Duration Calculator #}
-      <section class="card" style="margin-bottom: 16px; background: #f8f9fa;">
-        <h3 style="margin:0 0 12px 0;">Duration Calculator</h3>
-
-        {% if event_start_date and event_end_date %}
-          <div class="mb-16">
-            <strong>Event:</strong>
-            {{ event_start_date.strftime('%b %d') }} - {{ event_end_date.strftime('%b %d, %Y') }}
-            (<span id="event-nights-display">{{ event_nights }}</span> nights)
-          </div>
-
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 16px;">
-            <div>
-              <label for="setup-nights" style="display: block; font-weight: 600; margin-bottom: 4px;">Setup nights</label>
-              <input type="number" id="setup-nights" value="0" min="0" step="1" style="width: 80px;">
-            </div>
-            <div>
-              <label for="teardown-nights" style="display: block; font-weight: 600; margin-bottom: 4px;">Teardown nights</label>
-              <input type="number" id="teardown-nights" value="0" min="0" step="1" style="width: 80px;">
-            </div>
-            <div>
-              <label for="room-count" style="display: block; font-weight: 600; margin-bottom: 4px;">Count (rooms/passes)</label>
-              <input type="number" id="room-count" value="1" min="1" step="1" style="width: 80px;">
-            </div>
-          </div>
-
-          <div style="background: #fff; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
-            <strong>Total: <span id="total-nights-display">{{ event_nights }}</span> nights/days</strong>
-            <div class="muted small mt-4">
-              (<span id="event-nights-calc">{{ event_nights }}</span> event + <span id="setup-nights-calc">0</span> setup + <span id="teardown-nights-calc">0</span> teardown) x <span id="room-count-calc">1</span>
-            </div>
-          </div>
-
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <label for="apply-to-item" style="font-weight: 600;">Apply to:</label>
-            <select id="apply-to-item" style="flex: 1; max-width: 300px;">
-              {% for item in hotel_data %}
-                <option value="{{ item.account.id }}">{{ item.account.name }}</option>
-              {% endfor %}
-            </select>
-            <button type="button" id="apply-calculator-btn" class="btn">Apply</button>
-          </div>
-        {% else %}
-          <div class="muted" style="padding: 12px; background: #fff; border-radius: 6px;">
-            Event dates not configured. To use the calculator, ask an administrator to set the
-            Event Start Date and Event End Date in the event cycle settings.
-          </div>
-        {% endif %}
-      </section>
-
-      {# Hotel Items Table #}
-      <section class="card">
-        <h3 style="margin:0 0 8px 0;">Hotel &amp; Gaylord Services</h3>
-        <div class="muted" style="margin-bottom: 12px;">
-          Per-night/per-day items. Use the calculator above to estimate quantities. Include a note explaining the purpose.
-        </div>
-
-        <table>
-          <thead>
+    {# Existing Hotel Lines Summary #}
+    {% if hotel_lines %}
+    <section class="card" style="margin-bottom: 16px;">
+      <h3 style="margin:0 0 12px 0;">Current Hotel Requests</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Room Type</th>
+            <th>Description</th>
+            <th style="width: 100px;" class="right">Nights</th>
+            <th style="width: 120px;" class="right">Total</th>
+            <th style="width: 80px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line in hotel_lines %}
+            {% set detail = line.budget_detail %}
+            {% set line_total = (detail.unit_price_cents * detail.quantity) if detail else 0 %}
             <tr>
-              <th>Item</th>
-              <th style="width: 120px;" class="right">Unit Price</th>
-              <th style="width: 100px;">Quantity</th>
-              <th style="width: 120px;" class="right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for item in hotel_data %}
-              {% set acc = item.account %}
-              {% set unit_price = item.unit_price_cents %}
-              {% set existing_qty = item.existing_quantity %}
-              {% set existing_notes = item.existing_notes %}
-              <tr>
-                <td>
-                  <strong>{{ acc.name }}</strong>
-                  {% if acc.description %}
-                    <div class="muted small">{{ acc.description }}</div>
-                  {% endif %}
-                </td>
-                <td class="right num">{{ format_currency(unit_price) }}</td>
-                <td>
-                  <input type="number"
-                         name="fixed_qty_{{ acc.id }}"
-                         id="hotel-qty-{{ acc.id }}"
-                         value="{{ existing_qty if existing_qty else '' }}"
-                         min="0"
-                         step="1"
-                         placeholder="0"
-                         style="width: 80px;"
-                         data-unit-price="{{ unit_price }}"
-                         class="hotel-qty-input">
-                </td>
-                <td class="right num hotel-line-total" data-account-id="{{ acc.id }}">
-                  {% if existing_qty %}
-                    {{ format_currency((unit_price * existing_qty) | int) }}
-                  {% else %}
-                    -
-                  {% endif %}
-                </td>
-              </tr>
-              <tr class="notes-row">
-                <td colspan="4" style="padding-top: 0; border-top: none;">
-                  <input type="text"
-                         name="fixed_notes_{{ acc.id }}"
-                         value="{{ existing_notes }}"
-                         placeholder="Notes/reason (required if quantity > 0)"
-                         style="width: 100%; max-width: 500px; font-size: 13px;">
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-          <tfoot>
-            <tr style="font-weight: 700;">
-              <td colspan="3" class="right">Hotel/Gaylord Subtotal:</td>
-              <td class="right num" id="hotel-subtotal">
-                {% set hotel_subtotal = namespace(total=0) %}
-                {% for item in hotel_data %}
-                  {% if item.existing_quantity %}
-                    {% set hotel_subtotal.total = hotel_subtotal.total + (item.unit_price_cents * item.existing_quantity) | int %}
-                  {% endif %}
-                {% endfor %}
-                {{ format_currency(hotel_subtotal.total) }}
+              <td>
+                <strong>{{ detail.expense_account.name if detail and detail.expense_account else '-' }}</strong>
+              </td>
+              <td>{{ detail.description if detail else '-' }}</td>
+              <td class="right num">{{ detail.quantity | int if detail else '-' }}</td>
+              <td class="right num"><strong>{{ format_currency(line_total) }}</strong></td>
+              <td>
+                <form method="post" action="{{ url_for('work.line_delete', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="display: inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="btn" style="padding: 4px 8px; font-size: 12px; color: #dc3545; border-color: #dc3545;" data-confirm="Remove this hotel request?">
+                    Remove
+                  </button>
+                </form>
               </td>
             </tr>
-          </tfoot>
-        </table>
-
-        <div class="btn-row" style="margin-top: 16px;">
-          <button type="submit" class="btn btn-primary">Save Hotel/Gaylord Items</button>
-        </div>
-      </section>
-    </form>
-    {% else %}
-      <section class="card">
-        <div class="muted" style="text-align: center; padding: 24px;">
-          No hotel/Gaylord items available for this department.
-        </div>
-      </section>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr style="font-weight: 700;">
+            <td colspan="3" class="right">Hotel Subtotal:</td>
+            <td class="right num">
+              {% set hotel_subtotal = namespace(total=0) %}
+              {% for line in hotel_lines %}
+                {% if line.budget_detail %}
+                  {% set hotel_subtotal.total = hotel_subtotal.total + (line.budget_detail.unit_price_cents * line.budget_detail.quantity) | int %}
+                {% endif %}
+              {% endfor %}
+              {{ format_currency(hotel_subtotal.total) }}
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
     {% endif %}
+
+    {# Hotel Room Wizard #}
+    <section class="card">
+      <h3 style="margin:0 0 16px 0;">Add Hotel Room Request</h3>
+
+      <form method="post" action="{{ url_for('work.hotel_wizard_add', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" id="hotel-wizard-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        {# Step 1: Purpose #}
+        <div style="margin-bottom: 24px;">
+          <label style="display: block; font-weight: 600; margin-bottom: 12px;">What is this room for?</label>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+            <label style="display: block; cursor: pointer; padding: 12px 16px; border: 2px solid #ddd; border-radius: 8px; background: #fff;" class="purpose-option" data-value="external_partner">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <input type="radio" name="purpose" value="external_partner" checked>
+                <strong>External partner</strong>
+              </div>
+              <div class="muted small" style="margin-left: 24px;">
+                Guests, performers, contractors, vendors, or other non-staff partners who need a room as part of their arrangement with MAGFest.
+              </div>
+            </label>
+            <label style="display: block; cursor: pointer; padding: 12px 16px; border: 2px solid #ddd; border-radius: 8px; background: #fff;" class="purpose-option" data-value="dept_operations">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <input type="radio" name="purpose" value="dept_operations">
+                <strong>Department operations</strong>
+              </div>
+              <div class="muted small" style="margin-left: 24px;">
+                A room or suite required for your department to function &mdash; e.g., Treasury office, Hotel HQ, green room, or dedicated workspace. Not for general staff housing or social activities.
+              </div>
+            </label>
+            <label style="display: block; cursor: pointer; padding: 12px 16px; border: 2px solid #ddd; border-radius: 8px; background: #fff;" class="purpose-option" data-value="staff_crash">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <input type="radio" name="purpose" value="staff_crash">
+                <strong>Staff Suite Social/Crash Space</strong>
+              </div>
+              <div class="muted small" style="margin-left: 24px;">
+                A suite for staffers to sleep in or for social gatherings. Cost is paid out-of-pocket by staffers (not department budget). This is for planning purposes only.
+              </div>
+            </label>
+          </div>
+        </div>
+
+        {# Step 2: Who Pays (only for external partner) #}
+        <div id="who-pays-section" style="margin-bottom: 24px;">
+          <label style="display: block; font-weight: 600; margin-bottom: 12px;">Who pays for this room?</label>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
+            <label style="display: block; cursor: pointer; padding: 12px 16px; border: 2px solid #ddd; border-radius: 8px; background: #fff;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <input type="radio" name="who_pays" value="magfest" checked>
+                <strong>MAGFest covers</strong>
+              </div>
+              <div class="muted small" style="margin-left: 24px;">
+                Room cost comes from your department budget. Use this when MAGFest is providing the room as part of a contract or agreement.
+              </div>
+            </label>
+            <label style="display: block; cursor: pointer; padding: 12px 16px; border: 2px solid #ddd; border-radius: 8px; background: #fff;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                <input type="radio" name="who_pays" value="third_party">
+                <strong>Partner books &amp; pays</strong>
+              </div>
+              <div class="muted small" style="margin-left: 24px;">
+                We hold the room out of our block, but the partner books and pays directly. No budget impact &mdash; just tracked for planning.
+              </div>
+            </label>
+          </div>
+        </div>
+
+        {# Staff Crash Warning #}
+        <div id="staff-crash-warning" style="display: none; margin-bottom: 20px; padding: 12px 16px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px;">
+          <strong style="color: #92400e;">Reminder:</strong>
+          <span style="color: #78350f;">Staff crash suites must be paid out-of-pocket by staffers. Department budget cannot be used per MAGFest policy. This request is for planning and room allocation purposes only.</span>
+        </div>
+
+        {# Step 3: Room Type #}
+        <div style="margin-bottom: 24px;">
+          <label style="display: block; font-weight: 600; margin-bottom: 12px;">Room type</label>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+            <label id="room-type-standard" style="display: block; cursor: pointer; padding: 12px 16px; border: 2px solid #ddd; border-radius: 8px; background: #fff;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="radio" name="room_type" value="standard" checked>
+                <strong>Standard Room</strong>
+                <span class="pill" style="margin-left: auto;">$252/night</span>
+              </div>
+              <div class="muted small" style="margin-left: 24px; margin-top: 4px;">
+                King or double-queen sleeping room
+              </div>
+            </label>
+            <label style="display: block; cursor: pointer; padding: 12px 16px; border: 2px solid #ddd; border-radius: 8px; background: #fff;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="radio" name="room_type" value="executive">
+                <strong>Executive Suite</strong>
+                <span class="pill" style="margin-left: auto;">$515/night</span>
+              </div>
+              <div class="muted small" style="margin-left: 24px; margin-top: 4px;">
+                King bed + pullout couch, sleeps up to 4
+              </div>
+            </label>
+            <label style="display: block; cursor: pointer; padding: 12px 16px; border: 2px solid #ddd; border-radius: 8px; background: #fff;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="radio" name="room_type" value="hospitality">
+                <strong>Hospitality Suite</strong>
+                <span class="pill" style="margin-left: auto;">$995/night</span>
+              </div>
+              <div class="muted small" style="margin-left: 24px; margin-top: 4px;">
+                Suite + 2 attached bedrooms, sleeps up to 10
+              </div>
+            </label>
+          </div>
+        </div>
+
+        {# Step 4: How Many Rooms #}
+        <div style="margin-bottom: 20px;">
+          <label for="room_count" style="display: block; font-weight: 600; margin-bottom: 8px;">How many rooms?</label>
+          <input type="number" name="room_count" id="room_count" value="1" min="1" step="1" style="width: 80px;">
+        </div>
+
+        {# Step 5: Dates #}
+        <div style="margin-bottom: 20px; padding: 16px; background: #f8f9fa; border-radius: 6px;">
+          <label style="display: block; font-weight: 600; margin-bottom: 12px;">When do you need this room?</label>
+
+          {% if event_start_date and event_end_date %}
+            <div style="margin-bottom: 12px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" name="use_event_dates" id="use_event_dates" checked>
+                <span>
+                  <strong>Standard event dates</strong>
+                  <span class="muted">({{ event_start_date.strftime('%a %b %d') }} → {{ event_end_date.strftime('%a %b %d, %Y') }}, {{ event_nights }} nights)</span>
+                </span>
+              </label>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px;">
+              <div>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+                  <input type="checkbox" name="early_arrival" id="early_arrival">
+                  <strong>Early arrival</strong>
+                </label>
+                <div id="early-arrival-input" style="display: none;">
+                  <label for="early_nights" class="muted small">Extra nights before event:</label>
+                  <input type="number" name="early_nights" id="early_nights" value="1" min="1" max="7" step="1" style="width: 60px; margin-left: 8px;">
+                </div>
+              </div>
+              <div>
+                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+                  <input type="checkbox" name="late_departure" id="late_departure">
+                  <strong>Late departure</strong>
+                </label>
+                <div id="late-departure-input" style="display: none;">
+                  <label for="late_nights" class="muted small">Extra nights after event:</label>
+                  <input type="number" name="late_nights" id="late_nights" value="1" min="1" max="7" step="1" style="width: 60px; margin-left: 8px;">
+                </div>
+              </div>
+            </div>
+
+            <input type="hidden" name="event_nights" value="{{ event_nights }}">
+          {% else %}
+            <div class="muted">
+              Event dates not configured. Please enter total nights manually.
+            </div>
+            <div style="margin-top: 8px;">
+              <label for="manual_nights">Total nights:</label>
+              <input type="number" name="manual_nights" id="manual_nights" value="4" min="1" step="1" style="width: 80px; margin-left: 8px;">
+            </div>
+          {% endif %}
+        </div>
+
+        {# Step 6: Description #}
+        <div style="margin-bottom: 20px;">
+          <label for="description" style="display: block; font-weight: 600; margin-bottom: 8px;">Brief description (who is this for?)</label>
+          <input type="text" name="description" id="description" placeholder="e.g., Room for keynote speaker Jane Doe" style="width: 100%; max-width: 500px;">
+        </div>
+
+        {# Preview #}
+        <div id="hotel-preview" style="margin-bottom: 20px; padding: 16px; background: #e0f2fe; border: 1px solid #0ea5e9; border-radius: 6px;">
+          <div style="font-weight: 600; margin-bottom: 8px;">Preview</div>
+          <div id="preview-details">
+            <span id="preview-rooms">1</span>× <span id="preview-room-type">Standard Room</span>
+            <br>
+            <span id="preview-nights-breakdown" class="muted small"></span>
+          </div>
+          <div style="margin-top: 12px; font-size: 1.25rem; font-weight: 700;">
+            Total: <span id="preview-total">$0.00</span>
+          </div>
+        </div>
+
+        {# Submit #}
+        <div class="btn-row">
+          <button type="submit" class="btn btn-primary">Add Hotel Request</button>
+        </div>
+      </form>
+    </section>
   </div>
 
   {# Tab 4: Notes #}
@@ -547,81 +649,178 @@
     }
   }
 
-  // Update hotel line totals and subtotal
-  document.querySelectorAll('.hotel-qty-input').forEach(function(input) {
-    input.addEventListener('input', function() {
-      const unitPrice = parseInt(this.dataset.unitPrice) || 0;
-      const qty = parseInt(this.value) || 0;
-      const total = unitPrice * qty;
+  // ========== Hotel Room Wizard ==========
+  const eventNights = {{ event_nights if event_nights else 0 }};
 
-      const row = this.closest('tr');
-      const totalCell = row.querySelector('.hotel-line-total');
-      if (totalCell) {
-        totalCell.textContent = qty > 0 ? formatCurrency(total) : '-';
+  // Room prices in cents
+  const roomPrices = {
+    'standard': 25200,
+    'executive': 51500,
+    'hospitality': 99500
+  };
+
+  const roomTypeNames = {
+    'standard': 'Standard Room',
+    'executive': 'Executive Suite',
+    'hospitality': 'Hospitality Suite'
+  };
+
+  // Get wizard form elements
+  const purposeRadios = document.querySelectorAll('input[name="purpose"]');
+  const whoPaysSec = document.getElementById('who-pays-section');
+  const staffCrashWarning = document.getElementById('staff-crash-warning');
+  const roomTypeStandard = document.getElementById('room-type-standard');
+  const roomCountEl = document.getElementById('room_count');
+  const earlyArrivalCheck = document.getElementById('early_arrival');
+  const lateDepCheck = document.getElementById('late_departure');
+  const earlyInput = document.getElementById('early-arrival-input');
+  const lateInput = document.getElementById('late-departure-input');
+  const earlyNightsEl = document.getElementById('early_nights');
+  const lateNightsEl = document.getElementById('late_nights');
+  const useEventDatesEl = document.getElementById('use_event_dates');
+  const manualNightsEl = document.getElementById('manual_nights');
+
+  // Purpose change handler
+  purposeRadios.forEach(function(radio) {
+    radio.addEventListener('change', function() {
+      const purpose = this.value;
+
+      // Show/hide "who pays" section
+      if (whoPaysSec) {
+        whoPaysSec.style.display = purpose === 'external_partner' ? 'block' : 'none';
       }
 
-      updateHotelSubtotal();
+      // Show/hide staff crash warning
+      if (staffCrashWarning) {
+        staffCrashWarning.style.display = purpose === 'staff_crash' ? 'block' : 'none';
+      }
+
+      // Hide standard room option for staff crash
+      if (roomTypeStandard) {
+        roomTypeStandard.style.display = purpose === 'staff_crash' ? 'none' : 'flex';
+        // If staff crash and standard is selected, switch to executive
+        if (purpose === 'staff_crash') {
+          const standardRadio = roomTypeStandard.querySelector('input');
+          if (standardRadio && standardRadio.checked) {
+            const execRadio = document.querySelector('input[name="room_type"][value="executive"]');
+            if (execRadio) execRadio.checked = true;
+          }
+        }
+      }
+
+      updateHotelPreview();
     });
   });
 
-  function updateHotelSubtotal() {
-    let subtotal = 0;
-    document.querySelectorAll('.hotel-qty-input').forEach(function(input) {
-      const unitPrice = parseInt(input.dataset.unitPrice) || 0;
-      const qty = parseInt(input.value) || 0;
-      subtotal += unitPrice * qty;
-    });
+  // Who pays change handler
+  document.querySelectorAll('input[name="who_pays"]').forEach(function(radio) {
+    radio.addEventListener('change', updateHotelPreview);
+  });
 
-    const subtotalCell = document.getElementById('hotel-subtotal');
-    if (subtotalCell) {
-      subtotalCell.textContent = formatCurrency(subtotal);
+  // Room type change handler
+  document.querySelectorAll('input[name="room_type"]').forEach(function(radio) {
+    radio.addEventListener('change', updateHotelPreview);
+  });
+
+  // Room count change handler
+  if (roomCountEl) {
+    roomCountEl.addEventListener('input', updateHotelPreview);
+  }
+
+  // Early arrival checkbox
+  if (earlyArrivalCheck && earlyInput) {
+    earlyArrivalCheck.addEventListener('change', function() {
+      earlyInput.style.display = this.checked ? 'block' : 'none';
+      updateHotelPreview();
+    });
+  }
+
+  // Late departure checkbox
+  if (lateDepCheck && lateInput) {
+    lateDepCheck.addEventListener('change', function() {
+      lateInput.style.display = this.checked ? 'block' : 'none';
+      updateHotelPreview();
+    });
+  }
+
+  // Night inputs
+  if (earlyNightsEl) earlyNightsEl.addEventListener('input', updateHotelPreview);
+  if (lateNightsEl) lateNightsEl.addEventListener('input', updateHotelPreview);
+  if (useEventDatesEl) useEventDatesEl.addEventListener('change', updateHotelPreview);
+  if (manualNightsEl) manualNightsEl.addEventListener('input', updateHotelPreview);
+
+  function updateHotelPreview() {
+    // Get current values
+    const purpose = document.querySelector('input[name="purpose"]:checked')?.value || 'external_partner';
+    const whoPays = document.querySelector('input[name="who_pays"]:checked')?.value || 'magfest';
+    const roomType = document.querySelector('input[name="room_type"]:checked')?.value || 'standard';
+    const roomCount = parseInt(roomCountEl?.value) || 1;
+
+    // Calculate nights
+    let baseNights = eventNights;
+    if (manualNightsEl) {
+      baseNights = parseInt(manualNightsEl.value) || 4;
+    }
+    if (useEventDatesEl && !useEventDatesEl.checked) {
+      baseNights = 0;
+    }
+
+    let earlyNights = 0;
+    if (earlyArrivalCheck?.checked) {
+      earlyNights = parseInt(earlyNightsEl?.value) || 0;
+    }
+
+    let lateNights = 0;
+    if (lateDepCheck?.checked) {
+      lateNights = parseInt(lateNightsEl?.value) || 0;
+    }
+
+    const totalNightsPerRoom = baseNights + earlyNights + lateNights;
+    const totalNights = totalNightsPerRoom * roomCount;
+
+    // Determine price (zero for held/crash)
+    let pricePerNight = roomPrices[roomType] || 0;
+    if (purpose === 'staff_crash' || (purpose === 'external_partner' && whoPays === 'third_party')) {
+      pricePerNight = 0;
+    }
+
+    const totalCents = pricePerNight * totalNights;
+
+    // Update preview
+    document.getElementById('preview-rooms').textContent = roomCount;
+    document.getElementById('preview-room-type').textContent = roomTypeNames[roomType] || roomType;
+
+    // Build nights breakdown
+    let breakdown = totalNights + ' total nights';
+    if (roomCount > 1) {
+      breakdown = roomCount + ' rooms × ' + totalNightsPerRoom + ' nights = ' + totalNights + ' total nights';
+    }
+    if (earlyNights > 0 || lateNights > 0) {
+      let parts = [];
+      if (baseNights > 0) parts.push(baseNights + ' event');
+      if (earlyNights > 0) parts.push(earlyNights + ' early');
+      if (lateNights > 0) parts.push(lateNights + ' late');
+      breakdown += ' (' + parts.join(' + ') + ' per room)';
+    }
+    document.getElementById('preview-nights-breakdown').textContent = breakdown;
+
+    document.getElementById('preview-total').textContent = formatCurrency(totalCents);
+
+    // Update preview styling based on cost
+    const previewEl = document.getElementById('hotel-preview');
+    if (previewEl) {
+      if (totalCents === 0) {
+        previewEl.style.background = '#f0fdf4';
+        previewEl.style.borderColor = '#22c55e';
+      } else {
+        previewEl.style.background = '#e0f2fe';
+        previewEl.style.borderColor = '#0ea5e9';
+      }
     }
   }
 
-  // Hotel calculator
-  const eventNights = {{ event_nights if event_nights else 0 }};
-  const setupInput = document.getElementById('setup-nights');
-  const teardownInput = document.getElementById('teardown-nights');
-  const roomCountInput = document.getElementById('room-count');
-
-  function updateCalculator() {
-    if (!setupInput || !teardownInput || !roomCountInput) return;
-
-    const setup = parseInt(setupInput.value) || 0;
-    const teardown = parseInt(teardownInput.value) || 0;
-    const count = parseInt(roomCountInput.value) || 1;
-    const total = (eventNights + setup + teardown) * count;
-
-    document.getElementById('setup-nights-calc').textContent = setup;
-    document.getElementById('teardown-nights-calc').textContent = teardown;
-    document.getElementById('room-count-calc').textContent = count;
-    document.getElementById('total-nights-display').textContent = total;
-  }
-
-  if (setupInput) setupInput.addEventListener('input', updateCalculator);
-  if (teardownInput) teardownInput.addEventListener('input', updateCalculator);
-  if (roomCountInput) roomCountInput.addEventListener('input', updateCalculator);
-
-  // Apply calculator to selected item
-  const applyBtn = document.getElementById('apply-calculator-btn');
-  if (applyBtn) {
-    applyBtn.addEventListener('click', function() {
-      const selectEl = document.getElementById('apply-to-item');
-      const accountId = selectEl.value;
-
-      const setup = parseInt(setupInput.value) || 0;
-      const teardown = parseInt(teardownInput.value) || 0;
-      const count = parseInt(roomCountInput.value) || 1;
-      const total = (eventNights + setup + teardown) * count;
-
-      const qtyInput = document.getElementById('hotel-qty-' + accountId);
-      if (qtyInput) {
-        qtyInput.value = total;
-        // Trigger input event to update totals
-        qtyInput.dispatchEvent(new Event('input'));
-      }
-    });
-  }
+  // Initial preview update
+  updateHotelPreview();
 
   function formatCurrency(cents) {
     const dollars = cents / 100;

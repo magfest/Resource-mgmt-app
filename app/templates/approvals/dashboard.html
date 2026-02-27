@@ -20,7 +20,7 @@
     <div class="btn-row mb-16">
       {% for g in groups %}
         {% if g.id == current_group.id %}
-          <span class="btn btn-primary">{{ g.name }}</span>
+          <button type="button" class="btn btn-primary" disabled style="opacity: 1; cursor: default;">{{ g.name }}</button>
         {% else %}
           <a class="btn" href="{{ url_for('approvals.dashboard_group', group_code=g.code, event=selected_event, dept=selected_dept) }}">
             {{ g.name }}

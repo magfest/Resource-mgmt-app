@@ -643,6 +643,173 @@ def work_item_fixed_costs_save(event: str, dept: str, public_id: str):
 
 
 # ============================================================
+# Hotel Wizard Route
+# ============================================================
+
+@work_bp.post("/<event>/<dept>/budget/item/<public_id>/hotel/add")
+def hotel_wizard_add(event: str, dept: str, public_id: str):
+    """
+    Add a hotel room request via the wizard form.
+
+    Maps wizard selections to the appropriate expense account and creates a line item.
+    """
+    from decimal import Decimal
+    from app.models import ExpenseAccount
+
+    work_item, ctx = get_work_item_by_public_id(event, dept, public_id)
+    perms = require_work_item_edit(work_item, ctx)
+    user_ctx = get_user_ctx()
+
+    # Parse form data
+    purpose = request.form.get("purpose", "external_partner")  # external_partner, dept_operations, staff_crash
+    who_pays = request.form.get("who_pays", "magfest")  # magfest, third_party
+    room_type = request.form.get("room_type", "standard")  # standard, executive, hospitality
+    room_count = int(request.form.get("room_count", 1) or 1)
+    description = (request.form.get("description") or "").strip()
+
+    # Calculate total nights
+    event_nights = int(request.form.get("event_nights", 0) or 0)
+    use_event_dates = request.form.get("use_event_dates") == "on"
+    manual_nights = int(request.form.get("manual_nights", 4) or 4)
+
+    base_nights = event_nights if use_event_dates else manual_nights
+
+    early_arrival = request.form.get("early_arrival") == "on"
+    early_nights = int(request.form.get("early_nights", 0) or 0) if early_arrival else 0
+
+    late_departure = request.form.get("late_departure") == "on"
+    late_nights = int(request.form.get("late_nights", 0) or 0) if late_departure else 0
+
+    nights_per_room = base_nights + early_nights + late_nights
+    total_nights = nights_per_room * room_count
+
+    if total_nights <= 0:
+        flash("Please specify at least one night.", "error")
+        return redirect(url_for(
+            "work.work_item_edit",
+            event=event,
+            dept=dept,
+            public_id=public_id
+        ))
+
+    # Determine expense account code based on selections
+    # Room type prefix
+    room_type_codes = {
+        "standard": "STD",
+        "executive": "EXEC",
+        "hospitality": "HOSP",
+    }
+    room_code = room_type_codes.get(room_type, "STD")
+
+    # Determine suffix based on purpose/who_pays
+    if purpose == "staff_crash":
+        # Staff crash - only executive and hospitality allowed
+        if room_type == "standard":
+            flash("Standard rooms are not available for staff crash space. Please select a suite.", "error")
+            return redirect(url_for(
+                "work.work_item_edit",
+                event=event,
+                dept=dept,
+                public_id=public_id
+            ))
+        account_code = f"HTL_{room_code}_CRASH"
+    elif purpose == "external_partner" and who_pays == "third_party":
+        account_code = f"HTL_{room_code}_HELD"
+    else:
+        # MAGFest paid (dept operations or external partner with magfest covering)
+        account_code = f"HTL_{room_code}_MAGPAID"
+
+    # Look up the expense account
+    expense_account = ExpenseAccount.query.filter_by(code=account_code, is_active=True).first()
+    if not expense_account:
+        flash(f"Hotel expense account not found: {account_code}. Please contact an administrator.", "error")
+        return redirect(url_for(
+            "work.work_item_edit",
+            event=event,
+            dept=dept,
+            public_id=public_id
+        ))
+
+    # Get effective settings for this account
+    settings = get_effective_fixed_cost_settings(expense_account, ctx.event_cycle.id)
+
+    # Get spend type
+    spend_type_id = expense_account.default_spend_type_id
+    if not spend_type_id:
+        allowed = get_allowed_spend_types(expense_account)
+        if allowed:
+            spend_type_id = allowed[0].id
+        else:
+            flash(f"No spend type configured for {expense_account.name}", "error")
+            return redirect(url_for(
+                "work.work_item_edit",
+                event=event,
+                dept=dept,
+                public_id=public_id
+            ))
+
+    # Build description if not provided
+    if not description:
+        if purpose == "external_partner":
+            description = "Hotel room for external partner"
+        elif purpose == "dept_operations":
+            description = "Hotel room for department operations"
+        else:
+            description = "Hotel room for staff crash space"
+
+    # Add details about room count and dates to description
+    if room_count > 1:
+        description = f"{room_count} rooms: {description}"
+    if early_nights > 0 or late_nights > 0:
+        date_note = []
+        if early_nights > 0:
+            date_note.append(f"+{early_nights} early")
+        if late_nights > 0:
+            date_note.append(f"+{late_nights} late")
+        description = f"{description} ({', '.join(date_note)})"
+
+    # Create the work line
+    next_line_number = get_next_line_number(work_item)
+
+    work_line = WorkLine(
+        work_item_id=work_item.id,
+        line_number=next_line_number,
+        status=WORK_LINE_STATUS_PENDING,
+        updated_by_user_id=user_ctx.user_id,
+    )
+    db.session.add(work_line)
+    db.session.flush()
+
+    # Create budget detail
+    budget_detail = BudgetLineDetail(
+        work_line_id=work_line.id,
+        expense_account_id=expense_account.id,
+        spend_type_id=spend_type_id,
+        unit_price_cents=settings["unit_price_cents"],
+        quantity=Decimal(total_nights),
+        frequency_id=settings["frequency_id"],
+        warehouse_flag=False,
+        description=description,
+    )
+    db.session.add(budget_detail)
+    db.session.commit()
+
+    # Calculate total for flash message
+    total_cost = settings["unit_price_cents"] * total_nights
+    if total_cost > 0:
+        flash(f"Added {expense_account.name}: {total_nights} nights = ${total_cost / 100:,.2f}", "success")
+    else:
+        flash(f"Added {expense_account.name}: {total_nights} nights (no budget impact)", "success")
+
+    return redirect(url_for(
+        "work.work_item_edit",
+        event=event,
+        dept=dept,
+        public_id=public_id
+    ))
+
+
+# ============================================================
 # Submit Route
 # ============================================================
 

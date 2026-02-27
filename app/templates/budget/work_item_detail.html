@@ -123,17 +123,23 @@
       </a>
     {% endif %}
 
+    {# Admin Dispatch button #}
+    {% if perms.is_admin and status == "SUBMITTED" %}
+      <a class="btn" href="{{ url_for('dispatch.dashboard') }}" style="position: relative;">
+      Dispatch Queue</a>
+    {% endif %}
+
     {# Dashboard link for reviewers #}
     {% if perms.is_admin or perms.is_checked_out_by_current_user %}
       <a class="btn" href="{{ url_for('approvals.dashboard_home') }}">
-        Approval Dashboard
+        Approval Queue
       </a>
     {% endif %}
 
     {# Admin Final Review button #}
     {% if perms.is_admin and status == "SUBMITTED" %}
       <a class="btn" href="{{ url_for('admin_final.dashboard') }}">
-        Admin Final Review
+        Admin Final Queue
       </a>
     {% endif %}
 
