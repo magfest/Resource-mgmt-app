@@ -19,7 +19,8 @@
   ],
   "env": {
     "APP_ENV": "development",
-    "DEV_LOGIN_ENABLED": "true",
+    "BETA_TESTING_MODE": "True",
+    "DEV_LOGIN_ENABLED": "True",
     "ENV_BANNER_MESSAGE": "Review App",
     "SECRET_KEY": {
       "description": "A secret key for verifying the integrity of signed cookies.",
