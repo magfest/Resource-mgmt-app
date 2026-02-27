@@ -23,7 +23,11 @@
       </h1>
       <div class="muted" style="margin-top:4px;">
         {{ ctx.department.name }} &middot; {{ ctx.event_cycle.name }}
-        &middot; {{ lines | length }} lines
+        {% if lines_filtered %}
+          &middot; Showing {{ lines | length }} of {{ total_lines_count }} lines
+        {% else %}
+          &middot; {{ lines | length }} lines
+        {% endif %}
       </div>
     </div>
     <div class="btn-row">

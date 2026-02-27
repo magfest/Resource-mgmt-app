@@ -35,7 +35,12 @@
 
     <div style="text-align:right;">
       <div style="font-size: 24px; font-weight:700;">{{ format_currency(totals.requested) }}</div>
-      <div class="muted">{{ totals.line_count }} line{% if totals.line_count != 1 %}s{% endif %}</div>
+      <div class="muted">{{ total_lines_count }} line{% if total_lines_count != 1 %}s{% endif %}</div>
+      {% if lines_filtered %}
+        <div class="muted small" style="margin-top: 4px; color: #0a66c2;">
+          Showing {{ lines|length }} line{% if lines|length != 1 %}s{% endif %} for your approval group
+        </div>
+      {% endif %}
       {% if totals.approved > 0 %}
         <div class="muted mt-4">Approved: {{ format_currency(totals.approved) }}</div>
       {% endif %}

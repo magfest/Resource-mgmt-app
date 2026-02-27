@@ -56,6 +56,7 @@ from .helpers import (
     checkout_work_item,
     checkin_work_item,
     _is_approver_for_work_item,
+    filter_lines_for_user,
 )
 from app.routes.admin_final.helpers import (
     can_finalize_work_item,
@@ -187,11 +188,26 @@ def work_item_detail(event: str, dept: str, public_id: str):
     perms = require_work_item_view(work_item, ctx)
     user_ctx = get_user_ctx()
 
-    # Compute totals
+    # Compute totals (from ALL lines for context)
     totals = compute_work_item_totals(work_item)
 
-    # Get lines with details
-    lines = work_item.lines
+    # Check if user is a department member (requester/dept member should see all lines)
+    # This is different from perms.can_view which includes reviewer access
+    has_dept_membership = (
+        work_item.created_by_user_id == user_ctx.user_id or
+        (ctx.membership and ctx.membership.can_view_work_type(ctx.work_type.id)) or
+        (ctx.division_membership and ctx.division_membership.can_view_work_type(ctx.work_type.id))
+    )
+
+    # Get all lines and filter for display based on user access
+    all_lines = list(work_item.lines)
+    lines, lines_filtered = filter_lines_for_user(
+        all_lines,
+        user_ctx,
+        is_admin=perms.is_admin,
+        has_edit_access=has_dept_membership,  # Dept members/requesters see all lines
+    )
+    total_lines_count = len(all_lines)
 
     # Get kicked-back lines (NEEDS_INFO or NEEDS_ADJUSTMENT) with their review notes
     kicked_back_lines = []
@@ -231,6 +247,8 @@ def work_item_detail(event: str, dept: str, public_id: str):
         work_item=work_item,
         lines=lines,
         totals=totals,
+        total_lines_count=total_lines_count,
+        lines_filtered=lines_filtered,
         format_currency=format_currency,
         friendly_status=friendly_status,
         kicked_back_lines=kicked_back_lines,
@@ -1095,11 +1113,21 @@ def quick_review(event: str, dept: str, public_id: str):
     has_checkout = work_item.checked_out_by_user_id == user_ctx.user_id
     can_checkout = perms.can_checkout
 
-    # Build line data
+    # Filter lines for approval group users
+    all_lines = list(work_item.lines)
+    visible_lines, lines_filtered = filter_lines_for_user(
+        all_lines,
+        user_ctx,
+        is_admin=user_ctx.is_admin,
+        has_edit_access=False,  # Quick review is for reviewers only
+    )
+    total_lines_count = len(all_lines)
+
+    # Build line data only for visible lines
     lines_data = []
     summary = {"pending": 0, "approved": 0, "kicked_back": 0, "rejected": 0}
 
-    for line in work_item.lines:
+    for line in visible_lines:
         detail = line.budget_detail
         review = get_review_for_line(line)
         total_cents = detail.unit_price_cents * int(detail.quantity) if detail else 0
@@ -1129,6 +1157,8 @@ def quick_review(event: str, dept: str, public_id: str):
         user_ctx=user_ctx,
         work_item=work_item,
         lines=lines_data,
+        total_lines_count=total_lines_count,
+        lines_filtered=lines_filtered,
         summary=summary,
         is_checked_out=checked_out,
         has_checkout=has_checkout,

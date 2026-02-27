@@ -1158,3 +1158,46 @@ def get_next_line_number(work_item: WorkItem) -> int:
 
     max_num = max(line.line_number for line in work_item.lines)
     return max_num + 1
+
+
+# ============================================================
+# Line Filtering for Approval Group Access
+# ============================================================
+
+def filter_lines_for_user(
+    lines: list,
+    user_ctx: UserContext,
+    is_admin: bool,
+    has_edit_access: bool = False,
+) -> tuple[list, bool]:
+    """
+    Filter lines based on user's approval group access.
+
+    Args:
+        lines: List of WorkLine objects
+        user_ctx: Current user context
+        is_admin: Whether user is a work type admin
+        has_edit_access: Whether user has edit access (requester/dept member)
+
+    Returns:
+        (visible_lines, was_filtered) tuple where:
+        - visible_lines: Lines the user can see
+        - was_filtered: True if some lines were hidden
+    """
+    all_lines = list(lines)
+
+    # Admins and requesters see all lines
+    if is_admin or has_edit_access:
+        return all_lines, False
+
+    # Non-admin approval group users see only their routed lines
+    if user_ctx.approval_group_ids:
+        visible = [
+            line for line in all_lines
+            if line.budget_detail and
+               line.budget_detail.routed_approval_group_id in user_ctx.approval_group_ids
+        ]
+        return visible, len(visible) != len(all_lines)
+
+    # Users with no approval groups see all lines (shouldn't reach here normally)
+    return all_lines, False

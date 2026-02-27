@@ -92,6 +92,23 @@ def line_review(event: str, dept: str, public_id: str, line_num: int):
     # Check view permission
     perms = require_work_item_view(work_item, ctx)
 
+    # Check if user can access this specific line (approval group filtering)
+    if not user_ctx.is_admin:
+        routed_group_id = line.budget_detail.routed_approval_group_id if line.budget_detail else None
+
+        # Check if user is in the routed approval group
+        is_in_routed_group = routed_group_id and routed_group_id in user_ctx.approval_group_ids
+
+        # Check if user is a requester (can view for response purposes)
+        is_requester = (
+            work_item.created_by_user_id == user_ctx.user_id or
+            (ctx.membership and ctx.membership.can_edit_work_type(ctx.work_type.id)) or
+            (ctx.division_membership and ctx.division_membership.can_edit_work_type(ctx.work_type.id))
+        )
+
+        if not is_in_routed_group and not is_requester:
+            abort(403, "You do not have permission to view this line.")
+
     # Get or create review record
     review = get_review_for_line(line)
 
