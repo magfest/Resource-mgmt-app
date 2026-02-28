@@ -93,6 +93,31 @@ def require_admin(user_ctx: UserContext) -> None:
         abort(403, "Admin access required.")
 
 
+def require_budget_admin(user_ctx: UserContext) -> None:
+    """
+    Require Budget worktype admin OR super admin.
+    Aborts with 403 if user lacks permission.
+    """
+    if user_ctx.is_admin:
+        return  # Super admin has access
+
+    # Check for WORKTYPE_ADMIN role with Budget work type
+    from app.models import UserRole, WorkType, ROLE_WORKTYPE_ADMIN
+
+    budget_wt = WorkType.query.filter_by(code='BUDGET', is_active=True).first()
+    if not budget_wt:
+        abort(403, "Budget work type not configured")
+
+    has_role = UserRole.query.filter_by(
+        user_id=user_ctx.user_id,
+        role_code=ROLE_WORKTYPE_ADMIN,
+        work_type_id=budget_wt.id
+    ).first()
+
+    if not has_role:
+        abort(403, "You need Budget Admin access for this page")
+
+
 # ============================================================
 # Review Record Management
 # ============================================================

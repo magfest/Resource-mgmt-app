@@ -20,6 +20,7 @@ from app.models import (
 )
 from app.routes import get_user_ctx
 from app.routes.work.helpers import format_currency, friendly_status
+from app.routes.admin_final.helpers import require_budget_admin
 from . import dispatch_bp
 from .helpers import (
     get_dispatch_queue,
@@ -29,11 +30,13 @@ from .helpers import (
 )
 
 
-def require_admin():
-    """Abort 403 if user is not an admin."""
+def require_dispatch_admin():
+    """
+    Require Budget worktype admin OR super admin for dispatch operations.
+    Returns user_ctx for convenience.
+    """
     user_ctx = get_user_ctx()
-    if not user_ctx.is_admin:
-        abort(403, "Admin access required.")
+    require_budget_admin(user_ctx)
     return user_ctx
 
 
@@ -46,7 +49,7 @@ def dashboard():
     """
     Dispatch queue dashboard - list all items awaiting dispatch.
     """
-    require_admin()
+    require_dispatch_admin()
 
     # Get filter params
     selected_event = request.args.get("event", "")
@@ -98,7 +101,7 @@ def dispatch_item(work_item_id: int):
     """
     Show dispatch form for a single work item.
     """
-    require_admin()
+    require_dispatch_admin()
 
     work_item = WorkItem.query.get_or_404(work_item_id)
 
@@ -151,7 +154,7 @@ def assign_approval_groups(work_item_id: int):
     """
     Save approval group assignments for all lines (without dispatching).
     """
-    user_ctx = require_admin()
+    user_ctx = require_dispatch_admin()
 
     work_item = WorkItem.query.get_or_404(work_item_id)
 
@@ -188,7 +191,7 @@ def dispatch_to_queue(work_item_id: int):
     Validates all lines have approval groups assigned,
     creates WorkLineReview records, and updates status.
     """
-    user_ctx = require_admin()
+    user_ctx = require_dispatch_admin()
 
     work_item = WorkItem.query.get_or_404(work_item_id)
 

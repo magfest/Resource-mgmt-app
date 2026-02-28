@@ -26,6 +26,7 @@ from app.routes.work.helpers import format_currency, friendly_status
 from . import admin_final_bp
 from .helpers import (
     require_admin,
+    require_budget_admin,
     build_admin_queues,
     get_active_event_cycles,
     get_active_departments,
@@ -41,7 +42,7 @@ def dashboard():
     Admin Final Review dashboard.
     """
     user_ctx = get_user_ctx()
-    require_admin(user_ctx)
+    require_budget_admin(user_ctx)
 
     # Get filter values from query params
     event_code = request.args.get("event", "").strip()
@@ -91,7 +92,7 @@ def finalize(work_item_id: int):
     Finalize a work item.
     """
     user_ctx = get_user_ctx()
-    require_admin(user_ctx)
+    require_budget_admin(user_ctx)
 
     work_item = WorkItem.query.get_or_404(work_item_id)
     note = (request.form.get("note") or "").strip()
@@ -115,7 +116,7 @@ def unfinalize_form(work_item_id: int):
     Show unfinalize form.
     """
     user_ctx = get_user_ctx()
-    require_admin(user_ctx)
+    require_budget_admin(user_ctx)
 
     work_item = WorkItem.query.get_or_404(work_item_id)
 
@@ -135,7 +136,7 @@ def unfinalize(work_item_id: int):
     Unfinalize a work item.
     """
     user_ctx = get_user_ctx()
-    require_admin(user_ctx)
+    require_budget_admin(user_ctx)
 
     work_item = WorkItem.query.get_or_404(work_item_id)
 
@@ -161,10 +162,28 @@ def unfinalize(work_item_id: int):
 @admin_final_bp.get("/admin/")
 def admin_home():
     """
-    Super-admin landing page with links and overview.
+    Super-admin landing page with system configuration links.
     """
     user_ctx = get_user_ctx()
     require_admin(user_ctx)
+
+    return render_template(
+        "admin_final/admin_home.html",
+        user_ctx=user_ctx,
+    )
+
+
+# ============================================================
+# Budget Admin Home
+# ============================================================
+
+@admin_final_bp.get("/admin/budget/")
+def budget_admin_home():
+    """
+    Budget admin landing page - accessible by Budget Worktype Admins + Super Admins.
+    """
+    user_ctx = get_user_ctx()
+    require_budget_admin(user_ctx)
 
     # Gather summary statistics
     stats = {
@@ -196,17 +215,11 @@ def admin_home():
         ApprovalGroup.name.asc()
     ).all()
 
-    # Get event cycles and departments for reference
-    event_cycles = get_active_event_cycles()
-    departments = get_active_departments()
-
     return render_template(
-        "admin_final/admin_home.html",
+        "admin_final/budget_home.html",
         user_ctx=user_ctx,
         stats=stats,
         approval_groups=approval_groups,
-        event_cycles=event_cycles,
-        departments=departments,
         friendly_status=friendly_status,
     )
 
@@ -221,7 +234,7 @@ def all_requests():
     View all budget requests with search, filter, and pagination.
     """
     user_ctx = get_user_ctx()
-    require_admin(user_ctx)
+    require_budget_admin(user_ctx)
 
     # Get filter/search params
     search_query = request.args.get("q", "").strip()

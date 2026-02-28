@@ -23,7 +23,7 @@ from app.routes.work.helpers import (
 )
 from . import admin_final_bp
 from .helpers import (
-    require_admin,
+    require_budget_admin,
     get_approval_group_review,
     get_admin_final_review,
     apply_admin_final_decision,
@@ -61,7 +61,7 @@ def line_review(event: str, dept: str, public_id: str, line_num: int):
     Admin final review page for a specific line.
     """
     user_ctx = get_user_ctx()
-    require_admin(user_ctx)
+    require_budget_admin(user_ctx)
 
     work_item, line, ctx = _get_work_item_and_line(event, dept, public_id, line_num)
 
@@ -129,7 +129,7 @@ def line_needs_info(event: str, dept: str, public_id: str, line_num: int):
 def line_reset(event: str, dept: str, public_id: str, line_num: int):
     """Admin reset a line for re-review."""
     user_ctx = get_user_ctx()
-    require_admin(user_ctx)
+    require_budget_admin(user_ctx)
 
     work_item, line, ctx = _get_work_item_and_line(event, dept, public_id, line_num)
 
@@ -156,7 +156,7 @@ def _handle_admin_decision(event: str, dept: str, public_id: str, line_num: int,
     Returns JSON if ajax=1 in form data, otherwise redirects.
     """
     user_ctx = get_user_ctx()
-    require_admin(user_ctx)
+    require_budget_admin(user_ctx)
 
     work_item, line, ctx = _get_work_item_and_line(event, dept, public_id, line_num)
 
