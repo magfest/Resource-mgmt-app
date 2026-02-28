@@ -143,6 +143,8 @@ def list_expense_accounts():
     q = (request.args.get("q") or "").strip()
     show_inactive = request.args.get("show_inactive") == "1"
     approval_group_filter = request.args.get("approval_group")
+    sort_by = request.args.get("sort_by", "code")
+    sort_dir = request.args.get("sort_dir", "asc")
 
     query = db.session.query(ExpenseAccount)
 
@@ -160,7 +162,23 @@ def list_expense_accounts():
     if approval_group_filter:
         query = query.filter(ExpenseAccount.approval_group_id == int(approval_group_filter))
 
-    accounts = query.order_by(ExpenseAccount.sort_order, ExpenseAccount.name).all()
+    # Sortable columns whitelist
+    sortable = {
+        "code": ExpenseAccount.code,
+        "name": ExpenseAccount.name,
+        "approval_group": ApprovalGroup.name,
+    }
+
+    if sort_by in sortable:
+        col = sortable[sort_by]
+        if sort_by == "approval_group":
+            query = query.outerjoin(ApprovalGroup)
+        order = col.desc() if sort_dir == "desc" else col.asc()
+        query = query.order_by(order)
+    else:
+        query = query.order_by(ExpenseAccount.sort_order, ExpenseAccount.name)
+
+    accounts = query.all()
 
     approval_groups = (
         db.session.query(ApprovalGroup)
@@ -176,6 +194,8 @@ def list_expense_accounts():
         q=q,
         show_inactive=show_inactive,
         approval_group_filter=approval_group_filter,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
     )
 
 

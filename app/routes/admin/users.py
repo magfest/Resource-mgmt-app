@@ -81,6 +81,8 @@ def list_users():
     """List all users."""
     q = (request.args.get("q") or "").strip()
     show_inactive = request.args.get("show_inactive") == "1"
+    sort_by = request.args.get("sort_by", "display_name")
+    sort_dir = request.args.get("sort_dir", "asc")
 
     query = db.session.query(User)
 
@@ -94,13 +96,28 @@ def list_users():
             (User.display_name.ilike(like))
         )
 
-    users = query.order_by(User.display_name).all()
+    # Sortable columns whitelist
+    sortable = {
+        "display_name": User.display_name,
+        "email": User.email,
+    }
+
+    if sort_by in sortable:
+        col = sortable[sort_by]
+        order = col.desc() if sort_dir == "desc" else col.asc()
+        query = query.order_by(order)
+    else:
+        query = query.order_by(User.display_name)
+
+    users = query.all()
 
     return render_admin_config_page(
         "admin/users/list.html",
         users=users,
         q=q,
         show_inactive=show_inactive,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
     )
 
 

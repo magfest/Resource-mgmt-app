@@ -3,6 +3,17 @@
 {% block title %}Approval Groups - Admin{% endblock %}
 
 {% block content %}
+{% macro sort_header(column, label, current_sort, current_dir) %}
+  {% set next_dir = 'desc' if (current_sort == column and current_dir == 'asc') else 'asc' %}
+  {% set arrow = '' %}
+  {% if current_sort == column %}
+    {% set arrow = ' &uarr;' if current_dir == 'asc' else ' &darr;' %}
+  {% endif %}
+  <a href="?sort_by={{ column }}&sort_dir={{ next_dir }}{% if show_inactive %}&show_inactive=1{% endif %}"
+     style="text-decoration: none; color: inherit;">
+    {{ label }}{{ arrow | safe }}
+  </a>
+{% endmacro %}
 <div class="muted" style="margin-bottom: 12px;">
   <a href="{{ url_for('admin_final.admin_home') }}">&larr; Back to Admin</a>
 </div>
@@ -30,11 +41,11 @@
 <table>
   <thead>
     <tr>
-      <th style="width: 100px;">Code</th>
-      <th style="width: 200px;">Name</th>
+      <th style="width: 100px;">{{ sort_header('code', 'Code', sort_by, sort_dir) }}</th>
+      <th style="width: 200px;">{{ sort_header('name', 'Name', sort_by, sort_dir) }}</th>
       <th>Description</th>
       <th style="width: 100px;">Accounts</th>
-      <th style="width: 80px;">Order</th>
+      <th style="width: 80px;">{{ sort_header('sort_order', 'Order', sort_by, sort_dir) }}</th>
       <th style="width: 70px;">Status</th>
       <th style="width: 80px;">Actions</th>
     </tr>

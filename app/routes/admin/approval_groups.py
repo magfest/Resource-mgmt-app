@@ -52,12 +52,28 @@ def _group_to_dict(group: ApprovalGroup) -> dict:
 def list_approval_groups():
     """List all approval groups."""
     show_inactive = request.args.get("show_inactive") == "1"
+    sort_by = request.args.get("sort_by", "sort_order")
+    sort_dir = request.args.get("sort_dir", "asc")
 
     query = db.session.query(ApprovalGroup)
     if not show_inactive:
         query = query.filter(ApprovalGroup.is_active == True)
 
-    groups = query.order_by(ApprovalGroup.sort_order, ApprovalGroup.name).all()
+    # Sortable columns whitelist
+    sortable = {
+        "code": ApprovalGroup.code,
+        "name": ApprovalGroup.name,
+        "sort_order": ApprovalGroup.sort_order,
+    }
+
+    if sort_by in sortable:
+        col = sortable[sort_by]
+        order = col.desc() if sort_dir == "desc" else col.asc()
+        query = query.order_by(order)
+    else:
+        query = query.order_by(ApprovalGroup.sort_order, ApprovalGroup.name)
+
+    groups = query.all()
 
     # Get expense account counts per group
     account_counts = {}
@@ -75,6 +91,8 @@ def list_approval_groups():
         groups=groups,
         account_counts=account_counts,
         show_inactive=show_inactive,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
     )
 
 

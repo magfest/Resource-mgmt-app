@@ -3,6 +3,17 @@
 {% block title %}Expense Accounts - Admin{% endblock %}
 
 {% block content %}
+{% macro sort_header(column, label, current_sort, current_dir) %}
+  {% set next_dir = 'desc' if (current_sort == column and current_dir == 'asc') else 'asc' %}
+  {% set arrow = '' %}
+  {% if current_sort == column %}
+    {% set arrow = ' &uarr;' if current_dir == 'asc' else ' &darr;' %}
+  {% endif %}
+  <a href="?sort_by={{ column }}&sort_dir={{ next_dir }}{% if q %}&q={{ q }}{% endif %}{% if show_inactive %}&show_inactive=1{% endif %}{% if approval_group_filter %}&approval_group={{ approval_group_filter }}{% endif %}"
+     style="text-decoration: none; color: inherit;">
+    {{ label }}{{ arrow | safe }}
+  </a>
+{% endmacro %}
 <div class="muted" style="margin-bottom: 12px;">
   <a href="{{ url_for('admin_final.admin_home') }}">&larr; Back to Admin</a>
 </div>
@@ -40,12 +51,12 @@
 <table>
   <thead>
     <tr>
-      <th style="width: 125px;">Internal Code</th>
-      <th style="width: 200px;">Public Name</th>
+      <th style="width: 125px;">{{ sort_header('code', 'Internal Code', sort_by, sort_dir) }}</th>
+      <th style="width: 200px;">{{ sort_header('name', 'Public Name', sort_by, sort_dir) }}</th>
       <th style="width: 150px;">QB Account</th>
       <th>Description</th>
       <th style="width: 125px;">Visibility</th>
-      <th style="width: 125px;">Approval Group</th>
+      <th style="width: 125px;">{{ sort_header('approval_group', 'Approval Group', sort_by, sort_dir) }}</th>
       <th style="width: 75px;">Spend Type</th>
       <th style="width: 75px;">Fixed</th>
       <th style="width: 75px;">Status</th>

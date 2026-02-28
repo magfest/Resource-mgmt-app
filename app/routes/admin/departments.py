@@ -87,12 +87,30 @@ def _get_active_work_types():
 def list_departments():
     """List all departments."""
     show_inactive = request.args.get("show_inactive") == "1"
+    sort_by = request.args.get("sort_by", "sort_order")
+    sort_dir = request.args.get("sort_dir", "asc")
 
     query = db.session.query(Department)
     if not show_inactive:
         query = query.filter(Department.is_active == True)
 
-    departments = query.order_by(Department.sort_order, Department.name).all()
+    # Sortable columns whitelist
+    sortable = {
+        "code": Department.code,
+        "name": Department.name,
+        "division": Division.name,
+    }
+
+    if sort_by in sortable:
+        col = sortable[sort_by]
+        if sort_by == "division":
+            query = query.outerjoin(Division)
+        order = col.desc() if sort_dir == "desc" else col.asc()
+        query = query.order_by(order)
+    else:
+        query = query.order_by(Department.sort_order, Department.name)
+
+    departments = query.all()
 
     # Get member counts per department
     member_counts = {}
@@ -109,6 +127,8 @@ def list_departments():
         departments=departments,
         member_counts=member_counts,
         show_inactive=show_inactive,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
     )
 
 

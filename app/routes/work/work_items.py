@@ -295,6 +295,15 @@ def work_item_comment(event: str, dept: str, public_id: str):
     db.session.commit()
 
     flash("Comment added.", "success")
+    # If returning to the edit page, keep the notes tab active
+    if return_to and "edit" in return_to:
+        return redirect(url_for(
+            "work.work_item_edit",
+            event=event,
+            dept=dept,
+            public_id=public_id,
+            tab="notes"
+        ))
     return redirect(return_to or default_redirect)
 
 
@@ -656,7 +665,8 @@ def work_item_fixed_costs_save(event: str, dept: str, public_id: str):
         "work.work_item_edit",
         event=event,
         dept=dept,
-        public_id=public_id
+        public_id=public_id,
+        tab="fixed-costs"
     ))
 
 
@@ -823,7 +833,8 @@ def hotel_wizard_add(event: str, dept: str, public_id: str):
         "work.work_item_edit",
         event=event,
         dept=dept,
-        public_id=public_id
+        public_id=public_id,
+        tab="hotel-services"
     ))
 
 

@@ -68,12 +68,28 @@ def _parse_date(value: str | None):
 def list_event_cycles():
     """List all event cycles."""
     show_inactive = request.args.get("show_inactive") == "1"
+    sort_by = request.args.get("sort_by", "sort_order")
+    sort_dir = request.args.get("sort_dir", "asc")
 
     query = db.session.query(EventCycle)
     if not show_inactive:
         query = query.filter(EventCycle.is_active == True)
 
-    cycles = query.order_by(EventCycle.sort_order, EventCycle.name).all()
+    # Sortable columns whitelist
+    sortable = {
+        "code": EventCycle.code,
+        "name": EventCycle.name,
+        "sort_order": EventCycle.sort_order,
+    }
+
+    if sort_by in sortable:
+        col = sortable[sort_by]
+        order = col.desc() if sort_dir == "desc" else col.asc()
+        query = query.order_by(order)
+    else:
+        query = query.order_by(EventCycle.sort_order, EventCycle.name)
+
+    cycles = query.all()
 
     # Get portfolio counts per cycle
     portfolio_counts = {}
@@ -90,6 +106,8 @@ def list_event_cycles():
         cycles=cycles,
         portfolio_counts=portfolio_counts,
         show_inactive=show_inactive,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
     )
 
 

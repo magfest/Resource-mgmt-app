@@ -572,6 +572,19 @@
 
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
+  // Check for tab parameter on page load and switch to that tab
+  (function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab');
+    if (tabParam) {
+      const tabBtn = document.querySelector('.tab-btn[data-tab="' + tabParam + '"]');
+      if (tabBtn) {
+        // Defer click to after DOM is ready
+        setTimeout(function() { tabBtn.click(); }, 0);
+      }
+    }
+  })();
+
   // Tab switching
   document.querySelectorAll('.tab-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
