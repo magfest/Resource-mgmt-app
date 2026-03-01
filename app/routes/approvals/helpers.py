@@ -429,21 +429,17 @@ def build_approval_queues(
         .join(BudgetLineDetail, BudgetLineDetail.work_line_id == WorkLine.id)
         .join(WorkPortfolio, WorkItem.portfolio_id == WorkPortfolio.id)
         .options(
-            # Use contains_eager for tables already joined
+            # Use contains_eager for tables already joined, then extend with joinedload
             contains_eager(WorkLineReview.work_line)
                 .contains_eager(WorkLine.work_item)
-                .contains_eager(WorkItem.portfolio),
+                .contains_eager(WorkItem.portfolio)
+                .joinedload(WorkPortfolio.event_cycle),
+            contains_eager(WorkLineReview.work_line)
+                .contains_eager(WorkLine.work_item)
+                .contains_eager(WorkItem.portfolio)
+                .joinedload(WorkPortfolio.department),
             contains_eager(WorkLineReview.work_line)
                 .contains_eager(WorkLine.budget_detail),
-            # Eager load portfolio relations
-            joinedload(WorkLineReview.work_line)
-                .joinedload(WorkLine.work_item)
-                .joinedload(WorkItem.portfolio)
-                .joinedload(WorkPortfolio.event_cycle),
-            joinedload(WorkLineReview.work_line)
-                .joinedload(WorkLine.work_item)
-                .joinedload(WorkItem.portfolio)
-                .joinedload(WorkPortfolio.department),
         )
         .filter(WorkLineReview.stage == REVIEW_STAGE_APPROVAL_GROUP)
         .filter(WorkLineReview.approval_group_id == group_id)
