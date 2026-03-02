@@ -9,7 +9,7 @@
   {% if current_sort == column %}
     {% set arrow = ' &uarr;' if current_dir == 'asc' else ' &darr;' %}
   {% endif %}
-  <a href="?sort_by={{ column }}&sort_dir={{ next_dir }}{% if q %}&q={{ q }}{% endif %}{% if show_inactive %}&show_inactive=1{% endif %}"
+  <a href="?sort_by={{ column }}&sort_dir={{ next_dir }}{% if q %}&q={{ q }}{% endif %}{% if show_inactive %}&show_inactive=1{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}{% if linked_filter %}&linked={{ linked_filter }}{% endif %}"
      style="text-decoration: none; color: inherit;">
     {{ label }}{{ arrow | safe }}
   </a>
@@ -23,20 +23,38 @@
   Manage user accounts and their system roles.
 </div>
 
-<div class="row mb-16">
-  <a class="btn btn-primary" href="{{ url_for('admin_config.users.new_user') }}">+ New User</a>
+<div class="mb-16">
+  <div class="row" style="gap: 8px; flex-wrap: wrap;">
+    <a class="btn btn-primary" href="{{ url_for('admin_config.users.new_user') }}">+ New User</a>
 
-  <form method="get" action="{{ url_for('admin_config.users.list_users') }}" class="row" style="margin: 0; gap: 8px;">
-    <input type="text" name="q" value="{{ q }}" placeholder="Search by name or email..." style="width: 200px;" />
-    <label class="muted" style="display: flex; gap: 6px; align-items: center;">
-      <input type="checkbox" name="show_inactive" value="1" {% if show_inactive %}checked{% endif %}>
-      show inactive
-    </label>
-    <button class="btn" type="submit">Search</button>
-    {% if q or show_inactive %}
-      <a class="btn" href="{{ url_for('admin_config.users.list_users') }}">Clear</a>
-    {% endif %}
-  </form>
+    <form method="get" action="{{ url_for('admin_config.users.list_users') }}" class="row" style="margin: 0; gap: 8px; flex-wrap: wrap;">
+      <input type="text" name="q" value="{{ q }}" placeholder="Search name or email..." style="width: 180px;" />
+
+      <select name="role" style="width: 140px;">
+        <option value="">All roles</option>
+        <option value="super_admin" {% if role_filter == 'super_admin' %}selected{% endif %}>Super Admin</option>
+        <option value="worktype_admin" {% if role_filter == 'worktype_admin' %}selected{% endif %}>Work Type Admin</option>
+        <option value="approver" {% if role_filter == 'approver' %}selected{% endif %}>Approver</option>
+        <option value="no_roles" {% if role_filter == 'no_roles' %}selected{% endif %}>No roles</option>
+      </select>
+
+      <select name="linked" style="width: 130px;">
+        <option value="">Any status</option>
+        <option value="linked" {% if linked_filter == 'linked' %}selected{% endif %}>Google linked</option>
+        <option value="not_linked" {% if linked_filter == 'not_linked' %}selected{% endif %}>Not linked</option>
+      </select>
+
+      <label class="muted" style="display: flex; gap: 6px; align-items: center;">
+        <input type="checkbox" name="show_inactive" value="1" {% if show_inactive %}checked{% endif %}>
+        inactive
+      </label>
+
+      <button class="btn" type="submit">Filter</button>
+      {% if q or show_inactive or role_filter or linked_filter %}
+        <a class="btn" href="{{ url_for('admin_config.users.list_users') }}">Clear</a>
+      {% endif %}
+    </form>
+  </div>
 </div>
 
 <table>
@@ -92,6 +110,6 @@
 </table>
 
 <div class="muted small" style="margin-top: 16px;">
-  {{ users|length }} user(s) shown
+  {{ users|length }} user(s){% if q or role_filter or linked_filter %} matching filters{% endif %}
 </div>
 {% endblock %}

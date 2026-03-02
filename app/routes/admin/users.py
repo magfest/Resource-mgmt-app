@@ -83,6 +83,8 @@ def list_users():
     show_inactive = request.args.get("show_inactive") == "1"
     sort_by = request.args.get("sort_by", "display_name")
     sort_dir = request.args.get("sort_dir", "asc")
+    role_filter = request.args.get("role", "")
+    linked_filter = request.args.get("linked", "")
 
     query = db.session.query(User)
 
@@ -95,6 +97,28 @@ def list_users():
             (User.email.ilike(like)) |
             (User.display_name.ilike(like))
         )
+
+    # Role filtering
+    if role_filter == "super_admin":
+        query = query.filter(
+            User.roles.any(UserRole.role_code == ROLE_SUPER_ADMIN)
+        )
+    elif role_filter == "worktype_admin":
+        query = query.filter(
+            User.roles.any(UserRole.role_code == ROLE_WORKTYPE_ADMIN)
+        )
+    elif role_filter == "approver":
+        query = query.filter(
+            User.roles.any(UserRole.role_code == ROLE_APPROVER)
+        )
+    elif role_filter == "no_roles":
+        query = query.filter(~User.roles.any())
+
+    # Google account linked filtering
+    if linked_filter == "linked":
+        query = query.filter(User.auth_subject.isnot(None))
+    elif linked_filter == "not_linked":
+        query = query.filter(User.auth_subject.is_(None))
 
     # Sortable columns whitelist
     sortable = {
@@ -118,6 +142,8 @@ def list_users():
         show_inactive=show_inactive,
         sort_by=sort_by,
         sort_dir=sort_dir,
+        role_filter=role_filter,
+        linked_filter=linked_filter,
     )
 
 
