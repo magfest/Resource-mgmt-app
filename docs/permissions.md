@@ -49,8 +49,9 @@ Full access to everything:
 
 Admin access for a specific work type:
 - See all departments for that work type
-- Access admin pages for that work type only
-- Cannot access system config pages (`/admin/`)
+- Access admin pages for that work type only (`/admin/budget/`)
+- **Budget Admin** can configure: Expense Accounts, Approval Groups
+- Cannot access system config pages (`/admin/` - users, departments, divisions, etc.)
 - Cannot access other work types
 
 Example: "Budget Admin" can manage all budgets but not contracts.
@@ -293,7 +294,8 @@ Give them:
 
 Give them:
 - WORKTYPE_ADMIN role for BUDGET work type
-- They can access `/admin/budget/` but NOT `/admin/` (system config)
+- They can access `/admin/budget/` and configure Expense Accounts + Approval Groups
+- They CANNOT access `/admin/` (users, departments, divisions, etc.)
 
 ---
 
@@ -308,7 +310,8 @@ SUPER_ADMIN (global)
 
 WORKTYPE_ADMIN (scoped to work type)
   ├─ Can access /admin/{worktype}/ for their work type
-  ├─ CANNOT access /admin/ (system config)
+  ├─ Can configure: Expense Accounts, Approval Groups (budget-specific config)
+  ├─ CANNOT access /admin/ (system config: users, departments, divisions)
   ├─ Admin for that work type only
   └─ Equivalent to dept membership + admin powers for that work type
 

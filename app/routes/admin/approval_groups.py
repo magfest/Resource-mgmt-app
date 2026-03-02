@@ -16,8 +16,8 @@ from app.models import (
 )
 from app.routes import h
 from .helpers import (
-    require_super_admin,
-    render_admin_config_page,
+    require_budget_admin,
+    render_budget_admin_page,
     log_config_change,
     track_changes,
     validate_code_length,
@@ -48,7 +48,7 @@ def _group_to_dict(group: ApprovalGroup) -> dict:
 
 
 @approval_groups_bp.get("/")
-@require_super_admin
+@require_budget_admin
 def list_approval_groups():
     """List all approval groups."""
     show_inactive = request.args.get("show_inactive") == "1"
@@ -86,7 +86,7 @@ def list_approval_groups():
         )
         account_counts[group.id] = count
 
-    return render_admin_config_page(
+    return render_budget_admin_page(
         "admin/approval_groups/list.html",
         groups=groups,
         account_counts=account_counts,
@@ -97,17 +97,17 @@ def list_approval_groups():
 
 
 @approval_groups_bp.get("/new")
-@require_super_admin
+@require_budget_admin
 def new_approval_group():
     """Show new approval group form."""
-    return render_admin_config_page(
+    return render_budget_admin_page(
         "admin/approval_groups/form.html",
         group=None,
     )
 
 
 @approval_groups_bp.post("/")
-@require_super_admin
+@require_budget_admin
 def create_approval_group():
     """Create a new approval group."""
     code = (request.form.get("code") or "").strip().upper()
@@ -148,7 +148,7 @@ def create_approval_group():
 
 
 @approval_groups_bp.get("/<int:group_id>")
-@require_super_admin
+@require_budget_admin
 def edit_approval_group(group_id: int):
     """Show edit form for approval group."""
     group = _get_approval_group_or_404(group_id)
@@ -160,7 +160,7 @@ def edit_approval_group(group_id: int):
         .count()
     )
 
-    return render_admin_config_page(
+    return render_budget_admin_page(
         "admin/approval_groups/form.html",
         group=group,
         account_count=account_count,
@@ -168,7 +168,7 @@ def edit_approval_group(group_id: int):
 
 
 @approval_groups_bp.post("/<int:group_id>")
-@require_super_admin
+@require_budget_admin
 def update_approval_group(group_id: int):
     """Update an approval group."""
     group = _get_approval_group_or_404(group_id)
@@ -213,7 +213,7 @@ def update_approval_group(group_id: int):
 
 
 @approval_groups_bp.post("/<int:group_id>/archive")
-@require_super_admin
+@require_budget_admin
 def archive_approval_group(group_id: int):
     """Archive (soft-delete) an approval group."""
     group = _get_approval_group_or_404(group_id)
@@ -233,7 +233,7 @@ def archive_approval_group(group_id: int):
 
 
 @approval_groups_bp.post("/<int:group_id>/restore")
-@require_super_admin
+@require_budget_admin
 def restore_approval_group(group_id: int):
     """Restore an archived approval group."""
     group = _get_approval_group_or_404(group_id)

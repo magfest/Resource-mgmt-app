@@ -25,7 +25,7 @@ from app.models import (
     ExpenseAccount,
     WORK_ITEM_STATUS_AWAITING_DISPATCH,
 )
-from app.routes.work.helpers import compute_portfolio_status_summary, get_active_work_types
+from app.routes.work.helpers import compute_portfolio_status_summary, get_active_work_types, is_budget_admin
 from app.routes import h, get_user_ctx, render_page
 
 home_bp = Blueprint('home', __name__)
@@ -93,6 +93,10 @@ def index():
     # Check if super admin (respects role override for testing)
     is_super_admin = user_ctx.is_super_admin
     context["is_super_admin"] = is_super_admin
+
+    # Check if budget admin (SUPER_ADMIN or WORKTYPE_ADMIN for budget)
+    is_budget_admin_user = is_budget_admin(user_ctx)
+    context["is_budget_admin"] = is_budget_admin_user
 
     # Get approval groups user can review
     approval_groups = []
@@ -254,8 +258,8 @@ def index():
     ]
     context["work_types_with_access"] = work_types_with_access
 
-    # Get stats for admins
-    if is_super_admin:
+    # Get stats for budget admins (super admin or worktype admin for budget)
+    if is_budget_admin_user:
         # Count submitted work items
         submitted_count = (
             db.session.query(WorkItem)
@@ -325,6 +329,7 @@ def index():
     # Determine if user has any access
     has_any_access = (
         is_super_admin or
+        is_budget_admin_user or
         bool(approval_groups) or
         bool(accessible_depts)
     )

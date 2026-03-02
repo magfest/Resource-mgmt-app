@@ -168,11 +168,11 @@
     </div>
   </section>
 
-  {# Budget Configuration - links to config pages (Super Admin only can access these) #}
+  {# Budget Configuration - links to config pages #}
   <section class="card">
     <h3 style="margin:0 0 16px 0;">Budget Configuration</h3>
     <p class="muted small" style="margin: 0 0 16px 0;">
-      Configuration pages are accessible to Super Admins only.
+      Manage expense accounts and approval groups for the budget system.
     </p>
     <div class="btn-row">
       <a class="btn" href="{{ url_for('admin_config.expense_accounts.list_expense_accounts') }}">

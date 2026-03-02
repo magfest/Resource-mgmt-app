@@ -34,8 +34,8 @@ from app.models import (
 )
 from app.routes import h
 from .helpers import (
-    require_super_admin,
-    render_admin_config_page,
+    require_budget_admin,
+    render_budget_admin_page,
     log_config_change,
     track_changes,
     validate_code_length,
@@ -137,7 +137,7 @@ def _account_to_dict(account: ExpenseAccount) -> dict:
 
 
 @expense_accounts_bp.get("/")
-@require_super_admin
+@require_budget_admin
 def list_expense_accounts():
     """List all expense accounts."""
     q = (request.args.get("q") or "").strip()
@@ -187,7 +187,7 @@ def list_expense_accounts():
         .all()
     )
 
-    return render_admin_config_page(
+    return render_budget_admin_page(
         "admin/expense_accounts/list.html",
         accounts=accounts,
         approval_groups=approval_groups,
@@ -200,10 +200,10 @@ def list_expense_accounts():
 
 
 @expense_accounts_bp.get("/new")
-@require_super_admin
+@require_budget_admin
 def new_expense_account():
     """Show new expense account form."""
-    return render_admin_config_page(
+    return render_budget_admin_page(
         "admin/expense_accounts/form.html",
         account=None,
         can_modify=True,
@@ -213,7 +213,7 @@ def new_expense_account():
 
 
 @expense_accounts_bp.post("/")
-@require_super_admin
+@require_budget_admin
 def create_expense_account():
     """Create a new expense account."""
     code = (request.form.get("code") or "").strip().upper()
@@ -299,7 +299,7 @@ def create_expense_account():
 
 
 @expense_accounts_bp.get("/<int:account_id>")
-@require_super_admin
+@require_budget_admin
 def edit_expense_account(account_id: int):
     """Show edit form for expense account."""
     account = _get_expense_account_or_404(account_id)
@@ -312,7 +312,7 @@ def edit_expense_account(account_id: int):
         .count()
     )
 
-    return render_admin_config_page(
+    return render_budget_admin_page(
         "admin/expense_accounts/form.html",
         account_id=f"accountid: {account_id}",
         account=account,
@@ -324,7 +324,7 @@ def edit_expense_account(account_id: int):
 
 
 @expense_accounts_bp.post("/<int:account_id>")
-@require_super_admin
+@require_budget_admin
 def update_expense_account(account_id: int):
     """Update an expense account."""
     account = _get_expense_account_or_404(account_id)
@@ -419,7 +419,7 @@ def update_expense_account(account_id: int):
 
 
 @expense_accounts_bp.post("/<int:account_id>/archive")
-@require_super_admin
+@require_budget_admin
 def archive_expense_account(account_id: int):
     """Archive (soft-delete) an expense account."""
     account = _get_expense_account_or_404(account_id)
@@ -439,7 +439,7 @@ def archive_expense_account(account_id: int):
 
 
 @expense_accounts_bp.post("/<int:account_id>/restore")
-@require_super_admin
+@require_budget_admin
 def restore_expense_account(account_id: int):
     """Restore an archived expense account."""
     account = _get_expense_account_or_404(account_id)
@@ -461,7 +461,7 @@ def restore_expense_account(account_id: int):
 # --- Event Overrides ---
 
 @expense_accounts_bp.get("/<int:account_id>/overrides")
-@require_super_admin
+@require_budget_admin
 def list_overrides(account_id: int):
     """List event overrides for an expense account."""
     account = _get_expense_account_or_404(account_id)
@@ -485,7 +485,7 @@ def list_overrides(account_id: int):
     override_cycle_ids = {o.event_cycle_id for o in overrides}
     available_cycles = [c for c in event_cycles if c.id not in override_cycle_ids]
 
-    return render_admin_config_page(
+    return render_budget_admin_page(
         "admin/expense_accounts/overrides.html",
         account=account,
         overrides=overrides,
@@ -494,7 +494,7 @@ def list_overrides(account_id: int):
 
 
 @expense_accounts_bp.get("/<int:account_id>/overrides/new")
-@require_super_admin
+@require_budget_admin
 def new_override(account_id: int):
     """Show new event override form."""
     account = _get_expense_account_or_404(account_id)
@@ -533,7 +533,7 @@ def new_override(account_id: int):
         .all()
     )
 
-    return render_admin_config_page(
+    return render_budget_admin_page(
         "admin/expense_accounts/override_form.html",
         account=account,
         override=None,
@@ -544,7 +544,7 @@ def new_override(account_id: int):
 
 
 @expense_accounts_bp.post("/<int:account_id>/overrides")
-@require_super_admin
+@require_budget_admin
 def create_override(account_id: int):
     """Create a new event override."""
     account = _get_expense_account_or_404(account_id)
@@ -588,7 +588,7 @@ def create_override(account_id: int):
 
 
 @expense_accounts_bp.get("/<int:account_id>/overrides/<int:override_id>")
-@require_super_admin
+@require_budget_admin
 def edit_override(account_id: int, override_id: int):
     """Show edit form for event override."""
     account = _get_expense_account_or_404(account_id)
@@ -611,7 +611,7 @@ def edit_override(account_id: int, override_id: int):
         .all()
     )
 
-    return render_admin_config_page(
+    return render_budget_admin_page(
         "admin/expense_accounts/override_form.html",
         account=account,
         override=override,
@@ -622,7 +622,7 @@ def edit_override(account_id: int, override_id: int):
 
 
 @expense_accounts_bp.post("/<int:account_id>/overrides/<int:override_id>")
-@require_super_admin
+@require_budget_admin
 def update_override(account_id: int, override_id: int):
     """Update an event override."""
     account = _get_expense_account_or_404(account_id)
@@ -649,7 +649,7 @@ def update_override(account_id: int, override_id: int):
 
 
 @expense_accounts_bp.post("/<int:account_id>/overrides/<int:override_id>/delete")
-@require_super_admin
+@require_budget_admin
 def delete_override(account_id: int, override_id: int):
     """Delete an event override."""
     account = _get_expense_account_or_404(account_id)

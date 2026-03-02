@@ -44,11 +44,42 @@ def require_super_admin(f):
     return decorated_function
 
 
+def require_budget_admin(f):
+    """Decorator to require budget admin access (SUPER_ADMIN or WORKTYPE_ADMIN for budget)."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        from flask import redirect, url_for, session, current_app
+        from app.routes.work.helpers import is_budget_admin
+
+        # Check if user is authenticated
+        if not session.get('active_user_id') and not current_app.config.get('DEV_LOGIN_ENABLED'):
+            return redirect(url_for('auth.login_page'))
+
+        user_ctx = get_user_ctx()
+        if user_ctx.user_id is None:
+            return redirect(url_for('auth.login_page'))
+
+        if not is_budget_admin(user_ctx):
+            abort(403, "Budget admin access required")
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 def render_admin_config_page(template: str, **ctx):
     """Render an admin config page with user context. Requires SUPER_ADMIN."""
     user_ctx = get_user_ctx()
     if not user_ctx.is_super_admin:
         abort(403, "Super admin access required")
+    return render_template(template, user_ctx=user_ctx, **ctx)
+
+
+def render_budget_admin_page(template: str, **ctx):
+    """Render a budget admin page with user context. Requires budget admin access."""
+    from app.routes.work.helpers import is_budget_admin
+
+    user_ctx = get_user_ctx()
+    if not is_budget_admin(user_ctx):
+        abort(403, "Budget admin access required")
     return render_template(template, user_ctx=user_ctx, **ctx)
 
 
