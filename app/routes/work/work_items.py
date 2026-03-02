@@ -918,6 +918,11 @@ def work_item_submit(event: str, dept: str, public_id: str):
 
     db.session.commit()
 
+    # Send notification to budget admins
+    from app.services.notifications import notify_budget_submitted
+    notify_budget_submitted(work_item)
+    db.session.commit()  # Commit notification log
+
     flash(
         "Budget request submitted! A budget admin will assign reviewers and "
         "dispatch it for approval. You'll be notified if any changes are needed.",

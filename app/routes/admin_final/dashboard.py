@@ -109,6 +109,11 @@ def finalize(work_item_id: int):
         flash(f"Work item {work_item.public_id} finalized.", "success")
         db.session.commit()
 
+        # Send notification to department members
+        from app.services.notifications import notify_budget_finalized
+        notify_budget_finalized(work_item)
+        db.session.commit()  # Commit notification log
+
     # Redirect back to referrer or dashboard
     referrer = request.form.get("referrer") or url_for("admin_final.dashboard")
     return redirect(referrer)

@@ -40,8 +40,8 @@
   <div style="font-size: 48px; margin-bottom: 16px;">?</div>
   <h2 style="margin: 0 0 16px 0;">No Access Yet</h2>
   <p class="muted" style="margin: 0;">
-    You don't currently have access to any departments or approval groups.
-    Contact an administrator to be added to a department or division.
+    You don't currently have access to any departments.
+    Please contact your division head or STOPS or IT-Ops to be added to a department or division.
   </p>
 </div>
 
@@ -348,7 +348,6 @@
           <a class="btn" href="{{ url_for('admin_config.divisions.list_divisions') }}">Manage Divisions</a>
           <a class="btn" href="{{ url_for('admin_config.users.list_users') }}">Manage Users</a>
         {% endif %}
-        <a class="btn" href="{{ url_for('dev.dev_login') }}">Switch User (Dev)</a>
       </div>
     </div>
   </details>

@@ -290,6 +290,12 @@ def _handle_review_action(event: str, dept: str, public_id: str, line_num: int, 
 
         db.session.commit()
 
+        # Send notification if line was kicked back (NEEDS_INFO or NEEDS_ADJUSTMENT)
+        if action in (REVIEW_ACTION_NEEDS_INFO, REVIEW_ACTION_NEEDS_ADJUSTMENT):
+            from app.services.notifications import notify_needs_attention
+            notify_needs_attention(work_item)
+            db.session.commit()  # Commit notification log
+
         if is_ajax:
             return jsonify({
                 "success": True,
@@ -370,6 +376,9 @@ def line_respond(event: str, dept: str, public_id: str, line_num: int):
     if not success:
         flash(error, "error")
     else:
+        # Capture reviewer before committing (may be cleared by apply_review_decision)
+        reviewer_user_id = review.decided_by_user_id
+
         flash("Response submitted. The line is back in review.", "success")
 
         # Add comment with the response
@@ -382,6 +391,12 @@ def line_respond(event: str, dept: str, public_id: str, line_num: int):
         )
         db.session.add(comment)
         db.session.commit()
+
+        # Notify the reviewer that a response was received
+        if reviewer_user_id:
+            from app.services.notifications import notify_response_received
+            notify_response_received(work_item, reviewer_user_id)
+            db.session.commit()  # Commit notification log
 
     return redirect(url_for(
         "approvals.line_review",
@@ -538,6 +553,9 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int):
     if not success:
         flash(error, "error")
     else:
+        # Capture reviewer before committing (may be cleared by apply_review_decision)
+        reviewer_user_id = review.decided_by_user_id
+
         flash("Adjustment submitted. The line is back in review.", "success")
 
         # Build comment body with changes
@@ -553,6 +571,12 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int):
         )
         db.session.add(comment)
         db.session.commit()
+
+        # Notify the reviewer that a response was received
+        if reviewer_user_id:
+            from app.services.notifications import notify_response_received
+            notify_response_received(work_item, reviewer_user_id)
+            db.session.commit()  # Commit notification log
 
     return redirect(url_for(
         "approvals.line_review",

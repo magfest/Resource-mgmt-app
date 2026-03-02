@@ -262,6 +262,17 @@ def dispatch_to_queue(work_item_id: int):
 
     db.session.commit()
 
+    # Collect unique approval group IDs for notification
+    approval_group_ids = set()
+    for line in work_item.lines:
+        if line.budget_detail and line.budget_detail.routed_approval_group_id:
+            approval_group_ids.add(line.budget_detail.routed_approval_group_id)
+
+    # Send notification to approval group members
+    from app.services.notifications import notify_budget_dispatched
+    notify_budget_dispatched(work_item, list(approval_group_ids))
+    db.session.commit()  # Commit notification log
+
     # Build redirect URL to work item detail
     portfolio = work_item.portfolio
     flash("Request dispatched to approval queue.", "success")

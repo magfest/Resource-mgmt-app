@@ -126,6 +126,21 @@ def create_app() -> Flask:
     app.config["GOOGLE_AUTH_ENABLED"] = app.config["AUTH_PROVIDER"] == "google"
     app.config["KEYCLOAK_AUTH_ENABLED"] = app.config["AUTH_PROVIDER"] == "keycloak"
 
+    # --- Email Notifications (AWS SES) ---
+    email_enabled = os.environ.get("EMAIL_ENABLED", "").lower()
+    app.config["EMAIL_ENABLED"] = email_enabled == "true"
+    app.config["EMAIL_FROM_ADDRESS"] = os.environ.get("EMAIL_FROM_ADDRESS", "noreply@magfest.org")
+    app.config["BASE_URL"] = os.environ.get("BASE_URL", "https://budget.magfest.org")
+    app.config["AWS_SES_REGION"] = os.environ.get("AWS_SES_REGION", "us-east-1")
+    app.config["AWS_SES_ACCESS_KEY"] = os.environ.get("AWS_SES_ACCESS_KEY")
+    app.config["AWS_SES_SECRET_KEY"] = os.environ.get("AWS_SES_SECRET_KEY")
+
+    # Email rate limits (safety mechanisms)
+    app.config["EMAIL_HOURLY_LIMIT"] = int(os.environ.get("EMAIL_HOURLY_LIMIT", "50"))
+    app.config["EMAIL_DAILY_LIMIT"] = int(os.environ.get("EMAIL_DAILY_LIMIT", "200"))
+    app.config["EMAIL_CIRCUIT_BREAKER_THRESHOLD"] = int(os.environ.get("EMAIL_CIRCUIT_BREAKER_THRESHOLD", "5"))
+    app.config["EMAIL_CIRCUIT_BREAKER_WINDOW"] = int(os.environ.get("EMAIL_CIRCUIT_BREAKER_WINDOW", "10"))
+
     # --- Proxy Fix for AWS AppRunner ---
     if os.environ.get("BEHIND_PROXY", "false").lower() == "true":
         from werkzeug.middleware.proxy_fix import ProxyFix

@@ -169,7 +169,7 @@
   </section>
 
   {# Budget Configuration - links to config pages #}
-  <section class="card">
+  <section class="card" style="margin-bottom: 24px;">
     <h3 style="margin:0 0 16px 0;">Budget Configuration</h3>
     <p class="muted small" style="margin: 0 0 16px 0;">
       Manage expense accounts and approval groups for the budget system.
@@ -180,6 +180,16 @@
       </a>
       <a class="btn" href="{{ url_for('admin_config.approval_groups.list_approval_groups') }}">
         Approval Groups
+      </a>
+    </div>
+  </section>
+
+  {# Tools #}
+  <section class="card">
+    <h3 style="margin:0 0 16px 0;">Tools</h3>
+    <div class="btn-row">
+      <a class="btn" href="{{ url_for('admin_final.email_debug') }}">
+        Email Debug
       </a>
     </div>
   </section>
