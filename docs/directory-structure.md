@@ -7,7 +7,8 @@ This document explains where files live and the reasoning behind the organizatio
 ```
 magfest-budget/
 ├── app/                    # Main application code
-│   ├── models.py           # All database models
+│   ├── models/             # Database models (package)
+│   ├── services/           # Business logic services (email, notifications)
 │   ├── line_details.py     # Generic line detail helpers (see note below)
 │   ├── routing/            # Approval routing strategies
 │   ├── routes/             # Flask blueprints and route handlers
@@ -21,19 +22,33 @@ magfest-budget/
 
 ## Detailed Breakdown
 
-### `app/models.py`
+### `app/models/`
 
-All SQLAlchemy models in one file. Key model groups:
+SQLAlchemy models organized as a package for maintainability:
 
-| Group | Models | Purpose |
-|-------|--------|---------|
-| **Core** | User, EventCycle | Users and event cycles |
-| **Organization** | Division, Department, Memberships | Org structure and access |
-| **Work Types** | WorkType, WorkTypeConfig | Define request types |
-| **Requests** | WorkPortfolio, WorkItem, WorkLine | The actual requests |
-| **Line Details** | BudgetLineDetail, ContractLineDetail, SupplyOrderLineDetail | Type-specific line data |
-| **Reviews** | WorkLineReview, ApprovalGroup | Review workflow |
-| **Reference Data** | ExpenseAccount, SpendType, ContractType, SupplyCategory | Lookup tables |
+```
+models/
+├── __init__.py      # Re-exports everything for backwards compatibility
+├── constants.py     # Status codes, role codes, visibility modes
+├── org.py           # EventCycle, Division, Department, User, Memberships
+├── workflow.py      # WorkType, ApprovalGroup, WorkItem, WorkLine, Reviews
+├── budget.py        # SpendType, ExpenseAccount, BudgetLineDetail
+├── contract.py      # ContractType, ContractLineDetail
+├── supply.py        # SupplyCategory, SupplyItem, SupplyOrderLineDetail
+└── telemetry.py     # ActivityEvent, NotificationLog, SecurityAuditLog
+```
+
+**Import pattern**: Use `from app.models import WorkItem` - the `__init__.py` re-exports all models.
+
+| Module | Models | Purpose |
+|--------|--------|---------|
+| **constants** | (constants only) | All status codes, role codes, visibility modes |
+| **org** | User, EventCycle, Division, Department, Memberships | Users and org structure |
+| **workflow** | WorkType, WorkPortfolio, WorkItem, WorkLine, Reviews | The workflow engine |
+| **budget** | SpendType, ExpenseAccount, BudgetLineDetail | Budget-specific data |
+| **contract** | ContractType, ContractLineDetail | Contract-specific data |
+| **supply** | SupplyCategory, SupplyItem, SupplyOrderLineDetail | Supply-specific data |
+| **telemetry** | ActivityEvent, NotificationLog, AuditLogs | Logging and audit |
 
 ### `app/routing/`
 
@@ -67,9 +82,21 @@ routes/
     ├── __init__.py      # Blueprint setup
     ├── department.py    # Department landing page
     ├── portfolio.py     # Portfolio landing, placeholder routes
-    ├── work_items.py    # Work item CRUD
     ├── lines.py         # Line item CRUD
-    └── helpers.py       # Context builders, permission checks, status computation
+    ├── helpers/         # Helper functions (package)
+    │   ├── __init__.py  # Re-exports everything
+    │   ├── context.py   # PortfolioContext, PortfolioPerms, WorkItemPerms
+    │   ├── checkout.py  # Checkout/checkin functionality
+    │   ├── expense_accounts.py  # Expense account queries
+    │   ├── computations.py      # Totals, line status summaries
+    │   └── formatting.py        # Status labels, currency, utilities
+    └── work_items/      # Work item routes (package)
+        ├── __init__.py  # Registers all routes
+        ├── common.py    # Shared helpers
+        ├── create.py    # PRIMARY/SUPPLEMENTARY creation
+        ├── view.py      # Detail view, comments, quick review
+        ├── edit.py      # Edit form, fixed costs, hotel wizard
+        └── actions.py   # Submit, checkout, checkin, needs_info
 ```
 
 The `work/` folder handles ALL work types via the generic system. The URL structure is:
@@ -133,7 +160,15 @@ python -c "from app import create_app; from app.seeds.config_seed import run_all
 
 ### "Where do I add a new model?"
 
-In `app/models.py`. Keep related models grouped together.
+In the appropriate module under `app/models/`. Choose by domain:
+- Org/user related: `org.py`
+- Workflow related: `workflow.py`
+- Budget specific: `budget.py`
+- Contract specific: `contract.py`
+- Supply specific: `supply.py`
+- Logging/telemetry: `telemetry.py`
+
+Then add it to `__init__.py` exports for backwards compatibility.
 
 ### "Where do I add a new route?"
 
@@ -141,6 +176,7 @@ In the appropriate blueprint under `app/routes/`. If it's a new functional area,
 
 ### "Where do I add shared utilities?"
 
-- If it's route-specific: `app/routes/<area>/helpers.py`
+- If it's route-specific: `app/routes/<area>/helpers/` (as a module in the package)
+- If it's business logic: `app/services/` (email, notifications, etc.)
 - If it's cross-cutting: `app/` root (like `line_details.py`)
 - If it's a template partial: `app/templates/components/`

@@ -208,11 +208,13 @@ DepartmentMembership
 
 ## Key Files
 
-| File | Purpose |
-|------|---------|
-| `app/models.py` | All database models |
+| File/Package | Purpose |
+|--------------|---------|
+| `app/models/` | Database models (package with domain-organized modules) |
+| `app/services/` | Business logic (email, notifications) |
 | `app/line_details.py` | Generic line detail helpers |
 | `app/routing/registry.py` | Approval routing lookup |
-| `app/routes/budget/helpers.py` | Context builders, permission checks |
+| `app/routes/work/helpers/` | Context builders, permission checks, computations |
+| `app/routes/work/work_items/` | Work item routes (create, view, edit, actions) |
 | `app/routes/home.py` | Main dashboard |
 | `app/seeds/config_seed.py` | Database seeding |
