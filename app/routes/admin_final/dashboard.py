@@ -230,11 +230,17 @@ def budget_admin_home():
         ApprovalGroup.name.asc()
     ).all()
 
+    # Get filter options for department navigation
+    event_cycles = get_active_event_cycles()
+    departments = get_active_departments()
+
     return render_template(
         "admin_final/budget_home.html",
         user_ctx=user_ctx,
         stats=stats,
         approval_groups=approval_groups,
+        event_cycles=event_cycles,
+        departments=departments,
         friendly_status=friendly_status,
     )
 

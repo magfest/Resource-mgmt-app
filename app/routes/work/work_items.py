@@ -13,6 +13,9 @@ from app.models import (
     WorkLineReview,
     BudgetLineDetail,
     WorkItemComment,
+    WorkItemAuditEvent,
+    WorkLineAuditEvent,
+    User,
     REQUEST_KIND_PRIMARY,
     REQUEST_KIND_SUPPLEMENTARY,
     WORK_ITEM_STATUS_DRAFT,
@@ -25,6 +28,12 @@ from app.models import (
     REVIEW_STATUS_PENDING,
     COMMENT_VISIBILITY_PUBLIC,
     COMMENT_VISIBILITY_ADMIN,
+    AUDIT_EVENT_SUBMIT,
+    AUDIT_EVENT_NEEDS_INFO_REQUESTED,
+    AUDIT_EVENT_NEEDS_INFO_RESPONDED,
+    AUDIT_EVENT_CHECKOUT,
+    AUDIT_EVENT_CHECKIN,
+    AUDIT_EVENT_VIEW,
 )
 from app.routes import get_user_ctx
 from . import work_bp
@@ -199,6 +208,17 @@ def work_item_detail(event: str, dept: str, public_id: str):
     perms = require_work_item_view(work_item, ctx)
     user_ctx = get_user_ctx()
 
+    # Log view for non-draft items when viewed by someone other than the requester
+    is_requester = work_item.created_by_user_id == user_ctx.user_id
+    if work_item.status != WORK_ITEM_STATUS_DRAFT and not is_requester:
+        view_event = WorkItemAuditEvent(
+            work_item_id=work_item.id,
+            event_type=AUDIT_EVENT_VIEW,
+            created_by_user_id=user_ctx.user_id,
+        )
+        db.session.add(view_event)
+        db.session.commit()
+
     # Compute totals (from ALL lines for context)
     totals = compute_work_item_totals(work_item)
 
@@ -251,6 +271,75 @@ def work_item_detail(event: str, dept: str, public_id: str):
     is_approver_for_item = _is_approver_for_work_item(work_item, user_ctx)
     can_add_comment = perms.is_worktype_admin or is_approver_for_item
 
+    # Fetch audit events for budget admins (super admin or worktype admin)
+    # Combines both work item level and line level events into a unified log
+    audit_events = []
+    can_view_audit = user_ctx.is_super_admin or perms.is_worktype_admin
+    if can_view_audit:
+        # Get work item level events
+        item_events = (
+            WorkItemAuditEvent.query
+            .filter_by(work_item_id=work_item.id)
+            .all()
+        )
+
+        # Get line level events for all lines in this work item
+        line_ids = [line.id for line in work_item.lines]
+        line_events = []
+        if line_ids:
+            line_events = (
+                WorkLineAuditEvent.query
+                .filter(WorkLineAuditEvent.work_line_id.in_(line_ids))
+                .all()
+            )
+
+        # Build line number lookup for line events
+        line_number_map = {line.id: line.line_number for line in work_item.lines}
+
+        # Normalize events into a unified format
+        unified_events = []
+
+        for e in item_events:
+            unified_events.append({
+                "created_at": e.created_at,
+                "event_type": e.event_type,
+                "created_by_user_id": e.created_by_user_id,
+                "old_value": e.old_value,
+                "new_value": e.new_value,
+                "reason": e.reason,
+                "snapshot": e.snapshot,
+                "line_number": None,  # Work item level
+                "is_line_event": False,
+            })
+
+        for e in line_events:
+            unified_events.append({
+                "created_at": e.created_at,
+                "event_type": e.event_type,
+                "created_by_user_id": e.created_by_user_id,
+                "old_value": e.old_value,
+                "new_value": e.new_value,
+                "reason": e.note,  # Line events use 'note' field
+                "snapshot": None,
+                "line_number": line_number_map.get(e.work_line_id),
+                "is_line_event": True,
+            })
+
+        # Sort by timestamp descending
+        unified_events.sort(key=lambda x: x["created_at"], reverse=True)
+
+        # Batch load user display names
+        user_ids = {e["created_by_user_id"] for e in unified_events if e["created_by_user_id"]}
+        user_map = {}
+        if user_ids:
+            users = User.query.filter(User.id.in_(user_ids)).all()
+            user_map = {u.id: u.display_name or u.email for u in users}
+
+        for event in unified_events:
+            event["_user_display_name"] = user_map.get(event["created_by_user_id"], str(event["created_by_user_id"]))
+
+        audit_events = unified_events
+
     return render_template(
         "budget/work_item_detail.html",
         ctx=ctx,
@@ -267,6 +356,8 @@ def work_item_detail(event: str, dept: str, public_id: str):
         finalization_summary=finalization_summary,
         filtered_comments=comments,
         can_add_comment=can_add_comment,
+        audit_events=audit_events,
+        can_view_audit=can_view_audit,
         user_ctx=user_ctx,
     )
 
@@ -916,6 +1007,19 @@ def work_item_submit(event: str, dept: str, public_id: str):
     work_item.submitted_at = datetime.utcnow()
     work_item.submitted_by_user_id = user_ctx.user_id
 
+    # Create audit event for submission
+    totals = compute_work_item_totals(work_item)
+    audit_event = WorkItemAuditEvent(
+        work_item_id=work_item.id,
+        event_type=AUDIT_EVENT_SUBMIT,
+        created_by_user_id=user_ctx.user_id,
+        snapshot={
+            "line_count": len(work_item.lines),
+            "total_requested_cents": totals.get("requested", 0),
+        },
+    )
+    db.session.add(audit_event)
+
     db.session.commit()
 
     # Send notification to budget admins
@@ -1075,6 +1179,16 @@ def work_item_checkout(event: str, dept: str, public_id: str):
 
     user_ctx = get_user_ctx()
     if checkout_work_item(work_item, user_ctx):
+        # Create audit event for checkout
+        audit_event = WorkItemAuditEvent(
+            work_item_id=work_item.id,
+            event_type=AUDIT_EVENT_CHECKOUT,
+            created_by_user_id=user_ctx.user_id,
+            snapshot={
+                "expires_at": work_item.checked_out_expires_at.isoformat() if work_item.checked_out_expires_at else None,
+            },
+        )
+        db.session.add(audit_event)
         db.session.commit()
         flash("Work item checked out. You have the lock for review.", "success")
     else:
@@ -1107,7 +1221,22 @@ def work_item_checkin(event: str, dept: str, public_id: str):
 
     user_ctx = get_user_ctx()
     force = perms.is_worktype_admin and not perms.is_checked_out_by_current_user
+
+    # Capture who had checkout before releasing (for audit)
+    previous_holder = work_item.checked_out_by_user_id
+
     if checkin_work_item(work_item, user_ctx, force=force):
+        # Create audit event for checkin
+        audit_event = WorkItemAuditEvent(
+            work_item_id=work_item.id,
+            event_type=AUDIT_EVENT_CHECKIN,
+            created_by_user_id=user_ctx.user_id,
+            snapshot={
+                "previous_holder": previous_holder,
+                "forced": force,
+            },
+        )
+        db.session.add(audit_event)
         db.session.commit()
         flash("Lock released.", "success")
     else:
@@ -1253,6 +1382,17 @@ def work_item_request_info(event: str, dept: str, public_id: str):
     work_item.needs_info_requested_at = datetime.utcnow()
     work_item.needs_info_requested_by_user_id = user_ctx.user_id
 
+    # Create audit event
+    audit_event = WorkItemAuditEvent(
+        work_item_id=work_item.id,
+        event_type=AUDIT_EVENT_NEEDS_INFO_REQUESTED,
+        created_by_user_id=user_ctx.user_id,
+        snapshot={
+            "message": message,
+        },
+    )
+    db.session.add(audit_event)
+
     # Release checkout
     checkin_work_item(work_item, user_ctx)
 
@@ -1309,6 +1449,17 @@ def work_item_respond_info(event: str, dept: str, public_id: str):
     work_item.status = WORK_ITEM_STATUS_SUBMITTED
     work_item.needs_info_requested_at = None
     work_item.needs_info_requested_by_user_id = None
+
+    # Create audit event
+    audit_event = WorkItemAuditEvent(
+        work_item_id=work_item.id,
+        event_type=AUDIT_EVENT_NEEDS_INFO_RESPONDED,
+        created_by_user_id=user_ctx.user_id,
+        snapshot={
+            "response": response,
+        },
+    )
+    db.session.add(audit_event)
 
     db.session.commit()
 

@@ -3,9 +3,11 @@
 {% block title %}{{ department.name }} - {{ event_cycle.code }}{% endblock %}
 
 {% block content %}
-<div class="muted" style="margin-bottom: 12px;">
-  <a href="{{ url_for('home.index') }}">&larr; Back to Home</a>
-</div>
+<nav class="muted small" style="margin-bottom: 12px;">
+  <a href="{{ url_for('home.index') }}">Home</a>
+  <span style="margin: 0 6px;">&rsaquo;</span>
+  <span>{{ department.name }}</span>
+</nav>
 
 <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; margin-bottom: 24px;">
   <div>
@@ -115,17 +117,10 @@
         <a class="btn btn-primary" href="{{ card_url }}">
           {% if card.can_edit and not card.primary_item %}
             Start {{ card.singular_name }}
-          {% elif card.can_edit %}
-            Edit
           {% else %}
-            View
+            Open {{ card.singular_name }}
           {% endif %}
         </a>
-        {% if card.primary_item and url_slug == 'budget' %}
-          <a class="btn" href="{{ url_for('work.work_item_detail', event=event_cycle.code, dept=department.code, public_id=card.primary_item.public_id) }}">
-            Details
-          </a>
-        {% endif %}
       </div>
 
       <div class="muted small" style="margin-top: 12px;">

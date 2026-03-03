@@ -59,6 +59,9 @@
         <a class="btn" href="{{ url_for('admin_final.workload_report') }}">
           Workload Report
         </a>
+        <a class="btn" href="{{ url_for('admin_final.missing_budgets_report') }}">
+          Missing Budgets
+        </a>
       </div>
     </div>
   </section>
@@ -168,6 +171,34 @@
     </div>
   </section>
 
+  {# Quick Navigation to Department #}
+  <section class="card" style="margin-bottom: 24px;">
+    <h3 style="margin:0 0 16px 0;">Go to Department</h3>
+    <p class="muted small" style="margin: 0 0 16px 0;">
+      Jump directly to a department's budget page.
+    </p>
+    <form id="dept-nav-form" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
+      <div>
+        <label class="muted small" style="display: block; margin-bottom: 4px;">Event</label>
+        <select name="event" id="dept-nav-event" style="width: 150px;" required>
+          {% for ec in event_cycles %}
+            <option value="{{ ec.code }}" {% if loop.first %}selected{% endif %}>{{ ec.code }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="muted small" style="display: block; margin-bottom: 4px;">Department</label>
+        <select name="dept" id="dept-nav-dept" style="width: 200px;" required>
+          <option value="">Select department...</option>
+          {% for dept in departments %}
+            <option value="{{ dept.code }}">{{ dept.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary">Go</button>
+    </form>
+  </section>
+
   {# Budget Configuration - links to config pages #}
   <section class="card" style="margin-bottom: 24px;">
     <h3 style="margin:0 0 16px 0;">Budget Configuration</h3>
@@ -184,14 +215,22 @@
     </div>
   </section>
 
-  {# Tools #}
-  <section class="card">
-    <h3 style="margin:0 0 16px 0;">Tools</h3>
-    <div class="btn-row">
-      <a class="btn" href="{{ url_for('admin_final.email_debug') }}">
-        Email Debug
-      </a>
-    </div>
-  </section>
+{% endblock %}
 
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+(function() {
+  var form = document.getElementById('dept-nav-form');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      var eventCode = document.getElementById('dept-nav-event').value;
+      var deptCode = document.getElementById('dept-nav-dept').value;
+      if (eventCode && deptCode) {
+        window.location.href = '/' + eventCode + '/' + deptCode + '/budget';
+      }
+    });
+  }
+})();
+</script>
 {% endblock %}

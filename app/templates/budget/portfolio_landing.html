@@ -5,6 +5,15 @@
 
 {% block content %}
 
+  {# Breadcrumb navigation #}
+  <nav class="muted small" style="margin-bottom: 12px;">
+    <a href="{{ url_for('home.index') }}">Home</a>
+    <span style="margin: 0 6px;">&rsaquo;</span>
+    <a href="{{ url_for('work.department_home', event=ctx.event_cycle.code, dept=ctx.department.code) }}">{{ ctx.department.name }}</a>
+    <span style="margin: 0 6px;">&rsaquo;</span>
+    <span>Budget</span>
+  </nav>
+
   {# Portfolio header with totals #}
   {% include "components/_portfolio_header.html" %}
 
@@ -79,7 +88,7 @@
 
   {# Navigation #}
   <div class="btn-row" style="margin-top: 24px;">
-    <a class="btn" href="{{ url_for('home.index') }}">Back to Home</a>
+    <a class="btn" href="{{ url_for('work.department_home', event=ctx.event_cycle.code, dept=ctx.department.code) }}">&larr; Back to {{ ctx.department.name }}</a>
   </div>
 
 {% endblock %}

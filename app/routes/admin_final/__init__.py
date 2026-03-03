@@ -13,3 +13,4 @@ from . import ledger_report
 from . import department_report
 from . import workload_report
 from . import email_debug
+from . import missing_budgets_report

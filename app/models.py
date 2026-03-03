@@ -89,6 +89,13 @@ AUDIT_EVENT_AMOUNT_OVERRIDE = "AMOUNT_OVERRIDE"
 # Work item audit event types
 AUDIT_EVENT_FINALIZE = "FINALIZE"
 AUDIT_EVENT_UNFINALIZE = "UNFINALIZE"
+AUDIT_EVENT_SUBMIT = "SUBMIT"
+AUDIT_EVENT_DISPATCH = "DISPATCH"
+AUDIT_EVENT_NEEDS_INFO_REQUESTED = "NEEDS_INFO_REQUESTED"
+AUDIT_EVENT_NEEDS_INFO_RESPONDED = "NEEDS_INFO_RESPONDED"
+AUDIT_EVENT_CHECKOUT = "CHECKOUT"
+AUDIT_EVENT_CHECKIN = "CHECKIN"
+AUDIT_EVENT_VIEW = "VIEW"
 
 # Review actions
 REVIEW_ACTION_APPROVE = "APPROVE"
@@ -803,10 +810,11 @@ class WorkItemAuditEvent(db.Model):
         index=True,
     )
 
-    event_type = db.Column(db.String(64), nullable=False, index=True)  # FINALIZE, UNFINALIZE, STATUS_CHANGE
+    event_type = db.Column(db.String(64), nullable=False, index=True)  # FINALIZE, UNFINALIZE, STATUS_CHANGE, SUBMIT, DISPATCH, etc.
     old_value = db.Column(db.Text, nullable=True)
     new_value = db.Column(db.Text, nullable=True)
     reason = db.Column(db.Text, nullable=True)
+    snapshot = db.Column(db.JSON, nullable=True)  # Flexible JSON for event-specific data
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     created_by_user_id = db.Column(db.String(64), nullable=False, index=True)

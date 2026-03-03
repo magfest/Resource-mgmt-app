@@ -1,0 +1,154 @@
+{# templates/budget/_work_item_lines_table.html #}
+{# Partial: Budget lines table for work_item_detail.html #}
+
+<h3 style="margin:0 0 12px 0;">Budget Lines</h3>
+
+{% if lines %}
+  {% set show_approved_column = status == "FINALIZED" or totals.approved > 0 %}
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 60px;">#</th>
+        <th>Expense</th>
+        <th>Details</th>
+        <th style="width: 80px;" class="right">Qty.</th>
+        <th style="width: 100px;" class="right">Unit Cost</th>
+        <th style="width: 120px;" class="right">Total Requested</th>
+        {% if show_approved_column %}
+          <th style="width: 120px;" class="right">Approved</th>
+        {% endif %}
+        <th style="width: 100px;">Status</th>
+        {% if status == "SUBMITTED" or status == "UNDER_REVIEW" or status == "NEEDS_INFO" %}
+          <th style="width: 80px;"></th>
+        {% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for line in lines %}
+        {% set detail = line.budget_detail %}
+        {% set line_total = (detail.unit_price_cents * detail.quantity) if detail else 0 %}
+        <tr id="line-{{ line.line_number }}">
+          <td>{{ line.line_number }}</td>
+          <td>
+            {% if detail and detail.expense_account %}
+              <strong>{{ detail.expense_account.name }}</strong>
+              {% if detail.spend_type %}
+                <div class="muted small">{{ detail.spend_type.name }}</div>
+              {% endif %}
+            {% else %}
+              <span class="muted">-</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if detail and detail.description %}
+              {{ detail.description }}
+            {% else %}
+              <span class="muted">-</span>
+            {% endif %}
+            {% if detail %}
+              <div class="muted small mt-4">
+                {% if detail.priority %}Priority: {{ detail.priority.name }}{% endif %}
+                {% if detail.confidence_level %} &middot; Confidence: {{ detail.confidence_level.name }}{% endif %}
+                {% if detail.frequency %} &middot; {{ detail.frequency.name }}{% endif %}
+                {% if detail.warehouse_flag %} &middot; Warehouse{% endif %}
+              </div>
+            {% endif %}
+            {% if line.needs_requester_action %}
+              <div class="muted small" style="margin-top: 4px; color: #d97706;">
+                Action required
+              </div>
+            {% endif %}
+          </td>
+          <td class="right num">{{ detail.quantity if detail else '-' }}</td>
+          <td class="right num">{{ format_currency(detail.unit_price_cents) if detail else '-' }}</td>
+          <td class="right num">{{ format_currency(line_total) }}</td>
+          {% if show_approved_column %}
+            <td class="right num">
+              {% if line.approved_amount_cents is not none %}
+                {% set diff = line.approved_amount_cents - line_total %}
+                <strong style="{% if diff < 0 %}color: #dc3545;{% elif diff > 0 %}color: #059669;{% else %}color: #059669;{% endif %}">
+                  {{ format_currency(line.approved_amount_cents) }}
+                </strong>
+                {% if diff != 0 %}
+                  <div class="muted small">
+                    {% if diff > 0 %}+{% endif %}{{ format_currency(diff) }}
+                  </div>
+                {% endif %}
+              {% elif line.status == "REJECTED" %}
+                <span class="muted">$0.00</span>
+              {% else %}
+                <span class="muted">-</span>
+              {% endif %}
+            </td>
+          {% endif %}
+          <td>
+            {% set line_status = line.status | upper %}
+            {% set review_stage = line.current_review_stage | upper if line.current_review_stage else '' %}
+            {% set line_pill_class =
+              "pill-approved" if line_status == "APPROVED"
+              else "pill-needs" if line_status in ["NEEDS_INFO", "NEEDS_ADJUSTMENT"]
+              else "tag-kicked" if line_status == "REJECTED"
+              else "" %}
+            {# Show different text based on review stage #}
+            {% if line_status == "APPROVED" %}
+              {% if review_stage == "ADMIN_FINAL" %}
+                <span class="pill {{ line_pill_class }}">APPROVED</span>
+              {% else %}
+                <span class="pill" style="background: #dbeafe; color: #1e40af;">AG APPROVED</span>
+              {% endif %}
+            {% elif line_status == "REJECTED" %}
+              {% if review_stage == "ADMIN_FINAL" %}
+                <span class="pill {{ line_pill_class }}">REJECTED</span>
+              {% else %}
+                <span class="pill" style="background: #fee2e2; color: #991b1b;">AG REJECTED</span>
+              {% endif %}
+            {% else %}
+              <span class="pill {{ line_pill_class }}">{{ line_status }}</span>
+            {% endif %}
+          </td>
+          {% if status == "SUBMITTED" or status == "UNDER_REVIEW" or status == "NEEDS_INFO" %}
+            <td>
+              <a class="btn btn-muted" href="{{ url_for('approvals.line_review', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number) }}" style="padding: 4px 8px; font-size: 12px;">
+                Review
+              </a>
+            </td>
+          {% endif %}
+        </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="font-weight: 700;">
+        <td colspan="5" class="right">Grand Total Requested:</td>
+        <td class="right num">{{ format_currency(totals.requested) }}</td>
+        {% if show_approved_column %}
+          <td class="right num" style="color: #059669;">{{ format_currency(totals.approved) }}</td>
+        {% endif %}
+        <td></td>
+        {% if status == "SUBMITTED" or status == "UNDER_REVIEW" or status == "NEEDS_INFO" %}
+          <td></td>
+        {% endif %}
+      </tr>
+      {% if show_approved_column and totals.approved != totals.requested %}
+        <tr class="muted">
+          <td colspan="5" class="right">Difference:</td>
+          <td></td>
+          <td class="right num" style="{% if totals.approved < totals.requested %}color: #dc3545;{% else %}color: #059669;{% endif %}">
+            {% set total_diff = totals.approved - totals.requested %}
+            {% if total_diff > 0 %}+{% endif %}{{ format_currency(total_diff) }}
+          </td>
+          <td></td>
+          {% if status == "SUBMITTED" or status == "UNDER_REVIEW" or status == "NEEDS_INFO" %}
+            <td></td>
+          {% endif %}
+        </tr>
+      {% endif %}
+    </tfoot>
+  </table>
+{% else %}
+  <div class="muted" style="text-align: center; padding: 24px;">
+    No budget lines yet.
+    {% if perms.can_add_lines %}
+      <a href="{{ url_for('work.line_new', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">Add one now</a>.
+    {% endif %}
+  </div>
+{% endif %}

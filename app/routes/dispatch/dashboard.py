@@ -11,6 +11,7 @@ from app.models import (
     WorkItem,
     WorkLine,
     WorkLineReview,
+    WorkItemAuditEvent,
     BudgetLineDetail,
     ApprovalGroup,
     WORK_ITEM_STATUS_AWAITING_DISPATCH,
@@ -18,6 +19,7 @@ from app.models import (
     WORK_LINE_STATUS_PENDING,
     REVIEW_STAGE_APPROVAL_GROUP,
     REVIEW_STATUS_PENDING,
+    AUDIT_EVENT_DISPATCH,
 )
 from app.routes import get_user_ctx
 from app.routes.work.helpers import format_currency, friendly_status
@@ -259,6 +261,31 @@ def dispatch_to_queue(work_item_id: int):
     work_item.status = WORK_ITEM_STATUS_SUBMITTED
     work_item.dispatched_at = datetime.utcnow()
     work_item.dispatched_by_user_id = user_ctx.user_id
+
+    # Build approval groups summary for audit
+    approval_groups_summary = {}
+    for line in work_item.lines:
+        if line.budget_detail and line.budget_detail.routed_approval_group_id:
+            group_id = line.budget_detail.routed_approval_group_id
+            if group_id not in approval_groups_summary:
+                group = ApprovalGroup.query.get(group_id)
+                approval_groups_summary[group_id] = {
+                    "name": group.name if group else f"Group {group_id}",
+                    "line_count": 0,
+                }
+            approval_groups_summary[group_id]["line_count"] += 1
+
+    # Create audit event for dispatch
+    audit_event = WorkItemAuditEvent(
+        work_item_id=work_item.id,
+        event_type=AUDIT_EVENT_DISPATCH,
+        created_by_user_id=user_ctx.user_id,
+        snapshot={
+            "line_count": len(work_item.lines),
+            "approval_groups": list(approval_groups_summary.values()),
+        },
+    )
+    db.session.add(audit_event)
 
     db.session.commit()
 

@@ -1,0 +1,43 @@
+{# templates/budget/_work_item_comments.html #}
+{# Partial: Comments section for work_item_detail.html #}
+
+<h3 style="margin:0 0 12px 0;">Request Comments</h3>
+
+{% if filtered_comments %}
+  {% for comment in filtered_comments %}
+    <div class="comment">
+      <div class="muted small">
+        {{ comment.created_at.strftime('%Y-%m-%d %H:%M') }} &middot;
+        {{ comment.created_by_user_id }}
+        {% if comment.visibility == "ADMIN" %}
+          <span class="pill" style="margin-left: 4px;">Admin Only</span>
+        {% endif %}
+      </div>
+      <div style="margin-top: 4px; white-space: pre-wrap;">{{ comment.body }}</div>
+    </div>
+  {% endfor %}
+{% else %}
+  <div class="muted" style="text-align: center; padding: 16px;">
+    No comments yet.
+  </div>
+{% endif %}
+
+{# Add Comment Form - visible to reviewers/admins #}
+{% if can_add_comment %}
+  <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
+    <form method="post" action="{{ url_for('work.work_item_comment', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div style="margin-bottom: 8px;">
+        <label for="work_item_comment" style="font-size: 13px; font-weight: 600;">Add Comment:</label>
+        <textarea name="comment" id="work_item_comment" rows="3" style="width: 100%; margin-top: 4px;" placeholder="Enter your comment..."></textarea>
+      </div>
+      {% if perms.is_worktype_admin %}
+        <label style="display: block; margin-bottom: 8px; font-size: 13px; cursor: pointer;">
+          <input type="checkbox" name="admin_only" value="1" style="margin-right: 4px;" />
+          Admin-only (not visible to requesters)
+        </label>
+      {% endif %}
+      <button type="submit" class="btn">Add Comment</button>
+    </form>
+  </div>
+{% endif %}

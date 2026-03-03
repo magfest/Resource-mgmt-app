@@ -1,5 +1,5 @@
 """
-Email debug and testing routes for budget admins.
+Email debug and testing routes for system admins.
 """
 from datetime import datetime, timedelta
 
@@ -8,17 +8,18 @@ from flask import render_template, redirect, url_for, request, flash
 from app import db
 from app.models import NotificationLog, User
 from app.routes import get_user_ctx
-from app.routes.admin_final.helpers import require_budget_admin
+from app.routes.admin_final.helpers import require_admin
 from . import admin_final_bp
 
 
-@admin_final_bp.get("/admin/budget/email/")
+@admin_final_bp.get("/admin/email/")
 def email_debug():
     """
     Email debug page - view notification log and send test emails.
+    System-wide tool accessible to all admins.
     """
     user_ctx = get_user_ctx()
-    require_budget_admin(user_ctx)
+    require_admin(user_ctx)
 
     # Get filter params
     status_filter = request.args.get("status", "")
@@ -85,13 +86,13 @@ def email_debug():
     )
 
 
-@admin_final_bp.post("/admin/budget/email/test")
+@admin_final_bp.post("/admin/email/test")
 def email_test_send():
     """
     Send a test email to the current user.
     """
     user_ctx = get_user_ctx()
-    require_budget_admin(user_ctx)
+    require_admin(user_ctx)
 
     # Get recipient email
     recipient = (request.form.get("recipient") or "").strip()
