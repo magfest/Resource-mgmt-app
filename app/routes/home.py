@@ -4,7 +4,7 @@ Home page route - adapts based on user role.
 from __future__ import annotations
 
 from datetime import date
-from flask import Blueprint, redirect, url_for
+from flask import Blueprint, redirect, url_for, session, request
 
 from app import db
 from app.models import (
@@ -29,6 +29,59 @@ from app.routes.work.helpers import compute_portfolio_status_summary, get_active
 from app.routes import h, get_user_ctx, render_page
 
 home_bp = Blueprint('home', __name__)
+
+
+def get_selected_event_cycle():
+    """Get selected event cycle from session, defaulting to is_default.
+
+    Returns:
+        Tuple of (selected_cycle, show_all_events)
+        - If show_all_events is True, selected_cycle is None
+    """
+    selected_id = session.get('selected_event_cycle_id')
+
+    if selected_id == 'all':
+        return None, True  # Show all events mode
+
+    if selected_id:
+        cycle = EventCycle.query.filter_by(id=selected_id, is_active=True).first()
+        if cycle:
+            return cycle, False
+
+    # Default: is_default cycle or first active
+    default_cycle = (
+        db.session.query(EventCycle)
+        .filter(EventCycle.is_default == True)
+        .first()
+    )
+    if not default_cycle:
+        default_cycle = (
+            db.session.query(EventCycle)
+            .filter(EventCycle.is_active == True)
+            .order_by(EventCycle.sort_order)
+            .first()
+        )
+
+    return default_cycle, False
+
+
+@home_bp.post("/switch-event")
+def switch_event():
+    """Switch the selected event cycle."""
+    event_cycle_id = request.form.get("event_cycle_id")
+
+    if event_cycle_id == "all":
+        session['selected_event_cycle_id'] = 'all'
+    elif event_cycle_id:
+        try:
+            cycle_id = int(event_cycle_id)
+            cycle = EventCycle.query.filter_by(id=cycle_id, is_active=True).first()
+            if cycle:
+                session['selected_event_cycle_id'] = cycle_id
+        except ValueError:
+            pass
+
+    return redirect(url_for('home.index'))
 
 
 @home_bp.get("/health")
@@ -65,29 +118,28 @@ def index():
     user = user_ctx.user
     if not user:
         # User ID in session but user doesn't exist - clear session and redirect
-        from flask import session
         session.pop('active_user_id', None)
         return redirect(url_for('auth.login_page'))
 
-    # Get the default event cycle
-    default_cycle = (
+    # Get all active event cycles for selector
+    active_cycles = (
         db.session.query(EventCycle)
-        .filter(EventCycle.is_default == True)
-        .first()
+        .filter(EventCycle.is_active == True)
+        .order_by(EventCycle.sort_order)
+        .all()
     )
 
-    if not default_cycle:
-        default_cycle = (
-            db.session.query(EventCycle)
-            .filter(EventCycle.is_active == True)
-            .order_by(EventCycle.sort_order)
-            .first()
-        )
+    # Get selected cycle (replaces old default_cycle logic)
+    selected_cycle, show_all_events = get_selected_event_cycle()
+    default_cycle = selected_cycle  # Keep for backwards compat
 
     # Build context based on user's access
     context = {
         "user": user,
         "default_cycle": default_cycle,
+        "active_cycles": active_cycles,
+        "selected_cycle": selected_cycle,
+        "show_all_events": show_all_events,
     }
 
     # Check if super admin (respects role override for testing)
@@ -260,13 +312,20 @@ def index():
 
     # Get stats for budget admins (super admin or worktype admin for budget)
     if is_budget_admin_user:
-        # Count submitted work items
-        submitted_count = (
+        # Count work items at or past submitted (in the review workflow)
+        in_review_statuses = [
+            "SUBMITTED",
+            "UNDER_REVIEW",
+            "NEEDS_INFO",
+            "FINALIZED",
+        ]
+        in_review_count = (
             db.session.query(WorkItem)
-            .filter(WorkItem.status == "SUBMITTED")
+            .filter(WorkItem.status.in_(in_review_statuses))
+            .filter(WorkItem.is_archived == False)
             .count()
         )
-        context["submitted_count"] = submitted_count
+        context["submitted_count"] = in_review_count
 
         # Count items awaiting dispatch
         dispatch_queue_count = (
@@ -277,13 +336,26 @@ def index():
         )
         context["dispatch_queue_count"] = dispatch_queue_count
 
-        # Count pending work lines
-        pending_lines = (
-            db.session.query(WorkLine)
+        # Count requests needing reviewer group work (distinct WorkItems with pending lines)
+        from sqlalchemy import func
+        requests_needing_review = (
+            db.session.query(func.count(func.distinct(WorkItem.id)))
+            .join(WorkLine, WorkLine.work_item_id == WorkItem.id)
+            .filter(WorkItem.status == "SUBMITTED")
+            .filter(WorkItem.is_archived == False)
             .filter(WorkLine.status == "PENDING")
+            .scalar()
+        ) or 0
+        context["requests_needing_review"] = requests_needing_review
+
+        # Count finalized requests
+        finalized_count = (
+            db.session.query(WorkItem)
+            .filter(WorkItem.status == "FINALIZED")
+            .filter(WorkItem.is_archived == False)
             .count()
         )
-        context["pending_lines"] = pending_lines
+        context["finalized_count"] = finalized_count
 
     # Get stats for approvers
     if approval_groups:

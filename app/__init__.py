@@ -153,6 +153,17 @@ def create_app() -> Flask:
     migrate.init_app(app, db)
     csrf.init_app(app)
 
+    # --- Template Filters ---
+    import math
+
+    @app.template_filter('format_qty')
+    def format_qty(value):
+        """Format quantity - show as rounded-up integer."""
+        if value is None:
+            return '-'
+        int_val = int(math.ceil(float(value)))
+        return str(int_val)
+
     # Import models so migrations can detect them
     from . import models  # noqa: F401
 

@@ -232,9 +232,11 @@ def line_create(event: str, dept: str, public_id: str):
         except InvalidOperation:
             errors.append("Invalid unit price value.")
 
-    # Validate optional references
+    # Validate required references
     confidence_level = None
-    if confidence_level_id_str:
+    if not confidence_level_id_str:
+        errors.append("Confidence level is required.")
+    else:
         try:
             confidence_level_id = int(confidence_level_id_str)
             confidence_level = ConfidenceLevel.query.get(confidence_level_id)
@@ -244,7 +246,9 @@ def line_create(event: str, dept: str, public_id: str):
             errors.append("Invalid confidence level ID.")
 
     frequency = None
-    if frequency_id_str:
+    if not frequency_id_str:
+        errors.append("Frequency is required.")
+    else:
         try:
             frequency_id = int(frequency_id_str)
             frequency = FrequencyOption.query.get(frequency_id)
@@ -254,7 +258,9 @@ def line_create(event: str, dept: str, public_id: str):
             errors.append("Invalid frequency option ID.")
 
     priority = None
-    if priority_id_str:
+    if not priority_id_str:
+        errors.append("Priority is required.")
+    else:
         try:
             priority_id = int(priority_id_str)
             priority = PriorityLevel.query.get(priority_id)
@@ -319,9 +325,9 @@ def line_create(event: str, dept: str, public_id: str):
         spend_type_id=spend_type.id,
         unit_price_cents=unit_price_cents,
         quantity=quantity,
-        confidence_level_id=confidence_level.id if confidence_level else None,
-        frequency_id=frequency.id if frequency else None,
-        priority_id=priority.id if priority else None,
+        confidence_level_id=confidence_level.id,
+        frequency_id=frequency.id,
+        priority_id=priority.id,
         warehouse_flag=warehouse_flag,
         description=description,
     )
@@ -525,9 +531,11 @@ def line_update(event: str, dept: str, public_id: str, line_num: int):
         except InvalidOperation:
             errors.append("Invalid unit price value.")
 
-    # Validate optional references
+    # Validate required references
     confidence_level = None
-    if confidence_level_id_str:
+    if not confidence_level_id_str:
+        errors.append("Confidence level is required.")
+    else:
         try:
             confidence_level_id = int(confidence_level_id_str)
             confidence_level = ConfidenceLevel.query.get(confidence_level_id)
@@ -537,7 +545,9 @@ def line_update(event: str, dept: str, public_id: str, line_num: int):
             errors.append("Invalid confidence level ID.")
 
     frequency = None
-    if frequency_id_str:
+    if not frequency_id_str:
+        errors.append("Frequency is required.")
+    else:
         try:
             frequency_id = int(frequency_id_str)
             frequency = FrequencyOption.query.get(frequency_id)
@@ -547,7 +557,9 @@ def line_update(event: str, dept: str, public_id: str, line_num: int):
             errors.append("Invalid frequency option ID.")
 
     priority = None
-    if priority_id_str:
+    if not priority_id_str:
+        errors.append("Priority is required.")
+    else:
         try:
             priority_id = int(priority_id_str)
             priority = PriorityLevel.query.get(priority_id)
@@ -598,9 +610,9 @@ def line_update(event: str, dept: str, public_id: str, line_num: int):
     detail.spend_type_id = spend_type.id
     detail.unit_price_cents = unit_price_cents
     detail.quantity = quantity
-    detail.confidence_level_id = confidence_level.id if confidence_level else None
-    detail.frequency_id = frequency.id if frequency else None
-    detail.priority_id = priority.id if priority else None
+    detail.confidence_level_id = confidence_level.id
+    detail.frequency_id = frequency.id
+    detail.priority_id = priority.id
     detail.warehouse_flag = warehouse_flag
     detail.description = description
 

@@ -76,9 +76,9 @@
       <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-top: 16px;">
         {# Priority #}
         <div>
-          <label for="priority_id"><strong>Priority</strong></label>
-          <select name="priority_id" id="priority_id" class="mt-4">
-            <option value="">(Optional)</option>
+          <label for="priority_id"><strong>Priority</strong> <span style="color: red;">*</span></label>
+          <select name="priority_id" id="priority_id" class="mt-4" required>
+            <option value="">(Select priority)</option>
             {% for p in priority_levels %}
               <option value="{{ p.id }}"
                       {% if form_data and form_data.priority_id == p.id|string %}selected{% endif %}>
@@ -90,9 +90,9 @@
 
         {# Confidence Level #}
         <div>
-          <label for="confidence_level_id"><strong>Unit Cost Confidence</strong></label>
-          <select name="confidence_level_id" id="confidence_level_id" class="mt-4">
-            <option value="">(Optional)</option>
+          <label for="confidence_level_id"><strong>Unit Cost Confidence</strong> <span style="color: red;">*</span></label>
+          <select name="confidence_level_id" id="confidence_level_id" class="mt-4" required>
+            <option value="">(Select confidence)</option>
             {% for c in confidence_levels %}
               <option value="{{ c.id }}"
                       {% if form_data and form_data.confidence_level_id == c.id|string %}selected{% endif %}>
@@ -107,9 +107,9 @@
 
         {# Frequency #}
         <div>
-          <label for="frequency_id"><strong>Frequency</strong></label>
-          <select name="frequency_id" id="frequency_id" class="mt-4">
-            <option value="">(Optional)</option>
+          <label for="frequency_id"><strong>Frequency</strong> <span style="color: red;">*</span></label>
+          <select name="frequency_id" id="frequency_id" class="mt-4" required>
+            <option value="">(Select frequency)</option>
             {% for f in frequency_options %}
               <option value="{{ f.id }}"
                       {% if form_data and form_data.frequency_id == f.id|string %}selected{% endif %}>

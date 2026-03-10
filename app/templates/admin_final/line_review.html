@@ -93,7 +93,7 @@
         <table style="margin-top: 12px;">
           <tr>
             <th style="width: 50%;">Quantity</th>
-            <td class="right num">{{ detail.quantity if detail else '-' }}</td>
+            <td class="right num">{{ detail.quantity|format_qty if detail else '-' }}</td>
           </tr>
           <tr>
             <th>Unit Price</th>
