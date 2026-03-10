@@ -343,7 +343,7 @@
 
         {# Step 1: Purpose #}
         <div style="margin-bottom: 24px;">
-          <label style="display: block; font-weight: 600; margin-bottom: 12px;">What is this room for?</label>
+          <label style="display: block; font-weight: 600; margin-bottom: 12px;">What is this suite for?</label>
           <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;">
             <label style="display: block; cursor: pointer; padding: 12px 16px; border: 2px solid #ddd; border-radius: 8px; background: #fff;" class="purpose-option" data-value="external_partner">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
@@ -351,30 +351,30 @@
                 <strong>External partner</strong>
               </div>
               <div class="muted small" style="margin-left: 24px;">
-                Guests, performers, contractors, vendors, or other non-staff partners who need a room as part of their arrangement with MAGFest.
+                A suite for performers, guests, contractors, or other external partners. Departments may use their budget to cover some or all of the cost.
               </div>
             </label>
             <label style="display: block; cursor: pointer; padding: 12px 16px; border: 2px solid #ddd; border-radius: 8px; background: #fff;" class="purpose-option" data-value="dept_operations">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
                 <input type="radio" name="purpose" value="dept_operations">
-                <strong>Department operations</strong>
+                <strong>Departmental function</strong>
               </div>
               <div class="muted small" style="margin-left: 24px;">
-                A room or suite required for your department to function &mdash; e.g., Treasury office, Hotel HQ, green room, or dedicated workspace. Not for general staff housing or social activities.
+                A suite critical for your department to function &mdash; e.g., Treasury, Staff Suite. Not for general staff housing.
               </div>
             </label>
             <label style="display: block; cursor: pointer; padding: 12px 16px; border: 2px solid #ddd; border-radius: 8px; background: #fff;" class="purpose-option" data-value="staff_crash">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
                 <input type="radio" name="purpose" value="staff_crash">
-                <strong>Staff Suite Social/Crash Space</strong>
+                <strong>Suite for staffers</strong>
               </div>
               <div class="muted small" style="margin-left: 24px;">
-                A suite for staffers to sleep in or for social gatherings. Staff crash suites, if approved, will be partially covered by STOPS based on the regular room rate. The remainder must be paid out-of-pocket. This is for planning purposes only.
+                A suite as gathering or sleeping space for staffers. Must be paid out-of-pocket; department budget cannot be used. MAGFest provides a credit per staffer housed.
               </div>
             </label>
           </div>
           <div class="muted small" style="margin-top: 12px; padding: 8px 12px; background: #f8f9fa; border-radius: 6px;">
-            Not sure which to pick? <strong>Department operations</strong> is for rooms essential to your department's function. <strong>Staff crash space</strong> is for optional social/sleeping suites.
+            Not sure which to pick? <strong>Departmental function</strong> is for suites critical to operations. <strong>Suite for staffers</strong> is for staff sleeping/gathering space (paid out-of-pocket). See the <a href="https://docs.google.com/document/d/1aZ4dZ-8MSvov4BWRZtBBs7NYBLbiEF18Saglg1zgCs0/edit?usp=sharing" target="_blank" rel="noopener">Suite Policy</a> for details.
           </div>
         </div>
 
@@ -403,16 +403,16 @@
           </div>
         </div>
 
-        {# Staff Suite Crash Warning #}
+        {# Suite for Staffers Warning #}
         <div id="staff-suite-crash-warning" style="display: none; margin-bottom: 20px; padding: 12px 16px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px;">
-          <strong style="color: #92400e;">Reminder:</strong>
-            <span style="color: #78350f;">Normal staff sleeping rooms should not be requested as they are provided by STOPS though the normal crash space process. Staff social/crash <b> suites</b> must be paid out-of-pocket by staffers. Department budget cannot be used per MAGFest policy. This request is for planning and room allocation purposes only.<a href="https://docs.google.com/document/d/1aZ4dZ-8MSvov4BWRZtBBs7NYBLbiEF18Saglg1zgCs0/edit?usp=sharing"> Suite Policy </a></span>
+          <strong style="color: #92400e;">Cost Reminder:</strong>
+          <span style="color: #78350f;">Unless critical for department function, suites for staffers must be paid out-of-pocket. MAGFest provides a ~$63/staffer/night credit toward the cost. You must submit this via the <a href="https://forms.gle/AsJLGfQtQ9cbaP2b9" target="_blank" rel="noopener">departmental suite request form</a>. See the <a href="https://docs.google.com/document/d/1aZ4dZ-8MSvov4BWRZtBBs7NYBLbiEF18Saglg1zgCs0/edit?usp=sharing" target="_blank" rel="noopener">Suite Policy</a> for rates and details.</span>
         </div>
 
-       {# Staff Crash Warning #}
-        <div id="staff-crash-warning" style="display: none; margin-bottom: 20px; padding: 12px 16px; background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px;">
-          <strong style="color: #92400e;">Reminder:</strong>
-            <span style="color: #78350f;">Normal staff sleeping rooms should not be requested as they are provided by STOPS though the normal crash space process.</span>
+        {# Departmental Function Warning #}
+        <div id="staff-crash-warning" style="display: none; margin-bottom: 20px; padding: 12px 16px; background: #e0f2fe; border: 1px solid #0ea5e9; border-radius: 8px;">
+          <strong style="color: #0369a1;">Note:</strong>
+          <span style="color: #0c4a6e;">Suites critical for department function (e.g., Treasury, Staff Suite) may be covered by budget. Standard staff sleeping rooms are provided separately through STOPS.</span>
         </div>
 
         {# Step 3: Room Type #}
