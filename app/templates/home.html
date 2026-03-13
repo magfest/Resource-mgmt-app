@@ -9,8 +9,10 @@
   <div>
     <h1 style="margin:0;">Welcome, {{ user.display_name }}</h1>
     <div class="muted" style="margin-top:4px;">
-      {% if default_cycle %}
-        {{ default_cycle.name }}
+      {% if selected_cycle %}
+        {{ selected_cycle.name }}
+      {% elif show_all_events %}
+        All Events
       {% else %}
         No active event cycle
       {% endif %}
@@ -20,6 +22,44 @@
     <span class="pill" style="background: #fef3c7; color: #92400e;">Super Admin</span>
   {% endif %}
 </div>
+
+{# Event Selector #}
+{% if active_cycles|length > 1 %}
+<section class="card" style="margin-bottom: 16px; padding: 12px 16px;">
+  <form method="post" action="{{ url_for('home.switch_event') }}" id="event-switcher-form" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="event_cycle_id" style="font-weight: 600; white-space: nowrap;">Event:</label>
+    <select name="event_cycle_id" id="event_cycle_id" style="flex: 1; max-width: 300px;">
+      {% for cycle in active_cycles %}
+        <option value="{{ cycle.id }}" {% if selected_cycle and cycle.id == selected_cycle.id and not show_all_events %}selected{% endif %}>
+          {{ cycle.name }}{% if cycle.is_default %} (Default){% endif %}
+        </option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn" id="event-switcher-btn">Switch</button>
+
+    {% if is_budget_admin %}
+    <a href="{{ url_for('admin_final.all_requests') }}" class="btn" style="margin-left: auto;">
+      View All Events
+    </a>
+    {% endif %}
+  </form>
+</section>
+<script nonce="{{ csp_nonce }}">
+(function() {
+  var select = document.getElementById('event_cycle_id');
+  var form = document.getElementById('event-switcher-form');
+  var btn = document.getElementById('event-switcher-btn');
+  if (select && form && btn) {
+    // Hide the button when JS is enabled (auto-submit on change)
+    btn.style.display = 'none';
+    select.addEventListener('change', function() {
+      form.submit();
+    });
+  }
+})();
+</script>
+{% endif %}
 
 {# Setup prompt for admins when no event cycle #}
 {% if not default_cycle and is_super_admin %}
@@ -185,13 +225,10 @@
   <h3 style="margin:0 0 16px 0;">Budget Admin Quick Actions</h3>
 
   <div class="btn-row">
-      <a class="btn" href="{{ url_for('dispatch.dashboard') }}" style="position: relative;">
+    <a class="btn" href="{{ url_for('dispatch.dashboard') }}">
       Dispatch Queue
-      {% if dispatch_queue_count %}
-        <span class="pill pill-needs" style="position: absolute; top: -8px; right: -8px; font-size: 11px; padding: 2px 6px;">{{ dispatch_queue_count }}</span>
-      {% endif %}
     </a>
-      <a class="btn" href="{{ url_for('approvals.dashboard_home') }}">
+    <a class="btn" href="{{ url_for('approvals.dashboard_home') }}">
       Reviewer Groups Queue
     </a>
 
@@ -211,22 +248,21 @@
   </div>
 
   <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 16px;">
-          <div style="text-align: center; padding: 16px; background: white; border-radius: 6px;">
+    <div style="text-align: center; padding: 16px; background: white; border-radius: 6px;">
       <div style="font-size: 28px; font-weight: 700; color: #0a66c2;">{{ submitted_count or 0 }}</div>
-      <div class="muted small">Submitted Requests</div>
+      <div class="muted small">In Review Pipeline</div>
     </div>
     <div style="text-align: center; padding: 16px; background: white; border-radius: 6px;">
       <div style="font-size: 28px; font-weight: 700; color: #d97706;">{{ dispatch_queue_count or 0 }}</div>
       <div class="muted small">Awaiting Dispatch</div>
     </div>
-
     <div style="text-align: center; padding: 16px; background: white; border-radius: 6px;">
-      <div style="font-size: 28px; font-weight: 700; color: #6b7280;">{{ pending_for_approver or 0 }}</div>
-      <div class="muted small">Pending Lines for Lvl 1 Approves</div>
+      <div style="font-size: 28px; font-weight: 700; color: #6b7280;">{{ requests_needing_review or 0 }}</div>
+      <div class="muted small">Requests Needing Review</div>
     </div>
     <div style="text-align: center; padding: 16px; background: white; border-radius: 6px;">
-      <div style="font-size: 28px; font-weight: 700; color: #059669;">{{ approval_groups|length }}</div>
-      <div class="muted small">Reviewer Groups</div>
+      <div style="font-size: 28px; font-weight: 700; color: #059669;">{{ finalized_count or 0 }}</div>
+      <div class="muted small">Finalized Requests</div>
     </div>
   </div>
 </section>
@@ -253,10 +289,10 @@
 </section>
 {% endif %}
 
-{# Key Dates - Collapsible #}
+{# Key Dates - Collapsible (expanded by default for non-admins) #}
 {% if milestones %}
 <section class="card">
-  <details>
+  <details {% if not is_budget_admin %}open{% endif %}>
     <summary style="cursor: pointer; font-weight: 600; font-size: 1rem; padding: 4px 0;">
       Key Dates
     </summary>
@@ -289,10 +325,10 @@
 </section>
 {% endif %}
 
-{# How It Works Guide - Tabbed Interface - Collapsible #}
+{# How It Works Guide - Tabbed Interface - Collapsible (expanded by default for non-admins) #}
 {% if work_types_with_access %}
 <section class="card">
-  <details>
+  <details {% if not is_budget_admin %}open{% endif %}>
     <summary style="cursor: pointer; font-weight: 600; font-size: 1rem; padding: 4px 0;">
       How It Works
     </summary>

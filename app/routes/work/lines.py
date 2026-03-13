@@ -33,6 +33,7 @@ from .helpers import (
     get_priority_levels,
     get_next_line_number,
     format_currency,
+    get_effective_description,
 )
 
 
@@ -118,6 +119,12 @@ def line_new(event: str, dept: str, public_id: str):
     # Build spend types data for JavaScript dropdown
     spend_types_by_account = build_spend_types_by_account(expense_accounts)
 
+    # Build effective descriptions dictionary (considering event overrides)
+    effective_descriptions = {
+        acc.id: get_effective_description(acc, ctx.event_cycle.id)
+        for acc in expense_accounts
+    }
+
     return render_template(
         "budget/line_form.html",
         ctx=ctx,
@@ -125,6 +132,7 @@ def line_new(event: str, dept: str, public_id: str):
         work_item=work_item,
         expense_accounts=expense_accounts,
         spend_types_by_account=spend_types_by_account,
+        effective_descriptions=effective_descriptions,
         confidence_levels=get_confidence_levels(),
         frequency_options=get_frequency_options(),
         priority_levels=get_priority_levels(),
@@ -232,9 +240,11 @@ def line_create(event: str, dept: str, public_id: str):
         except InvalidOperation:
             errors.append("Invalid unit price value.")
 
-    # Validate optional references
+    # Validate required references
     confidence_level = None
-    if confidence_level_id_str:
+    if not confidence_level_id_str:
+        errors.append("Confidence level is required.")
+    else:
         try:
             confidence_level_id = int(confidence_level_id_str)
             confidence_level = ConfidenceLevel.query.get(confidence_level_id)
@@ -244,7 +254,9 @@ def line_create(event: str, dept: str, public_id: str):
             errors.append("Invalid confidence level ID.")
 
     frequency = None
-    if frequency_id_str:
+    if not frequency_id_str:
+        errors.append("Frequency is required.")
+    else:
         try:
             frequency_id = int(frequency_id_str)
             frequency = FrequencyOption.query.get(frequency_id)
@@ -254,7 +266,9 @@ def line_create(event: str, dept: str, public_id: str):
             errors.append("Invalid frequency option ID.")
 
     priority = None
-    if priority_id_str:
+    if not priority_id_str:
+        errors.append("Priority is required.")
+    else:
         try:
             priority_id = int(priority_id_str)
             priority = PriorityLevel.query.get(priority_id)
@@ -271,6 +285,10 @@ def line_create(event: str, dept: str, public_id: str):
             exclude_fixed=True,
         )
         spend_types_by_account = build_spend_types_by_account(expense_accounts)
+        effective_descriptions = {
+            acc.id: get_effective_description(acc, ctx.event_cycle.id)
+            for acc in expense_accounts
+        }
 
         for error in errors:
             flash(error, "error")
@@ -282,6 +300,7 @@ def line_create(event: str, dept: str, public_id: str):
             work_item=work_item,
             expense_accounts=expense_accounts,
             spend_types_by_account=spend_types_by_account,
+            effective_descriptions=effective_descriptions,
             confidence_levels=get_confidence_levels(),
             frequency_options=get_frequency_options(),
             priority_levels=get_priority_levels(),
@@ -319,9 +338,9 @@ def line_create(event: str, dept: str, public_id: str):
         spend_type_id=spend_type.id,
         unit_price_cents=unit_price_cents,
         quantity=quantity,
-        confidence_level_id=confidence_level.id if confidence_level else None,
-        frequency_id=frequency.id if frequency else None,
-        priority_id=priority.id if priority else None,
+        confidence_level_id=confidence_level.id,
+        frequency_id=frequency.id,
+        priority_id=priority.id,
         warehouse_flag=warehouse_flag,
         description=description,
     )
@@ -378,6 +397,12 @@ def line_edit(event: str, dept: str, public_id: str, line_num: int):
     # Build spend types data for JavaScript dropdown
     spend_types_by_account = build_spend_types_by_account(expense_accounts)
 
+    # Build effective descriptions dictionary (considering event overrides)
+    effective_descriptions = {
+        acc.id: get_effective_description(acc, ctx.event_cycle.id)
+        for acc in expense_accounts
+    }
+
     # Build form_data from existing line
     form_data = {
         "expense_account_id": str(detail.expense_account_id) if detail.expense_account_id else "",
@@ -398,6 +423,7 @@ def line_edit(event: str, dept: str, public_id: str, line_num: int):
         work_item=work_item,
         expense_accounts=expense_accounts,
         spend_types_by_account=spend_types_by_account,
+        effective_descriptions=effective_descriptions,
         confidence_levels=get_confidence_levels(),
         frequency_options=get_frequency_options(),
         priority_levels=get_priority_levels(),
@@ -525,9 +551,11 @@ def line_update(event: str, dept: str, public_id: str, line_num: int):
         except InvalidOperation:
             errors.append("Invalid unit price value.")
 
-    # Validate optional references
+    # Validate required references
     confidence_level = None
-    if confidence_level_id_str:
+    if not confidence_level_id_str:
+        errors.append("Confidence level is required.")
+    else:
         try:
             confidence_level_id = int(confidence_level_id_str)
             confidence_level = ConfidenceLevel.query.get(confidence_level_id)
@@ -537,7 +565,9 @@ def line_update(event: str, dept: str, public_id: str, line_num: int):
             errors.append("Invalid confidence level ID.")
 
     frequency = None
-    if frequency_id_str:
+    if not frequency_id_str:
+        errors.append("Frequency is required.")
+    else:
         try:
             frequency_id = int(frequency_id_str)
             frequency = FrequencyOption.query.get(frequency_id)
@@ -547,7 +577,9 @@ def line_update(event: str, dept: str, public_id: str, line_num: int):
             errors.append("Invalid frequency option ID.")
 
     priority = None
-    if priority_id_str:
+    if not priority_id_str:
+        errors.append("Priority is required.")
+    else:
         try:
             priority_id = int(priority_id_str)
             priority = PriorityLevel.query.get(priority_id)
@@ -564,6 +596,10 @@ def line_update(event: str, dept: str, public_id: str, line_num: int):
             exclude_fixed=True,
         )
         spend_types_by_account = build_spend_types_by_account(expense_accounts)
+        effective_descriptions = {
+            acc.id: get_effective_description(acc, ctx.event_cycle.id)
+            for acc in expense_accounts
+        }
 
         for error in errors:
             flash(error, "error")
@@ -575,6 +611,7 @@ def line_update(event: str, dept: str, public_id: str, line_num: int):
             work_item=work_item,
             expense_accounts=expense_accounts,
             spend_types_by_account=spend_types_by_account,
+            effective_descriptions=effective_descriptions,
             confidence_levels=get_confidence_levels(),
             frequency_options=get_frequency_options(),
             priority_levels=get_priority_levels(),
@@ -598,9 +635,9 @@ def line_update(event: str, dept: str, public_id: str, line_num: int):
     detail.spend_type_id = spend_type.id
     detail.unit_price_cents = unit_price_cents
     detail.quantity = quantity
-    detail.confidence_level_id = confidence_level.id if confidence_level else None
-    detail.frequency_id = frequency.id if frequency else None
-    detail.priority_id = priority.id if priority else None
+    detail.confidence_level_id = confidence_level.id
+    detail.frequency_id = frequency.id
+    detail.priority_id = priority.id
     detail.warehouse_flag = warehouse_flag
     detail.description = description
 

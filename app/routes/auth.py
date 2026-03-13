@@ -344,6 +344,7 @@ def logout():
     session.pop('active_user_id', None)
     session.pop('role_override', None)
     session.pop('role_override_approval_group_id', None)
+    session.pop('selected_event_cycle_id', None)
 
     flash('You have been logged out.', 'info')
 

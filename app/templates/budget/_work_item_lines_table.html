@@ -59,7 +59,7 @@
               </div>
             {% endif %}
           </td>
-          <td class="right num">{{ detail.quantity if detail else '-' }}</td>
+          <td class="right num">{{ detail.quantity|format_qty if detail else '-' }}</td>
           <td class="right num">{{ format_currency(detail.unit_price_cents) if detail else '-' }}</td>
           <td class="right num">{{ format_currency(line_total) }}</td>
           {% if show_approved_column %}
