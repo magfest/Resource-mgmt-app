@@ -275,12 +275,34 @@ def send_email(
             # Use default credential chain (IAM role, env vars, etc.)
             client = boto3.client('ses', region_name=region)
 
+        # Build email body - support both HTML and plain text
+        # If body contains HTML tags, send as HTML with plain text fallback
+        body_content = {}
+
+        # Always include plain text version (strip HTML tags for fallback)
+        import re
+        plain_text = re.sub(r'<[^>]+>', '', body_text)
+        body_content['Text'] = {'Data': plain_text, 'Charset': 'UTF-8'}
+
+        # If body contains basic HTML tags, also send as HTML
+        if re.search(r'<(b|strong|u|i|em|a|br|p)[\s>]', body_text, re.IGNORECASE):
+            # Wrap in basic HTML structure and convert newlines to <br>
+            html_body = body_text.replace('\n', '<br>\n')
+            html_wrapped = f'''<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; line-height: 1.5; color: #333;">
+{html_body}
+</body>
+</html>'''
+            body_content['Html'] = {'Data': html_wrapped, 'Charset': 'UTF-8'}
+
         response = client.send_email(
             Source=get_from_address(),
             Destination={'ToAddresses': [to]},
             Message={
                 'Subject': {'Data': subject, 'Charset': 'UTF-8'},
-                'Body': {'Text': {'Data': body_text, 'Charset': 'UTF-8'}},
+                'Body': body_content,
             }
         )
 

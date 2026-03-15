@@ -153,3 +153,43 @@ class SecurityAuditLog(db.Model):
         db.Index("ix_security_audit_timestamp_category", "timestamp", "event_category"),
         db.Index("ix_security_audit_user_timestamp", "user_id", "timestamp"),
     )
+
+
+class EmailTemplate(db.Model):
+    """
+    Database-backed email templates with admin editing support.
+
+    Replaces filesystem .txt templates with editable templates stored in the database.
+    Templates use Jinja2 syntax and are rendered with work_item and base_url context.
+    """
+    __tablename__ = "email_templates"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Unique key for template lookup (e.g., "submitted", "dispatched", "needs_attention")
+    template_key = db.Column(db.String(64), nullable=False, unique=True, index=True)
+
+    # Human-readable name for admin UI
+    name = db.Column(db.String(128), nullable=False)
+
+    # Description of when this template is used
+    description = db.Column(db.Text, nullable=True)
+
+    # Email subject line (supports Jinja2 variables)
+    subject = db.Column(db.String(256), nullable=False)
+
+    # Email body text (supports Jinja2 variables)
+    body_text = db.Column(db.Text, nullable=False)
+
+    # Whether this template is active (inactive templates won't send)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
+
+    # Version tracking for optimistic locking
+    version = db.Column(db.Integer, nullable=False, default=1)
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Track who last modified
+    updated_by_user_id = db.Column(db.String(64), nullable=True)

@@ -165,6 +165,7 @@ from .telemetry import (
     NotificationLog,
     ConfigAuditEvent,
     SecurityAuditLog,
+    EmailTemplate,
 )
 
 # Define __all__ for explicit exports
@@ -300,4 +301,5 @@ __all__ = [
     "NotificationLog",
     "ConfigAuditEvent",
     "SecurityAuditLog",
+    "EmailTemplate",
 ]

@@ -205,7 +205,7 @@
   <section class="card" style="margin-bottom: 24px;">
     <h3 style="margin:0 0 16px 0;">Budget Configuration</h3>
     <p class="muted small" style="margin: 0 0 16px 0;">
-      Manage expense accounts and reviewer groups for the budget system.
+      Manage expense accounts, reviewer groups, and email templates for the budget system.
     </p>
     <div class="btn-row">
       <a class="btn" href="{{ url_for('admin_config.expense_accounts.list_expense_accounts') }}">
@@ -213,6 +213,9 @@
       </a>
       <a class="btn" href="{{ url_for('admin_config.approval_groups.list_approval_groups') }}">
         Reviewer Groups
+      </a>
+      <a class="btn" href="{{ url_for('admin_config.email_templates.list_email_templates') }}">
+        Email Templates
       </a>
     </div>
   </section>

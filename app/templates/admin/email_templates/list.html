@@ -1,0 +1,59 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Email Templates - Admin{% endblock %}
+
+{% block content %}
+<div class="muted" style="margin-bottom: 12px;">
+  <a href="{{ url_for('admin_final.admin_home') }}">&larr; Back to Admin</a>
+</div>
+
+<h1>Email Templates</h1>
+<div class="muted mb-16">
+  Manage email notification templates. These templates are sent to users during budget workflow events.
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th style="width: 150px;">Key</th>
+      <th style="width: 200px;">Name</th>
+      <th>Subject</th>
+      <th style="width: 100px;">Status</th>
+      <th style="width: 150px;">Last Updated</th>
+      <th style="width: 100px;">Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for t in templates %}
+      <tr>
+        <td class="num">{{ t.template_key }}</td>
+        <td>{{ t.name }}</td>
+        <td class="muted small" style="max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+          {{ t.subject }}
+        </td>
+        <td>
+          {% if t.is_active %}
+            <span class="pill" style="background: #e9f7ef;">Active</span>
+          {% else %}
+            <span class="pill" style="background: #fbeaea;">Inactive</span>
+          {% endif %}
+        </td>
+        <td class="muted small">
+          {{ t.updated_at.strftime('%Y-%m-%d %H:%M') if t.updated_at else '-' }}
+        </td>
+        <td>
+          <a class="btn" href="{{ url_for('admin_config.email_templates.edit_email_template', template_id=t.id) }}">Edit</a>
+        </td>
+      </tr>
+    {% else %}
+      <tr>
+        <td colspan="6" class="muted">No email templates found. Run database migrations to seed templates.</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="muted small" style="margin-top: 16px;">
+  {{ templates|length }} template(s)
+</div>
+{% endblock %}

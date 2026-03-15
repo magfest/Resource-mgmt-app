@@ -3,14 +3,14 @@ High-level notification functions for budget workflow events.
 
 Each function:
 - Gets recipient emails via helper functions
-- Renders email template
+- Renders email template from database
 - Sends via send_email() which handles rate limits, debounce, and logging
 - Logs warnings for edge cases (no recipients, user not found, etc.)
 """
 from __future__ import annotations
 
 import logging
-from flask import render_template, current_app
+from flask import current_app
 from typing import List, Set
 
 from app import db
@@ -26,6 +26,7 @@ from app.models import (
     ROLE_APPROVER,
 )
 from .email import send_email
+from .email_templates import render_email_template
 
 logger = logging.getLogger(__name__)
 
@@ -48,19 +49,22 @@ def notify_budget_submitted(work_item: WorkItem) -> int:
         logger.warning(f"No budget admin recipients found for submission notification: {work_item.public_id}")
         return 0
 
-    subject = f'[MAGFest Budget] New Submission - {work_item.public_id}'
-    body = render_template(
-        'email/submitted.txt',
-        work_item=work_item,
-        base_url=get_base_url(),
-    )
+    # Render template from database
+    rendered = render_email_template('submitted', {
+        'work_item': work_item,
+        'base_url': get_base_url(),
+    })
+
+    if not rendered:
+        logger.error(f"Failed to render 'submitted' template for {work_item.public_id}")
+        return 0
 
     sent_count = 0
     for email in recipients:
         if send_email(
             to=email,
-            subject=subject,
-            body_text=body,
+            subject=rendered.subject,
+            body_text=rendered.body_text,
             template_key='submitted',
             work_item_id=work_item.id,
         ):
@@ -87,19 +91,22 @@ def notify_budget_dispatched(work_item: WorkItem, approval_group_ids: List[int])
         logger.warning(f"No approver recipients found for groups {approval_group_ids}: {work_item.public_id}")
         return 0
 
-    subject = f'[MAGFest Budget] Ready for Review - {work_item.public_id}'
-    body = render_template(
-        'email/dispatched.txt',
-        work_item=work_item,
-        base_url=get_base_url(),
-    )
+    # Render template from database
+    rendered = render_email_template('dispatched', {
+        'work_item': work_item,
+        'base_url': get_base_url(),
+    })
+
+    if not rendered:
+        logger.error(f"Failed to render 'dispatched' template for {work_item.public_id}")
+        return 0
 
     sent_count = 0
     for email in recipients:
         if send_email(
             to=email,
-            subject=subject,
-            body_text=body,
+            subject=rendered.subject,
+            body_text=rendered.body_text,
             template_key='dispatched',
             work_item_id=work_item.id,
         ):
@@ -125,19 +132,22 @@ def notify_needs_attention(work_item: WorkItem) -> int:
         logger.warning(f"No department member recipients found for needs_attention: {work_item.public_id}")
         return 0
 
-    subject = f'[MAGFest Budget] Action Required - {work_item.public_id}'
-    body = render_template(
-        'email/needs_attention.txt',
-        work_item=work_item,
-        base_url=get_base_url(),
-    )
+    # Render template from database
+    rendered = render_email_template('needs_attention', {
+        'work_item': work_item,
+        'base_url': get_base_url(),
+    })
+
+    if not rendered:
+        logger.error(f"Failed to render 'needs_attention' template for {work_item.public_id}")
+        return 0
 
     sent_count = 0
     for email in recipients:
         if send_email(
             to=email,
-            subject=subject,
-            body_text=body,
+            subject=rendered.subject,
+            body_text=rendered.body_text,
             template_key='needs_attention',
             work_item_id=work_item.id,
         ):
@@ -163,17 +173,20 @@ def notify_response_received(work_item: WorkItem, reviewer_user_id: str) -> bool
         logger.warning(f"Reviewer has no email for response notification: user_id={reviewer_user_id}, work_item={work_item.public_id}")
         return False
 
-    subject = f'[MAGFest Budget] Response Received - {work_item.public_id}'
-    body = render_template(
-        'email/response_received.txt',
-        work_item=work_item,
-        base_url=get_base_url(),
-    )
+    # Render template from database
+    rendered = render_email_template('response_received', {
+        'work_item': work_item,
+        'base_url': get_base_url(),
+    })
+
+    if not rendered:
+        logger.error(f"Failed to render 'response_received' template for {work_item.public_id}")
+        return False
 
     success = send_email(
         to=user.email,
-        subject=subject,
-        body_text=body,
+        subject=rendered.subject,
+        body_text=rendered.body_text,
         template_key='response_received',
         work_item_id=work_item.id,
         recipient_user_id=user.id,
@@ -201,19 +214,22 @@ def notify_budget_finalized(work_item: WorkItem) -> int:
         logger.warning(f"No department member recipients found for finalized notification: {work_item.public_id}")
         return 0
 
-    subject = f'[MAGFest Budget] Finalized - {work_item.public_id}'
-    body = render_template(
-        'email/finalized.txt',
-        work_item=work_item,
-        base_url=get_base_url(),
-    )
+    # Render template from database
+    rendered = render_email_template('finalized', {
+        'work_item': work_item,
+        'base_url': get_base_url(),
+    })
+
+    if not rendered:
+        logger.error(f"Failed to render 'finalized' template for {work_item.public_id}")
+        return 0
 
     sent_count = 0
     for email in recipients:
         if send_email(
             to=email,
-            subject=subject,
-            body_text=body,
+            subject=rendered.subject,
+            body_text=rendered.body_text,
             template_key='finalized',
             work_item_id=work_item.id,
         ):
