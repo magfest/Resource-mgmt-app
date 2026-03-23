@@ -86,6 +86,7 @@ class ReportFilters:
     """
     event_code: str = ""
     dept_code: str = ""
+    request_kind: str = ""  # PRIMARY, SUPPLEMENTARY, or "" for all
     event_cycle: Optional[EventCycle] = None
     department: Optional[Department] = None
 
@@ -105,6 +106,10 @@ class ReportFilters:
     def has_department(self) -> bool:
         return self.department is not None
 
+    @property
+    def has_request_kind(self) -> bool:
+        return self.request_kind in ("PRIMARY", "SUPPLEMENTARY")
+
 
 # ============================================================
 # Filter Resolution
@@ -117,6 +122,11 @@ def resolve_report_filters() -> ReportFilters:
     """
     event_code = request.args.get("event", "").strip()
     dept_code = request.args.get("dept", "").strip()
+    request_kind = request.args.get("kind", "").strip().upper()
+
+    # Validate request_kind
+    if request_kind not in ("PRIMARY", "SUPPLEMENTARY"):
+        request_kind = ""
 
     event_cycle = None
     department = None
@@ -130,6 +140,7 @@ def resolve_report_filters() -> ReportFilters:
     return ReportFilters(
         event_code=event_code,
         dept_code=dept_code,
+        request_kind=request_kind,
         event_cycle=event_cycle,
         department=department,
     )

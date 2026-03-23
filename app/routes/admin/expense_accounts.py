@@ -26,6 +26,7 @@ from app.models import (
     PROMPT_MODE_REQUIRE_EXPLICIT_NA,
     UI_GROUP_KNOWN_COSTS,
     UI_GROUP_HOTEL_SERVICES,
+    UI_GROUP_BADGES,
     WORK_ITEM_STATUS_DRAFT,
     CONFIG_AUDIT_CREATE,
     CONFIG_AUDIT_UPDATE,
@@ -696,7 +697,7 @@ def _parse_account_type(account_type: str) -> tuple[bool, str | None, bool]:
     Parse the account_type form field into derived model fields.
 
     Args:
-        account_type: One of "standard", "fixed_cost", "hotel_service"
+        account_type: One of "standard", "fixed_cost", "hotel_service", "badge"
 
     Returns:
         Tuple of (is_fixed_cost, ui_display_group, unit_price_locked)
@@ -705,5 +706,7 @@ def _parse_account_type(account_type: str) -> tuple[bool, str | None, bool]:
         return True, UI_GROUP_HOTEL_SERVICES, True
     elif account_type == "fixed_cost":
         return True, UI_GROUP_KNOWN_COSTS, True
+    elif account_type == "badge":
+        return True, UI_GROUP_BADGES, True
     else:  # standard
         return False, None, False

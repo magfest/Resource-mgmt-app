@@ -53,13 +53,17 @@ def portfolio_landing(event: str, dept: str):
     ).first()
 
     # Get SUPPLEMENTARY work items - eager load lines with budget details
+    # Order by created_at ASC to assign sequential numbers (#1, #2, etc.)
     supplementary = WorkItem.query.filter_by(
         portfolio_id=ctx.portfolio.id,
         request_kind=REQUEST_KIND_SUPPLEMENTARY,
         is_archived=False,
     ).options(
         selectinload(WorkItem.lines).joinedload(WorkLine.budget_detail),
-    ).order_by(WorkItem.created_at.desc()).all()
+    ).order_by(WorkItem.created_at.asc()).all()
+
+    # Build a map of supplemental numbers (1-indexed, based on creation order)
+    supplementary_numbers = {item.id: idx + 1 for idx, item in enumerate(supplementary)}
 
     # Compute totals
     totals = compute_portfolio_totals(ctx.portfolio)
@@ -84,6 +88,7 @@ def portfolio_landing(event: str, dept: str):
         supplementary=supplementary,
         supplementary_totals=supplementary_totals,
         supplementary_line_summaries=supplementary_line_summaries,
+        supplementary_numbers=supplementary_numbers,
         totals=totals,
         format_currency=format_currency,
         friendly_status=friendly_status,

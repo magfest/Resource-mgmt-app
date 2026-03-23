@@ -224,6 +224,9 @@ class WorkItem(db.Model):
         index=True,
     )
 
+    # Optional reason/description for this request (primarily used for supplementals)
+    reason = db.Column(db.String(256), nullable=True)
+
     status = db.Column(db.String(32), nullable=False, default=WORK_ITEM_STATUS_DRAFT, index=True)
 
     # Submission lifecycle

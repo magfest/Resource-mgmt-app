@@ -56,6 +56,7 @@ from .constants import (
     # UI groups
     UI_GROUP_KNOWN_COSTS,
     UI_GROUP_HOTEL_SERVICES,
+    UI_GROUP_BADGES,
     # Prompt modes
     PROMPT_MODE_NONE,
     PROMPT_MODE_SUGGEST,
@@ -166,6 +167,7 @@ from .telemetry import (
     ConfigAuditEvent,
     SecurityAuditLog,
     EmailTemplate,
+    SiteContent,
 )
 
 # Define __all__ for explicit exports
@@ -210,6 +212,7 @@ __all__ = [
     # Constants - UI groups
     "UI_GROUP_KNOWN_COSTS",
     "UI_GROUP_HOTEL_SERVICES",
+    "UI_GROUP_BADGES",
     # Constants - Prompt modes
     "PROMPT_MODE_NONE",
     "PROMPT_MODE_SUGGEST",
@@ -302,4 +305,5 @@ __all__ = [
     "ConfigAuditEvent",
     "SecurityAuditLog",
     "EmailTemplate",
+    "SiteContent",
 ]

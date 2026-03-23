@@ -50,6 +50,7 @@ class LedgerRow(PipelineTotals):
 def get_ledger_data(
     event_cycle_id: int,
     department_id: Optional[int] = None,
+    request_kind: Optional[str] = None,
 ) -> List[LedgerRow]:
     """
     Get ledger data aggregated by expense account using SQL-level CASE expressions.
@@ -83,6 +84,10 @@ def get_ledger_data(
     # Apply department filter if specified
     if department_id:
         query = query.filter(WorkPortfolio.department_id == department_id)
+
+    # Apply request_kind filter if specified (PRIMARY or SUPPLEMENTARY)
+    if request_kind:
+        query = query.filter(WorkItem.request_kind == request_kind)
 
     # Group by expense account
     query = query.group_by(
@@ -133,7 +138,11 @@ def master_ledger():
 
     # Only query data if event cycle is selected
     if filters.has_event:
-        rows = get_ledger_data(filters.event_cycle_id, filters.department_id)
+        rows = get_ledger_data(
+            filters.event_cycle_id,
+            filters.department_id,
+            filters.request_kind if filters.has_request_kind else None,
+        )
         summary = compute_pipeline_summary(rows)
 
     # Get filter options
@@ -149,6 +158,7 @@ def master_ledger():
         departments=departments,
         selected_event=filters.event_code,
         selected_dept=filters.dept_code,
+        selected_request_kind=filters.request_kind,
         selected_event_cycle=filters.event_cycle,
         selected_department=filters.department,
         format_currency=format_currency,
@@ -170,7 +180,11 @@ def master_ledger_export():
         abort(400, "Event cycle is required for export")
 
     # Get report data
-    rows = get_ledger_data(filters.event_cycle_id, filters.department_id)
+    rows = get_ledger_data(
+        filters.event_cycle_id,
+        filters.department_id,
+        filters.request_kind if filters.has_request_kind else None,
+    )
     summary = compute_pipeline_summary(rows)
 
     # Build CSV headers

@@ -317,6 +317,7 @@ def seed_reference_data():
             ("HIGH", "High", "Important but event can proceed without", 20),
             ("MEDIUM", "Medium", "Nice to have", 30),
             ("LOW", "Low", "Optional / stretch goal", 40),
+            ("EXPERIMENTAL", "Experimental / Stretch Goal", "Non-operational item; exploratory or aspirational expense that would be nice to pursue if budget allows", 50),
         ]
         for code, name, desc, sort in priorities:
             db.session.add(PriorityLevel(

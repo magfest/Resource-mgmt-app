@@ -193,3 +193,45 @@ class EmailTemplate(db.Model):
 
     # Track who last modified
     updated_by_user_id = db.Column(db.String(64), nullable=True)
+
+
+class SiteContent(db.Model):
+    """
+    Database-backed editable content blocks for UI text.
+
+    Used for tab descriptions, info boxes, and other admin-editable text
+    that appears throughout the application.
+
+    Content blocks are identified by a unique key and can have:
+    - title: Section title (heading inside the tab)
+    - content: Explanatory text (supports markdown links)
+    - display_style: How to render the content (PLAIN or INFO_BOX)
+    """
+    __tablename__ = "site_content"
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Unique key for content lookup (e.g., "budget_tab_fixed_costs", "budget_tab_hotel")
+    content_key = db.Column(db.String(64), nullable=False, unique=True, index=True)
+
+    # Human-readable name for admin UI
+    name = db.Column(db.String(128), nullable=False)
+
+    # Category for grouping in admin UI (e.g., "Budget Tabs", "Approval Flow")
+    category = db.Column(db.String(64), nullable=True, index=True)
+
+    # Section title (heading inside the tab, e.g., "Badge Requests")
+    title = db.Column(db.String(128), nullable=True)
+
+    # Content text (supports markdown links)
+    content = db.Column(db.Text, nullable=True)
+
+    # Display style: PLAIN (muted text) or INFO_BOX (blue callout)
+    display_style = db.Column(db.String(16), nullable=False, default="PLAIN")
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Track who last modified
+    updated_by_user_id = db.Column(db.String(64), nullable=True)

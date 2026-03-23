@@ -24,13 +24,25 @@
       url_for('admin_final.budget_admin_home')
   ) }}
 
+  {% set request_kind_filter %}
+    <div>
+      <label for="kind" style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 4px;">Request Type</label>
+      <select name="kind" id="kind" style="min-width: 150px;">
+        <option value="">All Requests</option>
+        <option value="PRIMARY" {% if selected_request_kind == 'PRIMARY' %}selected{% endif %}>Primary Only</option>
+        <option value="SUPPLEMENTARY" {% if selected_request_kind == 'SUPPLEMENTARY' %}selected{% endif %}>Supplementary Only</option>
+      </select>
+    </div>
+  {% endset %}
+
   {{ report_filters(
       url_for('admin_final.department_summary'),
       event_cycles,
       departments,
       selected_event,
       selected_dept,
-      event_required=True
+      event_required=True,
+      extra_filters=request_kind_filter
   ) }}
 
   {% if not selected_event %}
@@ -43,7 +55,9 @@
   {% elif rows %}
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
       {{ report_context(selected_event_cycle, selected_department) }}
-      {{ export_button(url_for('admin_final.department_summary_export'), selected_event, selected_dept) }}
+      <a class="btn" href="{{ url_for('admin_final.department_summary_export') }}?event={{ selected_event }}{% if selected_dept %}&dept={{ selected_dept }}{% endif %}{% if selected_request_kind %}&kind={{ selected_request_kind }}{% endif %}" style="display: inline-flex; align-items: center; gap: 6px;">
+        <span style="font-size: 14px;">&#x2B73;</span> Download CSV
+      </a>
     </div>
 
     {# Stats Cards #}

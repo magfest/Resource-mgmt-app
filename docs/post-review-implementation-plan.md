@@ -1,5 +1,12 @@
 # Budget App - Post-Review Implementation Plan
 
+> **STATUS UPDATE - March 2026**
+> - **Phase 1:** COMPLETE - All quick wins (copy, labels, help text) implemented
+> - **Phase 2 Process/Data Tasks:** COMPLETE - These were admin UI configuration and documentation tasks, not code
+> - **Phase 2 Code Work & Phase 3 Features:** See `docs/plan-outstanding-march2026.md` for current consolidated tracking
+>
+> This document remains the authoritative reference for detailed specifications of Phase 2/3 features.
+
 ## Context
 The team completed a feedback/demo session and identified pain points across terminology, guidance, approval workflows, hotel wizard UX, event-specific overrides, reporting, and deadline enforcement. This plan addresses all feedback items, phased as **quick wins first, then deep work**.
 

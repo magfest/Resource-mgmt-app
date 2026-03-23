@@ -39,6 +39,19 @@
 
     <form method="post" action="{{ url_for('work.supplementary_create', event=ctx.event_cycle.code, dept=ctx.department.code) }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div style="margin-top: 16px;">
+        <label for="reason" style="display: block; font-weight: 600; margin-bottom: 8px;">
+          Reason for this supplemental request <span class="muted" style="font-weight: normal;">(optional)</span>
+        </label>
+        <input type="text" name="reason" id="reason" maxlength="256"
+               placeholder="e.g., Additional equipment needed, Revised vendor quote"
+               style="width: 100%; max-width: 500px;">
+        <div class="muted small" style="margin-top: 4px;">
+          A brief description helps identify this supplemental in lists.
+        </div>
+      </div>
+
       <div class="btn-row" style="margin-top: 16px;">
         <button type="submit" class="btn btn-primary">Create Supplementary Budget Request</button>
         <a class="btn" href="{{ url_for('work.portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">Cancel</a>

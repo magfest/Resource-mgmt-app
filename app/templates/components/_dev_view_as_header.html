@@ -133,6 +133,13 @@
         <a href="{{ url_for('dev.impersonate_user_page') }}" style="font-size:0.85em; color:#7c3aed;">
           Impersonate User
         </a>
+
+        {# Dev tools link - only in dev mode, not beta testing #}
+        {% if dev_login_enabled %}
+        <a href="{{ url_for('dev.dev_tools_dashboard') }}" style="font-size:0.85em; color:#dc2626; font-weight:600;">
+          Dev Tools
+        </a>
+        {% endif %}
       {% endif %}
     </div>
   </div>

@@ -11,10 +11,12 @@ from app.models import (
     BudgetLineDetail,
     ExpenseAccount,
     UI_GROUP_HOTEL_SERVICES,
+    UI_GROUP_BADGES,
     WORK_LINE_STATUS_PENDING,
     COMMENT_VISIBILITY_ADMIN,
 )
 from app.routes import get_user_ctx
+from app.routes.admin.site_content import get_site_content
 from .. import work_bp
 from ..helpers import (
     require_work_item_edit,
@@ -24,6 +26,7 @@ from ..helpers import (
     get_visible_expense_accounts,
     get_fixed_cost_expense_accounts,
     get_hotel_service_expense_accounts,
+    get_badge_expense_accounts,
     get_non_hotel_fixed_cost_accounts,
     get_effective_fixed_cost_settings,
     get_effective_description,
@@ -51,11 +54,12 @@ def work_item_edit(event: str, dept: str, public_id: str):
     # Compute totals
     totals = compute_work_item_totals(work_item)
 
-    # Get lines - separate into regular, fixed-cost, and hotel lines
+    # Get lines - separate into regular, fixed-cost, hotel, and badge lines
     all_lines = work_item.lines
     regular_lines = []
     fixed_cost_lines = []
     hotel_lines = []
+    badge_lines = []
 
     for line in all_lines:
         # Lines without budget details go to regular section
@@ -67,6 +71,9 @@ def work_item_edit(event: str, dept: str, public_id: str):
         # Lines with hotel service accounts go to hotel section
         if acc.is_fixed_cost and acc.ui_display_group == UI_GROUP_HOTEL_SERVICES:
             hotel_lines.append(line)
+        # Lines with badge accounts go to badges section
+        elif acc.is_fixed_cost and acc.ui_display_group == UI_GROUP_BADGES:
+            badge_lines.append(line)
         # Lines with other fixed-cost accounts go to fixed section
         elif acc.is_fixed_cost:
             fixed_cost_lines.append(line)
@@ -97,7 +104,13 @@ def work_item_edit(event: str, dept: str, public_id: str):
         event_cycle_id=ctx.event_cycle.id,
     )
 
-    # Build map of existing lines by account ID (for both fixed-cost and hotel)
+    # Get badge expense accounts (for Badges tab)
+    badge_accounts = get_badge_expense_accounts(
+        department_id=ctx.department.id,
+        event_cycle_id=ctx.event_cycle.id,
+    )
+
+    # Build map of existing lines by account ID (for fixed-cost, hotel, and badges)
     existing_fixed_by_account_id = {
         line.budget_detail.expense_account_id: line
         for line in fixed_cost_lines
@@ -106,6 +119,11 @@ def work_item_edit(event: str, dept: str, public_id: str):
     existing_hotel_by_account_id = {
         line.budget_detail.expense_account_id: line
         for line in hotel_lines
+        if line.budget_detail
+    }
+    existing_badge_by_account_id = {
+        line.budget_detail.expense_account_id: line
+        for line in badge_lines
         if line.budget_detail
     }
 
@@ -159,21 +177,56 @@ def work_item_edit(event: str, dept: str, public_id: str):
             "existing_notes": existing_notes,
         })
 
+    # Build badge data with effective settings and existing quantities
+    badge_data = []
+    for acc in badge_accounts:
+        settings = get_effective_fixed_cost_settings(acc, ctx.event_cycle.id)
+        existing_line = existing_badge_by_account_id.get(acc.id)
+
+        # Get existing quantity and notes if line exists with budget detail
+        if existing_line and existing_line.budget_detail:
+            existing_quantity = existing_line.budget_detail.quantity
+            existing_notes = existing_line.budget_detail.description or ""
+        else:
+            existing_quantity = None
+            existing_notes = ""
+
+        badge_data.append({
+            "account": acc,
+            "effective_description": get_effective_description(acc, ctx.event_cycle.id),
+            "unit_price_cents": settings["unit_price_cents"],  # Should be 0 for badges
+            "frequency_id": settings["frequency_id"],
+            "warehouse_default": settings["warehouse_default"],
+            "existing_line": existing_line,
+            "existing_quantity": existing_quantity,
+            "existing_notes": existing_notes,
+        })
+
     # Calculate event nights for hotel calculator
     event_nights = calculate_event_nights(
         ctx.event_cycle.event_start_date,
         ctx.event_cycle.event_end_date
     )
 
-    # Count items in each section for badge display
+    # Count items in each section for tab badge display
     fixed_cost_count = sum(1 for item in fixed_cost_data if item["existing_quantity"])
     hotel_count = sum(1 for item in hotel_data if item["existing_quantity"])
+    badge_count = sum(1 for item in badge_data if item["existing_quantity"])
 
     # Get comments (filter admin-only for non-admins)
     user_ctx = get_user_ctx()
     comments = work_item.comments
     if not user_ctx.is_super_admin:
         comments = [c for c in comments if c.visibility != COMMENT_VISIBILITY_ADMIN]
+
+    # Get editable site content for each tab
+    tab_content = {
+        "lines": get_site_content("budget_tab_lines"),
+        "fixed_costs": get_site_content("budget_tab_fixed_costs"),
+        "hotel": get_site_content("budget_tab_hotel"),
+        "badges": get_site_content("budget_tab_badges"),
+        "notes": get_site_content("budget_tab_notes"),
+    }
 
     return render_template(
         "budget/work_item_edit.html",
@@ -184,10 +237,13 @@ def work_item_edit(event: str, dept: str, public_id: str):
         lines=regular_lines,
         fixed_cost_lines=fixed_cost_lines,
         hotel_lines=hotel_lines,
+        badge_lines=badge_lines,
         fixed_cost_data=fixed_cost_data,
         hotel_data=hotel_data,
+        badge_data=badge_data,
         fixed_cost_count=fixed_cost_count,
         hotel_count=hotel_count,
+        badge_count=badge_count,
         event_nights=event_nights,
         event_start_date=ctx.event_cycle.event_start_date,
         event_end_date=ctx.event_cycle.event_end_date,
@@ -200,7 +256,34 @@ def work_item_edit(event: str, dept: str, public_id: str):
         priority_levels=get_priority_levels(),
         format_currency=format_currency,
         friendly_status=friendly_status,
+        tab_content=tab_content,
     )
+
+
+@work_bp.post("/<event>/<dept>/budget/item/<public_id>/reason")
+def work_item_reason_save(event: str, dept: str, public_id: str):
+    """
+    Save reason/description for a DRAFT work item.
+    Primarily used for supplementary requests.
+    """
+    work_item, ctx = get_work_item_by_public_id(event, dept, public_id)
+    perms = require_work_item_edit(work_item, ctx)
+
+    # Get reason from form
+    reason = (request.form.get("reason") or "").strip()
+    if len(reason) > 256:
+        reason = reason[:256]
+
+    work_item.reason = reason if reason else None
+    db.session.commit()
+
+    flash("Reason updated.", "success")
+    return redirect(url_for(
+        "work.work_item_edit",
+        event=event,
+        dept=dept,
+        public_id=public_id
+    ))
 
 
 @work_bp.post("/<event>/<dept>/budget/item/<public_id>/edit")
@@ -386,6 +469,147 @@ def work_item_fixed_costs_save(event: str, dept: str, public_id: str):
         dept=dept,
         public_id=public_id,
         tab="fixed-costs"
+    ))
+
+
+@work_bp.post("/<event>/<dept>/budget/item/<public_id>/badges")
+def work_item_badges_save(event: str, dept: str, public_id: str):
+    """
+    Save badge line items.
+
+    For each badge expense account:
+    - If quantity > 0 and no existing line: create line
+    - If quantity > 0 and existing line: update quantity
+    - If quantity = 0 and existing line: delete line
+
+    Badge items are informational only ($0 cost).
+    """
+    work_item, ctx = get_work_item_by_public_id(event, dept, public_id)
+    perms = require_work_item_edit(work_item, ctx)
+    user_ctx = get_user_ctx()
+
+    # Get available badge accounts for this department
+    badge_accounts = get_badge_expense_accounts(
+        department_id=ctx.department.id,
+        event_cycle_id=ctx.event_cycle.id,
+    )
+    valid_account_ids = {acc.id for acc in badge_accounts}
+
+    # Build map of existing badge line IDs by expense_account_id
+    existing_line_ids_by_account = {}
+    for line in work_item.lines:
+        if line.budget_detail and line.budget_detail.expense_account_id:
+            acc = line.budget_detail.expense_account
+            if acc and acc.is_fixed_cost and acc.ui_display_group == UI_GROUP_BADGES:
+                existing_line_ids_by_account[acc.id] = line.id
+
+    # Track next line number for new lines
+    next_line_number = get_next_line_number(work_item)
+
+    # Clear the session to avoid relationship caching issues
+    db.session.expire_all()
+
+    # Process form data
+    # Form fields are: badge_qty_<account_id>, badge_notes_<account_id>
+    for key in request.form:
+        if not key.startswith("badge_qty_"):
+            continue
+
+        try:
+            account_id = int(key.replace("badge_qty_", ""))
+        except ValueError:
+            continue
+
+        # Validate account is valid for this department
+        if account_id not in valid_account_ids:
+            continue
+
+        # Parse quantity
+        qty_str = request.form.get(key, "").strip()
+        try:
+            quantity = Decimal(qty_str) if qty_str else Decimal(0)
+        except InvalidOperation:
+            quantity = Decimal(0)
+
+        # Parse notes
+        notes_key = f"badge_notes_{account_id}"
+        notes = (request.form.get(notes_key) or "").strip()
+
+        # Get the expense account
+        expense_account = ExpenseAccount.query.get(account_id)
+        if not expense_account:
+            continue
+
+        existing_line_id = existing_line_ids_by_account.get(account_id)
+
+        if quantity <= 0:
+            # Delete existing line if present
+            if existing_line_id:
+                detail = BudgetLineDetail.query.filter_by(work_line_id=existing_line_id).first()
+                if detail:
+                    db.session.delete(detail)
+                    db.session.flush()
+                line_to_delete = WorkLine.query.get(existing_line_id)
+                if line_to_delete:
+                    db.session.delete(line_to_delete)
+                    db.session.flush()
+        else:
+            # Get effective settings (price should be 0 for badges)
+            settings = get_effective_fixed_cost_settings(expense_account, ctx.event_cycle.id)
+
+            if existing_line_id:
+                # Update existing line
+                existing_line = WorkLine.query.get(existing_line_id)
+                if existing_line:
+                    detail = BudgetLineDetail.query.filter_by(work_line_id=existing_line_id).first()
+                    if detail:
+                        detail.quantity = quantity
+                        detail.unit_price_cents = settings["unit_price_cents"]  # Should be 0
+                        detail.description = notes if notes else expense_account.name
+                    existing_line.updated_by_user_id = user_ctx.user_id
+            else:
+                # Create new line
+                spend_type_id = expense_account.default_spend_type_id
+                if not spend_type_id:
+                    allowed = get_allowed_spend_types(expense_account)
+                    if allowed:
+                        spend_type_id = allowed[0].id
+                    else:
+                        flash(f"No spend type configured for {expense_account.name}", "error")
+                        continue
+
+                work_line = WorkLine(
+                    work_item_id=work_item.id,
+                    line_number=next_line_number,
+                    status=WORK_LINE_STATUS_PENDING,
+                    updated_by_user_id=user_ctx.user_id,
+                )
+                db.session.add(work_line)
+                db.session.flush()
+
+                next_line_number += 1
+
+                budget_detail = BudgetLineDetail(
+                    work_line_id=work_line.id,
+                    expense_account_id=account_id,
+                    spend_type_id=spend_type_id,
+                    unit_price_cents=settings["unit_price_cents"],  # Should be 0
+                    quantity=quantity,
+                    frequency_id=settings["frequency_id"],
+                    warehouse_flag=False,  # Badges don't go to warehouse
+                    description=notes if notes else expense_account.name,
+                )
+                db.session.add(budget_detail)
+
+    db.session.commit()
+
+    flash("Badge requests updated.", "success")
+    return redirect(url_for(
+        "work.work_item_edit",
+        event=event,
+        dept=dept,
+        public_id=public_id,
+        tab="badges"
     ))
 
 

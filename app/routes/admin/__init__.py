@@ -18,6 +18,7 @@ from .contract_types import contract_types_bp
 from .supply_categories import supply_categories_bp
 from .supply_items import supply_items_bp
 from .email_templates import email_templates_bp
+from .site_content import site_content_bp
 
 admin_config_bp = Blueprint('admin_config', __name__, url_prefix='/admin/config')
 
@@ -35,3 +36,4 @@ admin_config_bp.register_blueprint(contract_types_bp)
 admin_config_bp.register_blueprint(supply_categories_bp)
 admin_config_bp.register_blueprint(supply_items_bp)
 admin_config_bp.register_blueprint(email_templates_bp)
+admin_config_bp.register_blueprint(site_content_bp)

@@ -1,6 +1,7 @@
 {# templates/components/_work_item_card.html #}
 {# Card displaying a work item summary #}
 {# Expects: item, item_totals, line_summary (optional), ctx, format_currency, friendly_status #}
+{# Optional: supplementary_numbers (dict mapping item.id to sequential number) for supplementals #}
 
 {# Use effective status from line_summary if available, otherwise fall back to item status #}
 {% set status = line_summary.effective_status | upper if line_summary else item.status | upper %}
@@ -15,13 +16,21 @@
   else "pill-needs" if status == "PAUSED"
   else "pill-draft" %}
 
+{# Get supplemental number if available #}
+{% set supp_number = supplementary_numbers.get(item.id) if supplementary_numbers is defined else none %}
+
 <div class="card" style="margin-bottom: 12px;">
   <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
     <div>
       <h3 style="margin:0;">
         <a href="{{ url_for('work.work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=item.public_id) }}"
            style="text-decoration: none; color: inherit;">
-          {{ item.public_id }}
+          {# Show "Supplemental #N" for supplementary items, otherwise public ID #}
+          {% if item.request_kind == 'SUPPLEMENTARY' and supp_number %}
+            Supplemental #{{ supp_number }}
+          {% else %}
+            {{ item.public_id }}
+          {% endif %}
         </a>
         <span class="pill {{ status_pill_class }}" style="margin-left: 8px; font-weight: normal;">{{ status_label }}</span>
         {# Show approval stage breakdown if there are approved lines #}
@@ -38,11 +47,22 @@
       </h3>
 
       <div class="muted" style="margin-top:4px;">
-        {{ item.request_kind }}
-        {% if item.submitted_at %}
-          &middot; Submitted {{ item.submitted_at.strftime('%Y-%m-%d') }}
+        {# Show public ID as secondary info for supplementals #}
+        {% if item.request_kind == 'SUPPLEMENTARY' and supp_number %}
+          {{ item.public_id }}
+          &middot;
         {% else %}
-          &middot; Created {{ item.created_at.strftime('%Y-%m-%d') }}
+          {{ item.request_kind }}
+          &middot;
+        {% endif %}
+        {% if item.submitted_at %}
+          Submitted {{ item.submitted_at.strftime('%b %d, %Y') }}
+        {% else %}
+          Created {{ item.created_at.strftime('%b %d, %Y') }}
+        {% endif %}
+        {# Show reason for supplementals if set #}
+        {% if item.request_kind == 'SUPPLEMENTARY' and item.reason %}
+          &middot; {{ item.reason }}
         {% endif %}
       </div>
 

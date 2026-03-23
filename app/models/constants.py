@@ -79,6 +79,7 @@ VISIBILITY_MODE_RESTRICTED = "RESTRICTED"
 
 UI_GROUP_KNOWN_COSTS = "KNOWN_COSTS"
 UI_GROUP_HOTEL_SERVICES = "HOTEL_SERVICES"
+UI_GROUP_BADGES = "BADGES"
 
 # ============================================================
 # Prompt modes for "Known Costs" prompting behavior

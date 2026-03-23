@@ -1,7 +1,7 @@
 """
 Work item creation routes - PRIMARY and SUPPLEMENTARY requests.
 """
-from flask import render_template, redirect, url_for, abort, flash
+from flask import render_template, redirect, url_for, abort, flash, request
 
 from app import db
 from app.models import (
@@ -198,6 +198,11 @@ def supplementary_create(event: str, dept: str):
     if not perms.can_create_supplementary:
         abort(403, "You do not have permission to create a Supplementary Budget Request.")
 
+    # Get optional reason from form
+    reason = (request.form.get("reason") or "").strip()
+    if len(reason) > 256:
+        reason = reason[:256]
+
     # Create the work item with SUP- prefix
     user_ctx = get_user_ctx()
     work_item = WorkItem(
@@ -206,6 +211,7 @@ def supplementary_create(event: str, dept: str):
         status=WORK_ITEM_STATUS_DRAFT,
         public_id=generate_public_id("SUP"),
         created_by_user_id=user_ctx.user_id,
+        reason=reason if reason else None,
     )
     db.session.add(work_item)
     db.session.commit()

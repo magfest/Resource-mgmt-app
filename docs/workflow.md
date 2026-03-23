@@ -154,9 +154,12 @@ Admins can force-release checkouts if needed.
 After the primary budget is finalized, requesters can add supplementary requests:
 
 1. Create supplementary request (same portfolio)
+   - Optionally add a reason (e.g., "Additional equipment needed", "Revised vendor quote")
 2. Add new lines
 3. Submit for review
 4. Same approval flow
+
+Supplemental requests are labeled as "Supplemental #1", "Supplemental #2", etc. in list views, based on creation order. The reason (if provided) is displayed alongside the date for easy identification.
 
 Supplementary requests are common for:
 - Unexpected needs discovered later

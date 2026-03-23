@@ -13,6 +13,8 @@
     else "pill-needs" if status in ["UNDER_REVIEW", "NEEDS_INFO", "PAUSED", "AWAITING_DISPATCH"]
     else "pill-draft" %}
 
+  {% set is_supplementary = work_item.request_kind == 'SUPPLEMENTARY' %}
+
   {# Header #}
   <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap: wrap; margin-bottom: 16px;">
     <div>
@@ -31,6 +33,13 @@
           &middot; Submitted {{ work_item.submitted_at.strftime('%Y-%m-%d %H:%M') }}
         {% endif %}
       </div>
+      {# Reason display for supplementals #}
+      {% if is_supplementary and work_item.reason %}
+        <div style="margin-top: 8px;">
+          <span class="muted" style="font-size: 13px;">Reason:</span>
+          <span style="font-size: 13px;">{{ work_item.reason }}</span>
+        </div>
+      {% endif %}
     </div>
 
     <div style="text-align:right;">

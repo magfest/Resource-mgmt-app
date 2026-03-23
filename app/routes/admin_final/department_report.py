@@ -53,6 +53,7 @@ class DepartmentRow(PipelineTotals):
 def get_department_data(
     event_cycle_id: int,
     department_id: Optional[int] = None,
+    request_kind: Optional[str] = None,
 ) -> List[DepartmentRow]:
     """
     Get department summary data aggregated by department using SQL-level CASE expressions.
@@ -88,6 +89,10 @@ def get_department_data(
     # Apply department filter if specified (for single department detail view)
     if department_id:
         query = query.filter(WorkPortfolio.department_id == department_id)
+
+    # Apply request_kind filter if specified (PRIMARY or SUPPLEMENTARY)
+    if request_kind:
+        query = query.filter(WorkItem.request_kind == request_kind)
 
     # Group by department
     query = query.group_by(
@@ -159,7 +164,11 @@ def department_summary():
 
     # Only query data if event cycle is selected
     if filters.has_event:
-        rows = get_department_data(filters.event_cycle_id, filters.department_id)
+        rows = get_department_data(
+            filters.event_cycle_id,
+            filters.department_id,
+            filters.request_kind if filters.has_request_kind else None,
+        )
         summary = compute_pipeline_summary(rows)
         stats = compute_department_stats(rows)
 
@@ -177,6 +186,7 @@ def department_summary():
         departments=departments,
         selected_event=filters.event_code,
         selected_dept=filters.dept_code,
+        selected_request_kind=filters.request_kind,
         selected_event_cycle=filters.event_cycle,
         selected_department=filters.department,
         format_currency=format_currency,
@@ -198,7 +208,11 @@ def department_summary_export():
         abort(400, "Event cycle is required for export")
 
     # Get report data
-    rows = get_department_data(filters.event_cycle_id, filters.department_id)
+    rows = get_department_data(
+        filters.event_cycle_id,
+        filters.department_id,
+        filters.request_kind if filters.has_request_kind else None,
+    )
     summary = compute_pipeline_summary(rows)
     stats = compute_department_stats(rows)
 

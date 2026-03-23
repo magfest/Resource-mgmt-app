@@ -98,6 +98,8 @@
             {% if account %}
               {% if account.ui_display_group == 'HOTEL_SERVICES' %}
                 {% set current_type = 'hotel_service' %}
+              {% elif account.ui_display_group == 'BADGES' %}
+                {% set current_type = 'badge' %}
               {% elif account.is_fixed_cost %}
                 {% set current_type = 'fixed_cost' %}
               {% endif %}
@@ -105,11 +107,13 @@
             <option value="standard" {% if current_type == 'standard' %}selected{% endif %}>Standard</option>
             <option value="fixed_cost" {% if current_type == 'fixed_cost' %}selected{% endif %}>Fixed Cost</option>
             <option value="hotel_service" {% if current_type == 'hotel_service' %}selected{% endif %}>Hotel/Gaylord Service</option>
+            <option value="badge" {% if current_type == 'badge' %}selected{% endif %}>Badge (Informational)</option>
           </select>
           <div class="muted small mt-4">
             <strong>Standard:</strong> User enters price and quantity.<br>
             <strong>Fixed Cost:</strong> Price is set by admin; user only enters quantity. Shows in Fixed Costs tab.<br>
-            <strong>Hotel/Gaylord:</strong> Same as Fixed Cost, but shows in Hotel tab with duration calculator.
+            <strong>Hotel/Gaylord:</strong> Same as Fixed Cost, but shows in Hotel tab with duration calculator.<br>
+            <strong>Badge:</strong> Informational only ($0 cost). Shows in Badges tab for tracking badge counts.
           </div>
         </div>
 
@@ -279,7 +283,7 @@
 
   function updatePricingVisibility() {
     const type = accountTypeSelect.value;
-    if (type === 'fixed_cost' || type === 'hotel_service') {
+    if (type === 'fixed_cost' || type === 'hotel_service' || type === 'badge') {
       pricingSection.style.display = 'block';
     } else {
       pricingSection.style.display = 'none';
