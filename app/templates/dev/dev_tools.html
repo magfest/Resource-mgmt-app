@@ -1,0 +1,163 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Dev Tools - Development Only{% endblock %}
+
+{% block content %}
+
+<div style="background: #dc2626; color: white; padding: 16px; margin: -20px -20px 20px -20px; text-align: center;">
+  <strong>DEVELOPMENT ENVIRONMENT ONLY</strong>
+  <div class="small">These tools are disabled in production. Data changes are permanent.</div>
+</div>
+
+<h1>Development Tools</h1>
+
+<div class="muted mb-16">
+  These tools are for development and testing purposes only.
+  They allow direct manipulation of data that would not be possible through the normal UI.
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+  {# Left Column #}
+  <div>
+    {# Clear Department Budget #}
+    <section class="card" style="border: 2px solid #dc2626;">
+      <h3 style="margin: 0 0 8px 0; color: #dc2626;">Clear Department Budget</h3>
+      <div class="muted small mb-16">
+        Deletes ALL budget requests, lines, reviews, and audit history for a department/event combination.
+        This cannot be undone.
+      </div>
+
+      <form method="post" action="{{ url_for('dev.clear_department_budget') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="mb-16">
+          <label for="clear_department_id" class="form-label">Department</label>
+          <select name="department_id" id="clear_department_id" required>
+            <option value="">Select department...</option>
+            {% for dept in departments %}
+              <option value="{{ dept.id }}">{{ dept.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="mb-16">
+          <label for="clear_event_cycle_id" class="form-label">Event Cycle</label>
+          <select name="event_cycle_id" id="clear_event_cycle_id" required>
+            <option value="">Select event cycle...</option>
+            {% for cycle in event_cycles %}
+              <option value="{{ cycle.id }}">{{ cycle.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="mb-16">
+          <label style="display: flex; gap: 8px; align-items: center;">
+            <input type="checkbox" name="delete_portfolio" value="1">
+            Also delete the portfolio record
+          </label>
+        </div>
+
+        <button type="submit" class="btn" style="background: #dc2626; color: white; border-color: #dc2626;"
+                data-confirm="This will permanently delete ALL budget data for this department/event. Are you sure?">
+          Clear Budget Data
+        </button>
+      </form>
+    </section>
+
+    {# Reset Work Item Status #}
+    <section class="card" style="border: 2px solid #f59e0b;">
+      <h3 style="margin: 0 0 8px 0; color: #b45309;">Reset Work Item to Draft</h3>
+      <div class="muted small mb-16">
+        Resets a work item back to DRAFT status, clears checkout, deletes all reviews,
+        and sets all lines to PENDING.
+      </div>
+
+      <form method="post" action="{{ url_for('dev.reset_work_item_status') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="mb-16">
+          <label for="reset_public_id" class="form-label">Work Item Public ID</label>
+          <input type="text" name="public_id" id="reset_public_id"
+                 placeholder="e.g., BUD-SUP27-TECH-1"
+                 style="max-width: 300px;">
+        </div>
+
+        <button type="submit" class="btn" style="background: #f59e0b; color: white; border-color: #f59e0b;"
+                data-confirm="This will reset the work item to DRAFT and delete all reviews. Continue?">
+          Reset to Draft
+        </button>
+      </form>
+    </section>
+  </div>
+
+  {# Right Column #}
+  <div>
+    {# Force Finalize #}
+    <section class="card" style="border: 2px solid #059669;">
+      <h3 style="margin: 0 0 8px 0; color: #059669;">Force Finalize Work Item</h3>
+      <div class="muted small mb-16">
+        Immediately finalizes a work item, approving all lines at their requested amounts.
+        Creates admin final reviews as needed.
+      </div>
+
+      <form method="post" action="{{ url_for('dev.force_finalize_work_item') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="mb-16">
+          <label for="finalize_public_id" class="form-label">Work Item Public ID</label>
+          <input type="text" name="public_id" id="finalize_public_id"
+                 placeholder="e.g., BUD-SUP27-TECH-1"
+                 style="max-width: 300px;">
+        </div>
+
+        <button type="submit" class="btn" style="background: #059669; color: white; border-color: #059669;"
+                data-confirm="This will finalize the work item and approve all lines. Continue?">
+          Force Finalize
+        </button>
+      </form>
+    </section>
+
+    {# Portfolio Overview #}
+    <section class="card">
+      <h3 style="margin: 0 0 16px 0;">Active Portfolios with Data</h3>
+
+      {% if portfolio_stats %}
+        <table style="font-size: 13px;">
+          <thead>
+            <tr>
+              <th>Department</th>
+              <th>Event</th>
+              <th class="right">Items</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for stat in portfolio_stats %}
+              <tr>
+                <td>{{ stat.department.name }}</td>
+                <td>{{ stat.event_cycle.code }}</td>
+                <td class="right">{{ stat.item_count }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="muted" style="text-align: center; padding: 24px;">
+          No portfolios with work items found.
+        </div>
+      {% endif %}
+    </section>
+  </div>
+</div>
+
+<section class="card" style="margin-top: 24px;">
+  <h3 style="margin: 0 0 12px 0;">Database Tools</h3>
+  <div class="btn-row">
+    <a href="{{ url_for('dev.db_info') }}" class="btn btn-primary">View Database Schema</a>
+  </div>
+</section>
+
+<div class="btn-row" style="margin-top: 24px;">
+  <a href="{{ url_for('home.index') }}" class="btn">Back to Home</a>
+</div>
+
+{% endblock %}

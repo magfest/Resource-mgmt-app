@@ -1,0 +1,244 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Database Info - Dev Tools{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 16px;">
+  <h1 style="margin: 0;">Database Schema Info</h1>
+  <div class="muted mt-4">
+    Development tool for inspecting database structure
+  </div>
+</div>
+
+<div class="btn-row mb-16">
+  <a href="{{ url_for('dev.dev_tools_dashboard') }}" class="btn">Back to Dev Tools</a>
+</div>
+
+{# Database Overview #}
+<section class="card mb-16">
+  <h3 style="margin: 0 0 12px 0;">Database Overview</h3>
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+    <div style="text-align: center; padding: 16px; background: #f8f9fa; border-radius: 8px;">
+      <div style="font-size: 28px; font-weight: 700; color: #0a66c2;">{{ total_tables }}</div>
+      <div class="muted small">Tables</div>
+    </div>
+    <div style="text-align: center; padding: 16px; background: #f8f9fa; border-radius: 8px;">
+      <div style="font-size: 28px; font-weight: 700; color: #059669;">{{ "{:,}".format(total_rows) }}</div>
+      <div class="muted small">Total Rows</div>
+    </div>
+    <div style="text-align: center; padding: 16px; background: #f8f9fa; border-radius: 8px;">
+      <div style="font-size: 28px; font-weight: 700; color: #7c3aed;">{{ db_size }}</div>
+      <div class="muted small">Database Size</div>
+    </div>
+    <div style="text-align: center; padding: 16px; background: #f8f9fa; border-radius: 8px;">
+      <div style="font-size: 14px; font-weight: 600; color: #374151; word-break: break-all;">{{ alembic_version }}</div>
+      <div class="muted small">Migration Version</div>
+    </div>
+  </div>
+  <div class="muted small mt-16">
+    <strong>Connection:</strong> <code>{{ db_url }}</code>
+  </div>
+</section>
+
+{# Table Selection #}
+<section class="card mb-16">
+  <h3 style="margin: 0 0 12px 0;">Select Table</h3>
+  <div style="display: flex; gap: 16px; align-items: flex-end;">
+    <div style="flex: 1; max-width: 400px;">
+      <select id="table-select" style="width: 100%;">
+        <option value="">-- Select a table to view details --</option>
+        {% for table in tables_overview %}
+        <option value="{{ table.name }}" {% if selected_table == table.name %}selected{% endif %}>
+          {{ table.name }} ({{ table.row_count }} rows, {{ table.column_count }} cols)
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="button" class="btn btn-primary" id="view-table-btn">View Table</button>
+  </div>
+</section>
+
+{# All Tables Summary #}
+<section class="card mb-16">
+  <h3 style="margin: 0 0 12px 0;">All Tables</h3>
+  <table style="font-size: 13px;">
+    <thead>
+      <tr>
+        <th>Table Name</th>
+        <th class="right" style="width: 100px;">Rows</th>
+        <th class="right" style="width: 100px;">Columns</th>
+        <th style="width: 100px;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for table in tables_overview %}
+      <tr {% if selected_table == table.name %}style="background: #e0f2fe;"{% endif %}>
+        <td>
+          <a href="{{ url_for('dev.db_table_detail', table_name=table.name) }}">
+            <strong>{{ table.name }}</strong>
+          </a>
+        </td>
+        <td class="right num">{{ "{:,}".format(table.row_count) }}</td>
+        <td class="right num">{{ table.column_count }}</td>
+        <td>
+          <a href="{{ url_for('dev.db_table_detail', table_name=table.name) }}" class="btn" style="padding: 2px 8px; font-size: 12px;">
+            View
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{# Table Detail (only shown when a table is selected) #}
+{% if table_detail %}
+<section class="card mb-16" id="table-detail">
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+    <h3 style="margin: 0;">
+      {{ table_detail.name }}
+      <span class="pill" style="margin-left: 8px;">{{ "{:,}".format(table_detail.row_count) }} rows</span>
+    </h3>
+    <a href="{{ url_for('dev.db_info') }}" class="btn">Clear Selection</a>
+  </div>
+
+  <h4 style="margin: 0 0 8px 0;">Columns</h4>
+  <table style="margin-bottom: 24px;">
+    <thead>
+      <tr>
+        <th style="width: 200px;">Column</th>
+        <th style="width: 150px;">Type</th>
+        <th style="width: 80px;">Nullable</th>
+        <th style="width: 60px;">PK</th>
+        <th>Default / FK</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for col in table_detail.columns %}
+      <tr>
+        <td>
+          <strong>{{ col.name }}</strong>
+          {% if col.is_pk %}
+          <span class="pill" style="background: #0a66c2; color: white; margin-left: 4px;">PK</span>
+          {% endif %}
+          {% if col.fk %}
+          <span class="pill" style="background: #059669; color: white; margin-left: 4px;">FK</span>
+          {% endif %}
+        </td>
+        <td><code>{{ col.type }}</code></td>
+        <td>
+          {% if col.nullable %}
+          <span class="muted">Yes</span>
+          {% else %}
+          <strong>No</strong>
+          {% endif %}
+        </td>
+        <td>
+          {% if col.is_pk %}
+          <span style="color: #0a66c2;">Yes</span>
+          {% else %}
+          <span class="muted">-</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if col.fk %}
+          <a href="{{ url_for('dev.db_table_detail', table_name=col.fk.referred_table) }}" style="color: #059669;">
+            &rarr; {{ col.fk.referred_table }}.{{ col.fk.referred_columns | join(', ') }}
+          </a>
+          {% elif col.default %}
+          <code class="muted" style="font-size: 11px;">{{ col.default[:50] }}{% if col.default|length > 50 %}...{% endif %}</code>
+          {% else %}
+          <span class="muted">-</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if table_detail.indexes %}
+  <h4 style="margin: 0 0 8px 0;">Indexes</h4>
+  <table style="margin-bottom: 24px; font-size: 13px;">
+    <thead>
+      <tr>
+        <th>Index Name</th>
+        <th>Columns</th>
+        <th style="width: 80px;">Unique</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for idx in table_detail.indexes %}
+      <tr>
+        <td><code>{{ idx.name }}</code></td>
+        <td>{{ idx.column_names | join(', ') }}</td>
+        <td>
+          {% if idx.unique %}
+          <span class="pill" style="background: #7c3aed; color: white;">UNIQUE</span>
+          {% else %}
+          <span class="muted">-</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if table_detail.sample_rows %}
+  <h4 style="margin: 0 0 8px 0;">Sample Data (first 10 rows)</h4>
+  <div style="overflow-x: auto;">
+    <table style="font-size: 12px; white-space: nowrap;">
+      <thead>
+        <tr>
+          {% for col in table_detail.sample_columns %}
+          <th>{{ col }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in table_detail.sample_rows %}
+        <tr>
+          {% for val in row %}
+          <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">
+            {% if val is none %}
+            <span class="muted">NULL</span>
+            {% elif val is string and val|length > 50 %}
+            {{ val[:50] }}...
+            {% else %}
+            {{ val }}
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% elif table_detail.row_count == 0 %}
+  <div class="muted" style="text-align: center; padding: 24px; background: #f8f9fa; border-radius: 6px;">
+    Table is empty.
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+<div class="btn-row mb-16">
+  <a href="{{ url_for('dev.dev_tools_dashboard') }}" class="btn">Back to Dev Tools</a>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+  document.getElementById('view-table-btn').addEventListener('click', function() {
+    var select = document.getElementById('table-select');
+    var tableName = select.value;
+    if (tableName) {
+      window.location.href = '{{ url_for("dev.db_info") }}/' + tableName;
+    }
+  });
+
+  document.getElementById('table-select').addEventListener('change', function() {
+    if (this.value) {
+      window.location.href = '{{ url_for("dev.db_info") }}/' + this.value;
+    }
+  });
+</script>
+{% endblock %}
