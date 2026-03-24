@@ -1,0 +1,146 @@
+{# components/_top_nav.html — Persistent top navigation bar with dropdown menus #}
+{% if active_user %}
+<nav class="top-nav">
+  <div class="top-nav-left">
+    <a href="{{ url_for('home.index') }}" class="top-nav-brand">MAGFest Budget</a>
+
+    {# Budget Admin menu (budget admins + super admins) #}
+    {% if nav_is_budget_admin %}
+    <div class="top-nav-dropdown">
+      <button type="button" class="top-nav-link top-nav-toggle">Budget Admin <span class="top-nav-caret">&#9662;</span></button>
+      <div class="top-nav-menu">
+        <a href="{{ url_for('dispatch.dashboard') }}">Dispatch Queue</a>
+        <a href="{{ url_for('approvals.dashboard_home') }}">Reviewer Groups</a>
+        <a href="{{ url_for('admin_final.dashboard') }}">Final Review</a>
+        <a href="{{ url_for('admin_final.all_requests') }}">All Requests</a>
+        <div class="top-nav-divider"></div>
+        <a href="{{ url_for('admin_config.expense_accounts.list_expense_accounts') }}">Expense Accounts</a>
+        <a href="{{ url_for('admin_config.approval_groups.list_approval_groups') }}">Reviewer Groups</a>
+        <div class="top-nav-divider"></div>
+        <a href="{{ url_for('admin_final.budget_admin_home') }}">Budget Admin Home</a>
+      </div>
+    </div>
+
+    {# Reports menu (budget admins + super admins — separated for future role split) #}
+    <div class="top-nav-dropdown">
+      <button type="button" class="top-nav-link top-nav-toggle">Reports <span class="top-nav-caret">&#9662;</span></button>
+      <div class="top-nav-menu">
+        <a href="{{ url_for('admin_final.master_ledger') }}">Master Ledger</a>
+        <a href="{{ url_for('admin_final.department_summary') }}">Department Summary</a>
+        <a href="{{ url_for('admin_final.workload_report') }}">Workload Report</a>
+        <a href="{{ url_for('admin_final.missing_budgets_report') }}">Missing Budgets</a>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Review menu (approvers) #}
+    {% if nav_approval_groups %}
+    <div class="top-nav-dropdown">
+      <button type="button" class="top-nav-link top-nav-toggle">Review <span class="top-nav-caret">&#9662;</span></button>
+      <div class="top-nav-menu">
+        {% for group in nav_approval_groups %}
+          <a href="{{ url_for('approvals.dashboard_group', group_code=group.code) }}">{{ group.name }}</a>
+        {% endfor %}
+        <div class="top-nav-divider"></div>
+        <a href="{{ url_for('approvals.dashboard_home') }}">All Reviewer Groups</a>
+      </div>
+    </div>
+    {% endif %}
+
+    {# Admin menu (super admins only) #}
+    {% if is_super_admin %}
+    <div class="top-nav-dropdown">
+      <button type="button" class="top-nav-link top-nav-toggle">Admin <span class="top-nav-caret">&#9662;</span></button>
+      <div class="top-nav-menu">
+        <a href="{{ url_for('admin_config.users.list_users') }}">Users</a>
+        <a href="{{ url_for('admin_config.divisions.list_divisions') }}">Divisions</a>
+        <a href="{{ url_for('admin_config.departments.list_departments') }}">Departments</a>
+        <a href="{{ url_for('admin_config.event_cycles.list_event_cycles') }}">Event Cycles</a>
+        <div class="top-nav-divider"></div>
+        <a href="{{ url_for('admin_config.email_templates.list_email_templates') }}">Email Templates</a>
+        <a href="{{ url_for('admin_config.site_content.list_site_content') }}">Site Content</a>
+        <a href="{{ url_for('admin_final.email_debug') }}">Email Debug</a>
+        <div class="top-nav-divider"></div>
+        <a href="{{ url_for('admin_config.data_upload.index') }}">Data Upload</a>
+        <a href="{{ url_for('admin_config.locks.list_locks') }}">Locks</a>
+        <a href="{{ url_for('security_logs.list_logs') }}">Security Logs</a>
+        <div class="top-nav-divider"></div>
+        <a href="{{ url_for('admin_final.admin_home') }}">System Admin Home</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="top-nav-right">
+    {# User menu #}
+    <div class="top-nav-dropdown">
+      <button type="button" class="top-nav-link top-nav-toggle">{{ active_user.display_name }} <span class="top-nav-caret">&#9662;</span></button>
+      <div class="top-nav-menu top-nav-menu-right">
+        {% if nav_event_cycle and (nav_div_memberships or nav_dept_memberships) %}
+        <div class="top-nav-menu-label">{{ nav_event_cycle.code }}</div>
+        {% if nav_div_memberships %}
+          {% for dm in nav_div_memberships %}
+            <a href="{{ url_for('work.division_home', event=nav_event_cycle.code, div_code=dm.division.code) }}" style="color: #7c3aed;">{{ dm.division.name }}{% if dm.is_division_head %} <span style="opacity: 0.7;">(Head)</span>{% endif %}</a>
+          {% endfor %}
+        {% endif %}
+        {% if nav_dept_memberships %}
+          {% for m in nav_dept_memberships %}
+            <a href="{{ url_for('work.department_home', event=nav_event_cycle.code, dept=m.department.code) }}">{{ m.department.name }}{% if m.is_department_head %} <span style="color: #92400e;">(Head)</span>{% endif %}</a>
+          {% endfor %}
+        {% endif %}
+        <div class="top-nav-divider"></div>
+        {% endif %}
+        <a href="{{ url_for('home.changelog') }}">What's New</a>
+        <div class="top-nav-divider"></div>
+        <a href="{{ url_for('auth.logout') }}">Sign out</a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<script nonce="{{ csp_nonce }}">
+(function() {
+  // Toggle dropdown on click
+  document.querySelectorAll('.top-nav-toggle').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var dropdown = this.parentElement;
+      var wasOpen = dropdown.classList.contains('open');
+
+      // Close all dropdowns first
+      document.querySelectorAll('.top-nav-dropdown.open').forEach(function(d) {
+        d.classList.remove('open');
+      });
+
+      // Toggle the clicked one
+      if (!wasOpen) {
+        dropdown.classList.add('open');
+      }
+    });
+  });
+
+  // Close on outside click
+  document.addEventListener('click', function() {
+    document.querySelectorAll('.top-nav-dropdown.open').forEach(function(d) {
+      d.classList.remove('open');
+    });
+  });
+
+  // Close on Escape
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.top-nav-dropdown.open').forEach(function(d) {
+        d.classList.remove('open');
+      });
+    }
+  });
+
+  // Prevent menu clicks from closing the dropdown prematurely
+  document.querySelectorAll('.top-nav-menu').forEach(function(menu) {
+    menu.addEventListener('click', function(e) {
+      e.stopPropagation();
+    });
+  });
+})();
+</script>
+{% endif %}

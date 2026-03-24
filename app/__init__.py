@@ -772,13 +772,89 @@ def create_app() -> Flask:
         real_user_id = session.get("real_user_id")
         is_impersonating = bool(real_user_id and real_user_id != get_active_user_id())
 
+        # --- Nav bar context (role-gated menus) ---
+        _is_super = is_super_admin()
+        nav_is_budget_admin = False
+        nav_approval_groups = []
+        nav_event_cycle = None
+        nav_dept_memberships = []
+        nav_div_memberships = []
+
+        if u:
+            from .models import (
+                UserRole, WorkType, ApprovalGroup, EventCycle,
+                DepartmentMembership, DivisionMembership, Department, Division,
+                ROLE_WORKTYPE_ADMIN,
+            )
+
+            # Budget admin = super admin OR WORKTYPE_ADMIN for the BUDGET work type
+            if _is_super:
+                nav_is_budget_admin = True
+            else:
+                budget_wt = WorkType.query.filter_by(code="BUDGET").first()
+                if budget_wt:
+                    nav_is_budget_admin = UserRole.query.filter_by(
+                        user_id=u.id,
+                        role_code=ROLE_WORKTYPE_ADMIN,
+                        work_type_id=budget_wt.id,
+                    ).first() is not None
+
+            # Approval groups the user can review (for Review menu)
+            ag_ids = active_user_approval_group_ids()
+            if ag_ids:
+                nav_approval_groups = (
+                    ApprovalGroup.query
+                    .filter(ApprovalGroup.id.in_(ag_ids))
+                    .filter(ApprovalGroup.is_active.is_(True))
+                    .order_by(ApprovalGroup.sort_order)
+                    .all()
+                )
+
+            # User menu: department/division memberships for current event
+            # Use session-selected cycle, fallback to default
+            selected_id = session.get('selected_event_cycle_id')
+            if selected_id and selected_id != 'all':
+                nav_event_cycle = EventCycle.query.filter_by(id=selected_id, is_active=True).first()
+            if not nav_event_cycle:
+                nav_event_cycle = (
+                    EventCycle.query
+                    .filter(EventCycle.is_default.is_(True))
+                    .first()
+                ) or (
+                    EventCycle.query
+                    .filter(EventCycle.is_active.is_(True))
+                    .order_by(EventCycle.sort_order)
+                    .first()
+                )
+
+            if nav_event_cycle:
+                # Direct department memberships
+                nav_dept_memberships = (
+                    DepartmentMembership.query
+                    .join(Department)
+                    .filter(DepartmentMembership.user_id == u.id)
+                    .filter(DepartmentMembership.event_cycle_id == nav_event_cycle.id)
+                    .order_by(Department.name)
+                    .all()
+                )
+
+                # Division memberships (division heads)
+                nav_div_memberships = (
+                    DivisionMembership.query
+                    .join(Division)
+                    .filter(DivisionMembership.user_id == u.id)
+                    .filter(DivisionMembership.event_cycle_id == nav_event_cycle.id)
+                    .order_by(Division.name)
+                    .all()
+                )
+
         ctx = {
             # CSP nonce for inline scripts (see docs/security.md)
             "csp_nonce": getattr(g, 'csp_nonce', ''),
             "active_user": u,
             "active_user_id": get_active_user_id(),
             "active_user_roles": roles,
-            "is_super_admin": is_super_admin(),
+            "is_super_admin": _is_super,
             "beta_testing_mode": beta_mode,
             "can_override_role": beta_mode and has_super_admin,
             "role_override": override,
@@ -794,6 +870,12 @@ def create_app() -> Flask:
             # Environment banner
             "env_banner_enabled": app.config.get("ENV_BANNER_ENABLED", False),
             "env_banner_message": app.config.get("ENV_BANNER_MESSAGE", ""),
+            # Navigation bar
+            "nav_is_budget_admin": nav_is_budget_admin,
+            "nav_approval_groups": nav_approval_groups,
+            "nav_event_cycle": nav_event_cycle,
+            "nav_dept_memberships": nav_dept_memberships,
+            "nav_div_memberships": nav_div_memberships,
         }
         return ctx
 

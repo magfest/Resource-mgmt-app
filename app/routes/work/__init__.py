@@ -10,6 +10,7 @@ work_bp = Blueprint("work", __name__)
 
 # Import route modules to register their routes with the blueprint
 from . import department
+from . import division
 from . import portfolio
 from . import work_items
 from . import lines

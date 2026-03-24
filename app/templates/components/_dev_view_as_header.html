@@ -174,16 +174,4 @@
 })();
 </script>
 
-{% elif oauth_enabled %}
-{# === PRODUCTION MODE: Minimal user bar === #}
-  {% if active_user %}
-  <div style="padding: 8px 12px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.9em; display: flex; justify-content: flex-end; align-items: center; gap: 16px;">
-    <span style="color: #666;">{{ active_user.display_name }}</span>
-    <a href="{{ url_for('auth.logout') }}" style="color: #666; text-decoration: none;">Sign out</a>
-  </div>
-  {% elif not active_user %}
-  <div style="padding: 8px 12px; background: #f8f9fa; border-bottom: 1px solid #e9ecef; font-size: 0.9em; display: flex; justify-content: flex-end; align-items: center;">
-    <a href="{{ url_for('auth.login') }}" style="color: #666; text-decoration: none;">Sign in</a>
-  </div>
-  {% endif %}
 {% endif %}

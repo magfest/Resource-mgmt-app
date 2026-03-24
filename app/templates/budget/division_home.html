@@ -1,0 +1,102 @@
+{% extends "layout/base.html" %}
+
+{% block title %}{{ division.name }} - {{ event_cycle.code }}{% endblock %}
+
+{% block content %}
+<nav class="muted small" style="margin-bottom: 12px;">
+  <a href="{{ url_for('home.index') }}">Home</a>
+  <span style="margin: 0 6px;">&rsaquo;</span>
+  <span>{{ division.name }}</span>
+</nav>
+
+<div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 16px; margin-bottom: 24px;">
+  <div>
+    <h1 style="margin: 0;">{{ division.name }}</h1>
+    <div class="muted mt-4">
+      {{ event_cycle.name }}
+      {% if div_membership and div_membership.is_division_head %}
+        <span style="margin: 0 8px;">|</span>
+        <span class="pill pill-divhead">Division Head</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if departments %}
+<section class="card">
+  <h3 style="margin: 0 0 16px 0;">Departments</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Department</th>
+        {% for wt in active_work_types %}
+          <th style="width: 130px;">{{ wt.config.item_plural if wt.config else wt.name }}</th>
+        {% endfor %}
+        <th style="width: 80px;"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for dept in departments %}
+      <tr>
+        <td>
+          <a href="{{ url_for('work.department_home', event=event_cycle.code, dept=dept.code) }}" style="text-decoration: none; color: inherit; font-weight: 600;">
+            {{ dept.name }}
+          </a>
+        </td>
+        {% for wt in active_work_types %}
+          {% set wt_status = dept_work_type_status.get((dept.id, wt.id)) %}
+          {% if wt.config %}
+            {% set url_slug = wt.config.url_slug %}
+          {% else %}
+            {% set url_slug = 'budget' %}
+          {% endif %}
+          {% if url_slug == 'budget' %}
+            {% set wt_url = url_for('work.portfolio_landing', event=event_cycle.code, dept=dept.code) %}
+          {% else %}
+            {% set wt_url = url_for('work.department_home', event=event_cycle.code, dept=dept.code) %}
+          {% endif %}
+          <td>
+            {% if wt_status %}
+              {% set status = wt_status.effective_status %}
+              {% if status == "FINALIZED" %}
+                <a href="{{ wt_url }}" class="pill pill-approved pill-link">Finalized</a>
+              {% elif status == "DRAFT" %}
+                <a href="{{ wt_url }}" class="pill pill-draft pill-link">Draft</a>
+              {% elif status == "AWAITING_DISPATCH" %}
+                <a href="{{ wt_url }}" class="pill pill-needs pill-link">Awaiting Dispatch</a>
+              {% elif status == "NEEDS_INFO" or status == "NEEDS_ADJUSTMENT" or status == "NEEDS_RESPONSE" %}
+                <a href="{{ wt_url }}" class="pill pill-needs pill-link">{{ status | replace('_', ' ') | title }}</a>
+              {% elif status == "UNDER_REVIEW" or status == "SUBMITTED" %}
+                <a href="{{ wt_url }}" class="pill pill-submitted pill-link">{{ status | replace('_', ' ') | title }}</a>
+              {% else %}
+                <a href="{{ wt_url }}" class="pill pill-link">{{ status | replace('_', ' ') | title }}</a>
+              {% endif %}
+              {% if wt_status.supplementary_count > 0 %}
+                {% if wt_status.supplementary_draft_count > 0 %}
+                  <span class="pill" style="background: #fef3c7; color: #92400e; font-size: 10px; padding: 1px 5px; margin-left: 2px;" title="{{ wt_status.supplementary_count }} supplementary, {{ wt_status.supplementary_draft_count }} in draft">+{{ wt_status.supplementary_count }}</span>
+                {% elif wt_status.supplementary_needs_attention > 0 %}
+                  <span class="pill" style="background: #fee2e2; color: #dc2626; font-size: 10px; padding: 1px 5px; margin-left: 2px;" title="{{ wt_status.supplementary_count }} supplementary, {{ wt_status.supplementary_needs_attention }} need attention">+{{ wt_status.supplementary_count }}</span>
+                {% else %}
+                  <span class="pill" style="background: #e9f7ef; color: #059669; font-size: 10px; padding: 1px 5px; margin-left: 2px;" title="{{ wt_status.supplementary_count }} supplementary">+{{ wt_status.supplementary_count }}</span>
+                {% endif %}
+              {% endif %}
+            {% else %}
+              <a href="{{ wt_url }}" class="pill pill-link" style="background: #f1f5f9; color: #64748b;">Not started</a>
+            {% endif %}
+          </td>
+        {% endfor %}
+        <td>
+          <a class="btn" href="{{ url_for('work.department_home', event=event_cycle.code, dept=dept.code) }}">Open</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% else %}
+<div class="card" style="text-align: center; padding: 48px;">
+  <div class="muted">No departments are enabled for this division in {{ event_cycle.code }}.</div>
+</div>
+{% endif %}
+
+{% endblock %}

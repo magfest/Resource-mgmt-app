@@ -219,55 +219,6 @@
 </section>
 {% endif %}
 
-{# Budget Admin Section (super admin or budget worktype admin) #}
-{% if is_budget_admin %}
-<section class="card" style="background: #f0fdf4; border: 1px solid #059669;">
-  <h3 style="margin:0 0 16px 0;">Budget Admin Quick Actions</h3>
-
-  <div class="btn-row">
-    <a class="btn" href="{{ url_for('dispatch.dashboard') }}">
-      Dispatch Queue
-    </a>
-    <a class="btn" href="{{ url_for('approvals.dashboard_home') }}">
-      Reviewer Groups Queue
-    </a>
-
-    <a class="btn" href="{{ url_for('admin_final.dashboard') }}">
-      Final Review Queue
-    </a>
-        <a class="btn btn-primary" href="{{ url_for('admin_final.all_requests') }}">
-        All Requests
-      </a>
-
-    {# Divider #}
-    <span style="border-left: 1px solid #a7f3d0; height: 24px; margin: 0 4px;"></span>
-
-    <a class="btn" href="{{ url_for('admin_final.budget_admin_home') }}">
-      Budget Admin / Reports
-    </a>
-  </div>
-
-  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 16px;">
-    <div style="text-align: center; padding: 16px; background: white; border-radius: 6px;">
-      <div style="font-size: 28px; font-weight: 700; color: #0a66c2;">{{ submitted_count or 0 }}</div>
-      <div class="muted small">In Review Pipeline</div>
-    </div>
-    <div style="text-align: center; padding: 16px; background: white; border-radius: 6px;">
-      <div style="font-size: 28px; font-weight: 700; color: #d97706;">{{ dispatch_queue_count or 0 }}</div>
-      <div class="muted small">Awaiting Dispatch</div>
-    </div>
-    <div style="text-align: center; padding: 16px; background: white; border-radius: 6px;">
-      <div style="font-size: 28px; font-weight: 700; color: #6b7280;">{{ requests_needing_review or 0 }}</div>
-      <div class="muted small">Requests Needing Review</div>
-    </div>
-    <div style="text-align: center; padding: 16px; background: white; border-radius: 6px;">
-      <div style="font-size: 28px; font-weight: 700; color: #059669;">{{ finalized_count or 0 }}</div>
-      <div class="muted small">Finalized Requests</div>
-    </div>
-  </div>
-</section>
-{% endif %}
-
 {# Approver Section #}
 {% if approval_groups %}
 <section class="card" style="background: #eff6ff; border: 1px solid #3b82f6;">
@@ -365,35 +316,6 @@
   </details>
 </section>
 {% endif %}
-
-{# Quick Links - Collapsible #}
-<section class="card">
-  <details>
-    <summary style="cursor: pointer; font-weight: 600; font-size: 1rem; padding: 4px 0;">
-      Quick Links
-    </summary>
-    <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
-      <div class="btn-row">
-        {% if is_super_admin %}
-          <a class="btn btn-primary" href="{{ url_for('admin_final.admin_home') }}">
-              Admin Settings
-          </a>
-          {% if selected_cycle %}
-          <a class="btn" href="{{ url_for('admin_config.event_cycles.organization_enablement', cycle_id=selected_cycle.id) }}">
-              {{ selected_cycle.code }} Organization
-          </a>
-          {% endif %}
-          <a class="btn" href="{{ url_for('admin_config.departments.list_departments') }}">
-              Manage Departments
-          </a>
-          <a class="btn" href="{{ url_for('admin_config.divisions.list_divisions') }}">Manage Divisions</a>
-          <a class="btn" href="{{ url_for('admin_config.users.list_users') }}">Manage Users</a>
-        {% endif %}
-        <a class="btn" href="{{ url_for('home.changelog') }}">What's New</a>
-      </div>
-    </div>
-  </details>
-</section>
 
 {% endif %}
 

@@ -177,8 +177,10 @@ def unfinalize(work_item_id: int):
 @admin_final_bp.get("/admin/")
 def admin_home():
     """
-    Super-admin landing page with system configuration links.
+    Super-admin dashboard with system overview.
     """
+    from app.models import User, Division
+
     user_ctx = get_user_ctx()
     require_admin(user_ctx)
 
@@ -189,10 +191,20 @@ def admin_home():
             EventCycle.sort_order
         ).first()
 
+    # System overview counts (app-level, cross-work-type)
+    system_stats = {
+        "users": User.query.filter(User.is_active.is_(True)).count(),
+        "divisions": Division.query.filter(Division.is_active.is_(True)).count(),
+        "departments": Department.query.filter(Department.is_active.is_(True)).count(),
+        "active_events": EventCycle.query.filter(EventCycle.is_active.is_(True)).count(),
+        "approval_groups": ApprovalGroup.query.filter(ApprovalGroup.is_active.is_(True)).count(),
+    }
+
     return render_template(
         "admin_final/admin_home.html",
         user_ctx=user_ctx,
         default_event=default_event,
+        system_stats=system_stats,
     )
 
 
@@ -205,6 +217,8 @@ def budget_admin_home():
     """
     Budget admin landing page - accessible by Budget Worktype Admins + Super Admins.
     """
+    from app.routes.work.helpers import get_enabled_department_ids_for_event
+
     user_ctx = get_user_ctx()
     require_budget_admin(user_ctx)
 
@@ -242,6 +256,48 @@ def budget_admin_home():
     event_cycles = get_active_event_cycles()
     departments = get_active_departments()
 
+    # Department progress for default event
+    default_event = EventCycle.query.filter_by(is_default=True, is_active=True).first()
+    if not default_event:
+        default_event = EventCycle.query.filter_by(is_active=True).order_by(
+            EventCycle.sort_order
+        ).first()
+
+    event_progress = None
+    if default_event:
+        enabled_dept_ids = get_enabled_department_ids_for_event(default_event.id)
+        enabled_count = len(enabled_dept_ids)
+
+        depts_with_items = (
+            db.session.query(db.func.count(db.distinct(WorkPortfolio.department_id)))
+            .join(WorkItem, WorkItem.portfolio_id == WorkPortfolio.id)
+            .filter(WorkPortfolio.event_cycle_id == default_event.id)
+            .filter(WorkPortfolio.is_archived.is_(False))
+            .filter(WorkItem.is_archived.is_(False))
+            .filter(WorkPortfolio.department_id.in_(enabled_dept_ids))
+            .scalar()
+        ) if enabled_dept_ids else 0
+
+        status_counts = dict(
+            db.session.query(WorkItem.status, db.func.count(WorkItem.id))
+            .join(WorkPortfolio, WorkItem.portfolio_id == WorkPortfolio.id)
+            .filter(WorkPortfolio.event_cycle_id == default_event.id)
+            .filter(WorkPortfolio.is_archived.is_(False))
+            .filter(WorkItem.is_archived.is_(False))
+            .filter(WorkPortfolio.department_id.in_(enabled_dept_ids))
+            .group_by(WorkItem.status)
+            .all()
+        ) if enabled_dept_ids else {}
+
+        event_progress = {
+            "enabled_depts": enabled_count,
+            "started_depts": depts_with_items,
+            "draft": status_counts.get(WORK_ITEM_STATUS_DRAFT, 0),
+            "awaiting_dispatch": status_counts.get(WORK_ITEM_STATUS_AWAITING_DISPATCH, 0),
+            "submitted": status_counts.get(WORK_ITEM_STATUS_SUBMITTED, 0),
+            "finalized": status_counts.get(WORK_ITEM_STATUS_FINALIZED, 0),
+        }
+
     return render_template(
         "admin_final/budget_home.html",
         user_ctx=user_ctx,
@@ -250,6 +306,8 @@ def budget_admin_home():
         event_cycles=event_cycles,
         departments=departments,
         friendly_status=friendly_status,
+        default_event=default_event,
+        event_progress=event_progress,
     )
 
 

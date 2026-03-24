@@ -13,63 +13,12 @@
         Budget workflow tools and configuration
       </div>
     </div>
-    {% if user_ctx.is_super_admin %}
-      <a class="btn" href="{{ url_for('admin_final.admin_home') }}">
-        Back to System Admin
-      </a>
-    {% endif %}
   </div>
 
-  {# Quick Actions #}
-  <section class="card" style="margin-bottom: 24px; background: #f0fdf4; border: 1px solid #059669;">
-    <h3 style="margin:0 0 16px 0;">Quick Actions</h3>
-
-    {# Workflow Actions #}
-    <div style="margin-bottom: 12px;">
-      <div class="muted small" style="margin-bottom: 8px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Workflow</div>
-      <div class="btn-row">
-        <a class="btn" href="{{ url_for('dispatch.dashboard') }}">
-          Dispatch Queue
-        </a>
-        <a class="btn" href="{{ url_for('approvals.dashboard_home') }}">
-          Reviewer Group Queue
-        </a>
-        <a class="btn" href="{{ url_for('admin_final.dashboard') }}">
-          Final Review Queue
-        </a>
-         <a class="btn btn-primary" href="{{ url_for('admin_final.all_requests') }}">
-          All Requests
-        </a>
-      </div>
-    </div>
-
-    {# Divider #}
-    <div style="border-top: 1px solid #a7f3d0; margin: 16px 0;"></div>
-
-    {# Reports #}
-    <div id="reports">
-      <div class="muted small" style="margin-bottom: 8px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Reports</div>
-      <div class="btn-row">
-        <a class="btn" href="{{ url_for('admin_final.master_ledger') }}">
-          Master Ledger Report
-        </a>
-        <a class="btn" href="{{ url_for('admin_final.department_summary') }}">
-          Department Summary
-        </a>
-        <a class="btn" href="{{ url_for('admin_final.workload_report') }}">
-          Workload Report
-        </a>
-        <a class="btn" href="{{ url_for('admin_final.missing_budgets_report') }}">
-          Missing Budgets
-        </a>
-      </div>
-    </div>
-      {# Divider #}
-    <div style="border-top: 1px solid #a7f3d0; margin: 16px 0;"></div>
-
-    {# Quick Navigation to Department #}
-    <div class="muted small" style="margin-bottom: 8px; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Go to Department</div>
-    <p class="muted small" style="margin: 0 0 16px 0;">
+  {# Go to Department #}
+  <section class="card" style="margin-bottom: 24px;">
+    <h3 style="margin:0 0 8px 0;">Go to Department</h3>
+    <p class="muted small" style="margin: 0 0 12px 0;">
       Jump directly to a department's budget page.
     </p>
     <form id="dept-nav-form" style="display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end;">
@@ -94,7 +43,62 @@
     </form>
   </section>
 
-  {# Stats Overview #}
+  {# Department Progress #}
+  {% if default_event and event_progress %}
+  <section class="card" style="margin-bottom: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+      <div>
+        <h3 style="margin:0;">{{ default_event.name }} Progress</h3>
+        <div class="muted small" style="margin-top: 4px;">
+          {% if default_event.submission_deadline %}
+            Submission deadline: {{ default_event.submission_deadline.strftime('%b %d, %Y') }}
+          {% endif %}
+          {% if default_event.submission_deadline and default_event.approval_target_date %}
+            &middot;
+          {% endif %}
+          {% if default_event.approval_target_date %}
+            Approval target: {{ default_event.approval_target_date.strftime('%b %d, %Y') }}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# Department progress bar #}
+    <div style="margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+        <span style="font-weight: 600; font-size: 13px;">Department Progress</span>
+        <span class="muted small">{{ event_progress.started_depts }} of {{ event_progress.enabled_depts }} departments started</span>
+      </div>
+      <div style="background: #e5e7eb; border-radius: 999px; height: 10px; overflow: hidden;">
+        {% if event_progress.enabled_depts > 0 %}
+        <div style="background: #0a66c2; height: 100%; border-radius: 999px; width: {{ (event_progress.started_depts / event_progress.enabled_depts * 100) | round }}%;"></div>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Request status breakdown for this event #}
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+      <div style="text-align: center; padding: 16px; background: #f8fafc; border-radius: 6px;">
+        <div style="font-size: 28px; font-weight: 700; color: #6b7280;">{{ event_progress.draft }}</div>
+        <div class="muted small">Drafts</div>
+      </div>
+      <div style="text-align: center; padding: 16px; background: #f8fafc; border-radius: 6px;">
+        <div style="font-size: 28px; font-weight: 700; color: #d97706;">{{ event_progress.awaiting_dispatch + event_progress.submitted }}</div>
+        <div class="muted small">Under Review</div>
+      </div>
+      <div style="text-align: center; padding: 16px; background: #f8fafc; border-radius: 6px;">
+        <div style="font-size: 28px; font-weight: 700; color: #059669;">{{ event_progress.finalized }}</div>
+        <div class="muted small">Finalized</div>
+      </div>
+      <div style="text-align: center; padding: 16px; background: #f8fafc; border-radius: 6px;">
+        <div style="font-size: 28px; font-weight: 700; color: #0a66c2;">{{ event_progress.draft + event_progress.awaiting_dispatch + event_progress.submitted + event_progress.finalized }}</div>
+        <div class="muted small">Total Requests</div>
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {# Stats Overview (all events) #}
   <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
     <div class="card" style="text-align: center;">
       <div style="font-size: 32px; font-weight: 700; color: #0a66c2;">{{ stats.submitted_items }}</div>
@@ -200,25 +204,6 @@
   </section>
 
 
-
-  {# Budget Configuration - links to config pages #}
-  <section class="card" style="margin-bottom: 24px;">
-    <h3 style="margin:0 0 16px 0;">Budget Configuration</h3>
-    <p class="muted small" style="margin: 0 0 16px 0;">
-      Manage expense accounts, reviewer groups, and email templates for the budget system.
-    </p>
-    <div class="btn-row">
-      <a class="btn" href="{{ url_for('admin_config.expense_accounts.list_expense_accounts') }}">
-        Expense Accounts
-      </a>
-      <a class="btn" href="{{ url_for('admin_config.approval_groups.list_approval_groups') }}">
-        Reviewer Groups
-      </a>
-      <a class="btn" href="{{ url_for('admin_config.email_templates.list_email_templates') }}">
-        Email Templates
-      </a>
-    </div>
-  </section>
 
 {% endblock %}
 

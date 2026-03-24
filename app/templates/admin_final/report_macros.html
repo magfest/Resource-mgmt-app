@@ -10,7 +10,7 @@
    Report Header
    ============================================================ #}
 
-{% macro report_header(title, subtitle, back_url=None, back_label="Back to Budget Admin") %}
+{% macro report_header(title, subtitle) %}
 <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap: wrap; margin-bottom: 16px;">
   <div>
     <h1 style="margin:0;">{{ title }}</h1>
@@ -18,11 +18,6 @@
       {{ subtitle }}
     </div>
   </div>
-  {% if back_url %}
-    <a class="btn" href="{{ back_url }}">
-      {{ back_label }}
-    </a>
-  {% endif %}
 </div>
 {% endmacro %}
 
