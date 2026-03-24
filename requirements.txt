@@ -4,24 +4,20 @@
 #
 #    pip-compile --output-file=requirements.txt requirements.in
 #
-alembic==1.18.1
+alembic==1.18.4
     # via flask-migrate
-authlib==1.6.8
+authlib==1.6.9
     # via -r requirements.in
 blinker==1.9.0
     # via flask
-boto3==1.42.54
+boto3==1.42.75
     # via -r requirements.in
-botocore==1.42.54
+botocore==1.42.75
     # via
     #   boto3
     #   s3transfer
-certifi==2026.1.4
-    # via requests
 cffi==2.0.0
     # via cryptography
-charset-normalizer==3.4.4
-    # via requests
 click==8.3.1
     # via flask
 colorama==0.4.6
@@ -30,7 +26,7 @@ cryptography==46.0.5
     # via authlib
 et-xmlfile==2.0.0
     # via openpyxl
-flask==3.1.2
+flask==3.1.3
     # via
     #   -r requirements.in
     #   flask-migrate
@@ -44,12 +40,10 @@ flask-sqlalchemy==3.1.1
     #   flask-migrate
 flask-wtf==1.2.2
     # via -r requirements.in
-greenlet==3.3.0
+greenlet==3.3.2
     # via sqlalchemy
 gunicorn==25.1.0
     # via -r requirements.in
-idna==3.11
-    # via requests
 itsdangerous==2.2.0
     # via
     #   flask
@@ -69,7 +63,7 @@ markupsafe==3.0.3
     #   mako
     #   werkzeug
     #   wtforms
-numpy==2.4.2
+numpy==2.4.3
     # via pandas
 openpyxl==3.1.5
     # via -r requirements.in
@@ -85,15 +79,13 @@ python-dateutil==2.9.0.post0
     # via
     #   botocore
     #   pandas
-python-dotenv==1.2.1
-    # via -r requirements.in
-requests==2.32.5
+python-dotenv==1.2.2
     # via -r requirements.in
 s3transfer==0.16.0
     # via boto3
 six==1.17.0
     # via python-dateutil
-sqlalchemy==2.0.45
+sqlalchemy==2.0.48
     # via
     #   alembic
     #   flask-sqlalchemy
@@ -104,10 +96,8 @@ typing-extensions==4.15.0
 tzdata==2025.3
     # via pandas
 urllib3==2.6.3
-    # via
-    #   botocore
-    #   requests
-werkzeug==3.1.5
+    # via botocore
+werkzeug==3.1.7
     # via flask
 wtforms==3.2.1
     # via flask-wtf
