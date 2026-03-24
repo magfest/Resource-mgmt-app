@@ -105,7 +105,12 @@
         {# Build the correct URL based on work type slug #}
         {% set url_slug = card.url_slug %}
         {% if url_slug == 'budget' %}
-          {% set card_url = url_for('work.portfolio_landing', event=event_cycle.code, dept=department.code) %}
+          {# Skip portfolio page and go straight to create confirmation if no primary exists #}
+          {% if card.can_edit and not card.primary_item %}
+            {% set card_url = url_for('work.primary_new', event=event_cycle.code, dept=department.code) %}
+          {% else %}
+            {% set card_url = url_for('work.portfolio_landing', event=event_cycle.code, dept=department.code) %}
+          {% endif %}
         {% elif url_slug == 'contracts' %}
           {% set card_url = url_for('work.contracts_placeholder', event=event_cycle.code, dept=department.code) %}
         {% elif url_slug == 'supply' %}
