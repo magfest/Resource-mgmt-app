@@ -27,8 +27,7 @@ MAGFest is a volunteer-run nonprofit that produces multiple events each year. Ea
 - **Backend**: Python 3.13, Flask 3.1, SQLAlchemy 2.0, Alembic
 - **Database**: PostgreSQL (production), SQLite (development)
 - **Auth**: Keycloak SSO or Google OAuth via Authlib, with dev login mode
-- **Deployment**: Docker (GHCR), targeting Kubernetes
-- **CI**: GitHub Actions (security audit)
+- **Deployment**: Docker (GHCR)
 
 ## Quick Start
 
