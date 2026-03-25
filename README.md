@@ -1,27 +1,48 @@
 # MAGFest Budget System
 
-A Flask-based budget request and approval system for MAGFest events.
+> **Status: Active Development** — This application is functional and in use, but under active development. Features are still being added, UX is being refined, and some areas (contracts, supply orders, reporting) are incomplete. See the [outstanding items plan](docs/plan-outstanding-march2026.md) for what's in progress.
+
+A budget request and approval workflow application for [MAGFest](https://www.magfest.org/) events. Built with Flask, it currently handles multi-departmental/event budget requests. Long term the goal is to support contracts and supply orders through a configurable review and approval pipeline.
+
+## What It Does
+
+MAGFest is a volunteer-run nonprofit that produces multiple events each year. Each event has dozens of departments (Tech Ops, Panels, Hotels, etc.) that need to submit and get approval for their budgets. This system replaces spreadsheets and email chains with a structured workflow:
+
+- **Requesters** (department volunteers) create budget requests with line items, hotel needs, badge counts, and notes
+- **Reviewer groups** (subject matter experts) review and recommend approval on routed line items
+- **Budget admins** make final approval decisions and finalize requests
+- The system tracks everything with audit trails, role-based access, and status notifications
 
 ## Features
 
 - **Multi-work-type support**: Budget requests, contracts, and supply orders (extensible)
-- **Role-based access control**: Department members, department heads, approvers, finance, super-admins
-- **Approval workflow**: Submit → Review → Approve/Reject → Finalize
+- **Role-based access control**: Department members, division heads, reviewer groups, budget admins, super admins
+- **Approval workflow**: Draft → Submit → Reviewer Group Review → Admin Final Review → Finalized
 - **Multi-event support**: Manage budgets across different MAGFest events (Super, West, Stock, etc.)
+- **Income tracking**: Departments that generate revenue can record estimated income for reference
+- **Automated security scanning**: pip-audit in CI and pre-commit hooks, Dependabot alerts
+
+## Tech Stack
+
+- **Backend**: Python 3.13, Flask 3.1, SQLAlchemy 2.0, Alembic
+- **Database**: PostgreSQL (production), SQLite (development)
+- **Auth**: Keycloak SSO or Google OAuth via Authlib, with dev login mode
+- **Deployment**: Docker (GHCR), targeting Kubernetes
+- **CI**: GitHub Actions (security audit)
 
 ## Quick Start
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.13+
 - pip
 
 ### Local Development
 
 ```bash
 # Clone and setup
-git clone <repo-url>
-cd magfest-budget
+git clone https://github.com/magfest/Resource-mgmt-app.git
+cd Resource-mgmt-app
 
 # Create virtual environment
 python -m venv .venv
@@ -29,8 +50,8 @@ python -m venv .venv
 # source .venv/bin/activate  # macOS/Linux
 
 # Install dependencies
-pip install -r requirements.txt
-pre-commit install #allow for pip-aduit before any commits
+pip install -r requirements-dev.txt
+pre-commit install
 
 # Copy environment template
 cp .env.example .env
@@ -47,12 +68,35 @@ flask run
 
 Visit `http://localhost:5000`
 
+### Docker
+
+```bash
+docker build -t magfest-budget .
+docker run -p 8000:8000 -e DATABASE_URL=sqlite:///budget.db magfest-budget
+```
+
 ### Authentication
 
-- **Development**: Dev login enabled by default (user switcher)
+- **Development**: Set `DEV_LOGIN_ENABLED=true` for a local user switcher (no OAuth needed)
 - **Production**: Keycloak SSO or Google OAuth
 
-See `.env.example` for configuration options.
+See `.env.example` for all configuration options.
+
+## Project Structure
+
+```
+app/
+├── models/          # Database models (org, workflow, budget, contract, supply)
+├── routes/
+│   ├── admin/       # System configuration (super admin)
+│   ├── admin_final/ # Final review, reports, dashboards
+│   ├── approvals/   # Reviewer group workflow
+│   ├── dispatch/    # Reviewer assignment queue
+│   └── work/        # Requester workflow (create, edit, submit)
+├── routing/         # Pluggable approval routing strategies
+├── services/        # Email (AWS SES), notifications
+└── templates/       # Jinja2 templates
+```
 
 ## Documentation
 
@@ -64,75 +108,54 @@ Detailed documentation is in the [`docs/`](docs/) folder:
 - [Permissions & RBAC](docs/permissions.md)
 - [Workflow](docs/workflow.md)
 
-## Project Structure
-
-```
-magfest-budget/
-├── app/                    # Flask application
-│   ├── models.py           # Database models
-│   ├── routes/             # Route blueprints
-│   │   ├── admin/          # Admin configuration
-│   │   ├── admin_final/    # Final review workflow
-│   │   ├── approvals/      # Approver workflow
-│   │   └── work/           # Requester workflow
-│   ├── routing/            # Approval routing strategies
-│   ├── seeds/              # Database seeding
-│   └── templates/          # Jinja2 templates
-├── docs/                   # Documentation
-├── migrations/             # Alembic migrations
-└── requirements.txt        # Python dependencies
-```
-
-## Tech Stack
-
-- **Backend**: Flask, SQLAlchemy, Flask-Migrate
-- **Database**: PostgreSQL (production), SQLite (development)
-- **Auth**: Keycloak/Google OAuth via authlib
-- **Deployment**: AWS AppRunner
-
 ## Security
 
 ### Dependency Management
 
-Dependencies are managed with [pip-tools](https://pip-tools.readthedocs.io/):
+Dependencies are pinned with [pip-tools](https://pip-tools.readthedocs.io/) and audited for known vulnerabilities:
 
-- `requirements.in` — direct production dependencies
-- `requirements-dev.in` — dev/test dependencies (inherits from `requirements.in`)
+- `requirements.in` / `requirements-dev.in` — direct dependencies
 - `requirements.txt` / `requirements-dev.txt` — compiled lockfiles with pinned versions
 
-To update dependencies:
+To update:
 
 ```bash
 pip-compile --generate-hashes requirements.in -o requirements.txt --upgrade
 pip-compile --generate-hashes requirements-dev.in -o requirements-dev.txt --upgrade
 ```
 
-Always compile both files together to keep versions in sync.
+### Automated Scanning
 
-### Automated Vulnerability Scanning
+- **Pre-commit**: [pip-audit](https://github.com/trailofbits/pip-audit) blocks commits with known CVEs
+- **CI**: GitHub Actions runs pip-audit on every push and PR to `master`
+- **Dependabot**: Alerts and automatic security PRs enabled
 
-- **Pre-commit hook**: [pip-audit](https://github.com/trailofbits/pip-audit) runs before every commit via the [pre-commit](https://pre-commit.com/) framework, blocking commits with known CVEs.
-- **CI**: A GitHub Actions workflow (`.github/workflows/security.yml`) runs `pip-audit` on every push and PR to `master`.
-- **Dependabot**: GitHub Dependabot alerts and security updates are enabled to notify of newly disclosed vulnerabilities.
+See [SECURITY_ROADMAP.md](SECURITY_ROADMAP.md) for the full security roadmap.
 
-### Setup for new contributors
-
-After cloning and installing dependencies, install the pre-commit hooks:
-
-```bash
-pip install -r requirements-dev.txt
-pre-commit install
-```
-
-For more detail, see [SECURITY_ROADMAP.md](SECURITY_ROADMAP.md).
+### Tools / Disclosures
+This project was developed with assistance from AI tools for both code and wording. 
+For example: 
+1. Claude Code, JetBrain "AI" Tools, and Gemini 
+2. Grammerly was used for wordsmiting, and grammer..
 
 ## Contributing
 
-1. Create a feature branch
-2. Make changes
-3. Test locally
-4. Submit PR for review
+1. Fork the repo and create a feature branch
+2. Install dev dependencies: `pip install -r requirements-dev.txt`
+3. Install pre-commit hooks: `pre-commit install`
+4. Make changes and test locally
+5. Submit a PR for review
+
+### A note on AI tools
+
+AI-assisted development tools (Copilot, Claude, etc.) are permitted. That said, we expect contributors to **understand and own what they submit**. PRs should reflect thoughtful changes, not bulk-generated code. Specifically:
+
+- You should be able to explain what your code does and why
+- Changes should be scoped and focused, not "rewrite everything" dumps
+- Test your changes locally before submitting
+- If AI helped, that's fine — just make sure the output makes sense for this codebase
 
 ## License
 
-Internal MAGFest project.
+This project is licensed under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+
