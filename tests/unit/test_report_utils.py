@@ -19,7 +19,7 @@ class TestPipelineTotals:
         totals = PipelineTotals(
             draft_cents=1000,
             submitted_cents=2000,
-            ag_approved_cents=3000,
+            reviewer_recommended_cents=3000,
             final_approved_cents=4000,
             rejected_cents=500,
         )
@@ -31,7 +31,7 @@ class TestPipelineTotals:
         totals = PipelineTotals(
             draft_cents=1000,
             submitted_cents=2000,
-            ag_approved_cents=3000,
+            reviewer_recommended_cents=3000,
             final_approved_cents=4000,
             rejected_cents=500,
         )
@@ -43,14 +43,14 @@ class TestPipelineTotals:
         totals1 = PipelineTotals(
             draft_cents=100,
             submitted_cents=200,
-            ag_approved_cents=300,
+            reviewer_recommended_cents=300,
             final_approved_cents=400,
             rejected_cents=50,
         )
         totals2 = PipelineTotals(
             draft_cents=10,
             submitted_cents=20,
-            ag_approved_cents=30,
+            reviewer_recommended_cents=30,
             final_approved_cents=40,
             rejected_cents=5,
         )
@@ -59,7 +59,7 @@ class TestPipelineTotals:
 
         assert result.draft_cents == 110
         assert result.submitted_cents == 220
-        assert result.ag_approved_cents == 330
+        assert result.reviewer_recommended_cents == 330
         assert result.final_approved_cents == 440
         assert result.rejected_cents == 55
 
@@ -95,7 +95,7 @@ class TestComputePipelineSummary:
             def __init__(self, draft, submitted, ag_approved, final_approved, rejected):
                 self.draft_cents = draft
                 self.submitted_cents = submitted
-                self.ag_approved_cents = ag_approved
+                self.reviewer_recommended_cents = ag_approved
                 self.final_approved_cents = final_approved
                 self.rejected_cents = rejected
 
@@ -108,7 +108,7 @@ class TestComputePipelineSummary:
 
         assert result.draft_cents == 1100
         assert result.submitted_cents == 2200
-        assert result.ag_approved_cents == 3300
+        assert result.reviewer_recommended_cents == 3300
         assert result.final_approved_cents == 4400
         assert result.rejected_cents == 550
         assert result.total_cents == 11000
