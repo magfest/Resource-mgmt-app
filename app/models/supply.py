@@ -108,7 +108,7 @@ class SupplyOrderLineDetail(db.Model):
     delivery_location = db.Column(db.String(256), nullable=True)
     requester_notes = db.Column(db.Text, nullable=True)
 
-    work_line = db.relationship("WorkLine", backref=db.backref("supply_detail", uselist=False))
+    work_line = db.relationship("WorkLine", backref=db.backref("supply_detail", uselist=False, cascade="all, delete-orphan"))
     item = db.relationship("SupplyItem")
     routed_approval_group = db.relationship("ApprovalGroup", foreign_keys=[routed_approval_group_id])
 

@@ -70,7 +70,7 @@ class ContractLineDetail(db.Model):
     terms_summary = db.Column(db.Text, nullable=True)
     description = db.Column(db.Text, nullable=True)
 
-    work_line = db.relationship("WorkLine", backref=db.backref("contract_detail", uselist=False))
+    work_line = db.relationship("WorkLine", backref=db.backref("contract_detail", uselist=False, cascade="all, delete-orphan"))
     contract_type = db.relationship("ContractType")
     routed_approval_group = db.relationship("ApprovalGroup", foreign_keys=[routed_approval_group_id])
 

@@ -319,7 +319,7 @@ class BudgetLineDetail(db.Model):
 
     description = db.Column(db.Text, nullable=True)
 
-    work_line = db.relationship("WorkLine", backref=db.backref("budget_detail", uselist=False))
+    work_line = db.relationship("WorkLine", backref=db.backref("budget_detail", uselist=False, cascade="all, delete-orphan"))
     expense_account = db.relationship("ExpenseAccount")
     routed_approval_group = db.relationship("ApprovalGroup", foreign_keys=[routed_approval_group_id])
     spend_type = db.relationship("SpendType")
