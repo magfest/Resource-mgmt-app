@@ -8,6 +8,8 @@ Supports multiple OAuth providers, configurable via AUTH_PROVIDER env var:
 """
 from functools import wraps
 
+from urllib.parse import urlencode
+
 from flask import Blueprint, redirect, url_for, session, flash, current_app, request, render_template
 from authlib.integrations.flask_client import OAuth
 
@@ -112,10 +114,10 @@ def login_page():
     if session.get('active_user_id'):
         return redirect(url_for('home.index'))
 
-    # If only one auth method, skip the button page and go straight to OAuth
+    # If only one auth method and not returning from logout, skip to OAuth
     auth_provider = current_app.config.get('AUTH_PROVIDER')
     dev_login = current_app.config.get('DEV_LOGIN_ENABLED')
-    if auth_provider and not dev_login:
+    if auth_provider and not dev_login and not request.args.get('logged_out'):
         return redirect(url_for('auth.login'))
 
     return render_template('auth/login.html')
@@ -246,7 +248,14 @@ def _handle_keycloak_callback():
         email.split('@')[0]
     )
 
-    return _complete_login(email, subject, display_name, provider='keycloak')
+    response = _complete_login(email, subject, display_name, provider='keycloak')
+
+    # Save ID token for OIDC RP-Initiated Logout (id_token_hint)
+    id_token = token.get('id_token')
+    if id_token:
+        session['id_token'] = id_token
+
+    return response
 
 
 def _complete_login(email: str, subject: str, display_name: str, provider: str):
@@ -339,34 +348,49 @@ def _complete_login(email: str, subject: str, display_name: str, provider: str):
 
 @auth_bp.get('/auth/logout')
 def logout():
-    """Log out the current user."""
+    """Log out the current user and end SSO session if applicable.
+
+    For Keycloak: redirects through Keycloak's OIDC logout endpoint to end
+    the SSO session, then back to the login page. This follows the OIDC
+    RP-Initiated Logout spec (openid-connect-rpinitiated-1_0).
+
+    For other providers: clears local session and redirects to login page.
+    """
     from app.security_audit import log_logout
 
     auth_provider = current_app.config.get('AUTH_PROVIDER')
 
-    # Log logout before clearing session (we need the user_id)
+    # Capture values we need before clearing the session
     user_id = session.get('active_user_id')
+    id_token = session.get('id_token')
+
     if user_id:
         log_logout(user_id)
         db.session.commit()
 
-    # Clear session
-    session.pop('active_user_id', None)
-    session.pop('role_override', None)
-    session.pop('role_override_approval_group_id', None)
-    session.pop('selected_event_cycle_id', None)
+    # Clear entire session
+    session.clear()
 
     flash('You have been logged out.', 'info')
 
-    # For Keycloak, optionally redirect to Keycloak logout to end SSO session
-    # This is commented out for now - uncomment if full SSO logout is desired
-    # if auth_provider == 'keycloak':
-    #     keycloak_url = current_app.config.get('KEYCLOAK_URL')
-    #     keycloak_realm = current_app.config.get('KEYCLOAK_REALM')
-    #     redirect_uri = url_for('home.index', _external=True)
-    #     return redirect(
-    #         f'{keycloak_url}/realms/{keycloak_realm}/protocol/openid-connect/logout'
-    #         f'?redirect_uri={redirect_uri}'
-    #     )
+    # For Keycloak, end the SSO session via OIDC RP-Initiated Logout
+    if auth_provider == 'keycloak':
+        keycloak_url = current_app.config.get('KEYCLOAK_URL')
+        keycloak_realm = current_app.config.get('KEYCLOAK_REALM')
+        post_logout_uri = url_for('auth.login_page', logged_out=1, _external=True)
 
-    return redirect(url_for('home.index'))
+        params = {'post_logout_redirect_uri': post_logout_uri}
+        if id_token:
+            # id_token_hint lets Keycloak skip the "are you sure?" confirmation
+            params['id_token_hint'] = id_token
+        else:
+            # Fallback: client_id also works (Keycloak 18+)
+            params['client_id'] = current_app.config.get('KEYCLOAK_CLIENT_ID')
+
+        logout_url = (
+            f'{keycloak_url}/realms/{keycloak_realm}'
+            f'/protocol/openid-connect/logout?{urlencode(params)}'
+        )
+        return redirect(logout_url)
+
+    return redirect(url_for('auth.login_page', logged_out=1))

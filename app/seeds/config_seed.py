@@ -1,19 +1,20 @@
 """
 Seed script for budget configuration data.
 
-Parses Demo_Data/Budget App Mappings.xlsx and creates:
-- Approval groups (TECH, HOTEL, OTHER)
+Creates core configuration needed for a fresh instance:
+- Approval groups (LOGISTICS, OFFICE, GEN, GUEST, TECH, HOTEL, OTHER_SPECIAL)
+- Work types (BUDGET, CONTRACT, SUPPLY) with configs
+- Contract types and supply categories
 - Spend types (DIVVY, BANK)
-- Departments (including OFFICE for admin-restricted items)
-- Event cycles
 - Reference data (frequency, confidence, priority)
-- Expense accounts with approval group assignments, spend types, and fixed costs
+- Divisions and departments
+- Event cycle
+- Core expense accounts (hotel rooms, parking)
 """
 
 from __future__ import annotations
 
 import re
-from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -51,10 +52,13 @@ def seed_approval_groups() -> dict[str, ApprovalGroup]:
     print("Seeding approval groups...")
 
     groups_data = [
-        ("TECH", "Tech Review", "Reviews technical equipment, rentals, and tech-related expenses", 10),
-        ("HOTEL", "Hotel Review", "Reviews hotel rooms, venue fees, and hotel-related expenses", 20),
-        ("OTHER", "Admin Review", "Reviews special but general expenses and admin items", 30),
-        ("General", "General Review", "Reviews general expenses and admin items", 30),
+        ("LOGISTICS", "Logistics / Warehouse", "Items that should be reviewed by the logistics or warehouse teams", 10),
+        ("OFFICE", "Org Ops", "Items that need to be reviewed by the office or other organization leadership", 20),
+        ("GEN", "General", "General items that normally do not need custom reviews or approval", 30),
+        ("GUEST", "Guest / Booking", "Guest and booking related items", 40),
+        ("TECH", "FestOps - Tech", "Reviews technical equipment, rentals, and tech-related expenses", 50),
+        ("HOTEL", "Hotels Team", "Reviews hotel rooms, venue fees, and hotel-related expenses", 60),
+        ("OTHER_SPECIAL", "Other Specialty", "Reviews general expenses and admin items", 70),
     ]
 
     groups = {}
@@ -182,11 +186,11 @@ def seed_contract_types(approval_groups: dict[str, ApprovalGroup]) -> dict[str, 
     print("Seeding contract types...")
 
     contract_types_data = [
-        ("PERFORMER", "Performer/Artist", "Contracts for performers and artists", "OTHER", 10),
-        ("VENDOR", "Vendor Service", "Service provider contracts", "OTHER", 20),
+        ("PERFORMER", "Performer/Artist", "Contracts for performers and artists", "GUEST", 10),
+        ("VENDOR", "Vendor Service", "Service provider contracts", "GEN", 20),
         ("VENUE", "Venue/Space", "Venue and space rental contracts", "HOTEL", 30),
         ("EQUIPMENT", "Equipment Rental", "Equipment rental contracts", "TECH", 40),
-        ("SPONSOR", "Sponsorship", "Sponsorship agreements", "OTHER", 50),
+        ("SPONSOR", "Sponsorship", "Sponsorship agreements", "OFFICE", 50),
     ]
 
     contract_types = {}
@@ -217,11 +221,11 @@ def seed_supply_categories(approval_groups: dict[str, ApprovalGroup]) -> dict[st
     print("Seeding supply categories...")
 
     categories_data = [
-        ("OFFICE", "Office Supplies", "General office supplies", "OTHER", 10),
+        ("OFFICE", "Office Supplies", "General office supplies", "GEN", 10),
         ("TECH", "Tech Equipment", "Technical equipment and supplies", "TECH", 20),
-        ("EVENT", "Event Supplies", "Event-specific supplies", "OTHER", 30),
-        ("SAFETY", "Safety/Medical", "Safety and medical supplies", "OTHER", 40),
-        ("SIGNAGE", "Signage/Printing", "Signs, banners, and printed materials", "OTHER", 50),
+        ("EVENT", "Event Supplies", "Event-specific supplies", "GEN", 30),
+        ("SAFETY", "Safety/Medical", "Safety and medical supplies", "LOGISTICS", 40),
+        ("SIGNAGE", "Signage/Printing", "Signs, banners, and printed materials", "GEN", 50),
     ]
 
     categories = {}
@@ -483,8 +487,7 @@ def seed_event_cycles() -> dict[str, EventCycle]:
     print("Seeding event cycles...")
 
     cycles_data = [
-        ("SMF2026", "Super MAGFest 2026", True, True, 10),
-        ("SMF2027", "Super MAGFest 2027", True, False, 20),
+        ("SMF2027", "Super MAGFest 2027", True, True, 10),
     ]
 
     cycles = {}
@@ -509,290 +512,154 @@ def seed_event_cycles() -> dict[str, EventCycle]:
     return cycles
 
 
-def parse_price(text: str) -> Optional[int]:
-    """
-    Extract price in cents from text like "$244/night" or "$19/night".
-    Returns None if no price found.
-    """
-    if not text:
-        return None
-
-    # Look for dollar amounts like $244, $509.10, etc.
-    match = re.search(r'\$(\d+(?:\.\d{2})?)', str(text))
-    if match:
-        price_str = match.group(1)
-        price_float = float(price_str)
-        return int(price_float * 100)  # Convert to cents
-    return None
-
-
-def parse_spend_types(spend_type_str: str) -> list[str]:
-    """Parse spend type string like "Divvy, Bank" into list of codes."""
-    if not spend_type_str or str(spend_type_str).lower() == 'nan':
-        return []
-
-    result = []
-    spend_type_str = str(spend_type_str).strip()
-
-    for part in spend_type_str.split(','):
-        part = part.strip().upper()
-        if part == 'DIVVY':
-            result.append('DIVVY')
-        elif part == 'BANK':
-            result.append('BANK')
-
-    return result
-
-
 def slugify(name: str) -> str:
-    """Convert expense account name to a code-friendly slug."""
+    """Convert a name to a code-friendly slug."""
     # Remove special characters, convert to uppercase with underscores
     slug = re.sub(r'[^a-zA-Z0-9\s]', '', name)
     slug = re.sub(r'\s+', '_', slug.strip())
     return slug.upper()
 
 
-def determine_approval_group(row: dict) -> str:
-    """
-    Determine approval group code based on expense account characteristics.
-
-    Mapping logic:
-    - Hotel-related items → HOTEL
-    - Tech/Equipment items → TECH
-    - Everything else → GENERAL
-    """
-    name = str(row.get('Expense Accounts', '')).lower()
-
-    # Hotel-related
-    hotel_keywords = ['hotel', 'venue', 'gaylord']
-    if any(kw in name for kw in hotel_keywords):
-        return 'HOTEL'
-
-    # Tech-related (including "For Review By" = YES items that seem tech-related)
-    tech_keywords = ['tech', 'equipment', 'a/v', 'rental', 'truck', 'content room']
-    if any(kw in name for kw in tech_keywords):
-        return 'TECH'
-
-    # Default to OTHER (Admin)
-    return 'GENERAL'
-
-
-def seed_expense_accounts_from_spreadsheet(
+def seed_expense_accounts(
     approval_groups: dict[str, ApprovalGroup],
     spend_types: dict[str, SpendType],
-    departments: dict[str, Department],
 ):
     """
-    Parse Demo_Data/Budget App Mappings.xlsx and create expense accounts.
+    Seed core expense accounts that are known at standup time.
+
+    Creates hotel room variants (by room type and payment scenario)
+    and venue parking accounts. Additional expense accounts can be
+    added later via the admin UI.
     """
-    print("Seeding expense accounts from spreadsheet...")
+    print("Seeding core expense accounts...")
 
     # Check if already seeded
     if db.session.query(ExpenseAccount).first():
         print("  Expense accounts already exist, skipping...")
         return
 
-    try:
-        import pandas as pd
-    except ImportError:
-        print("  ERROR: pandas not installed. Run: pip install pandas openpyxl")
-        return
-
-    # Find the spreadsheet
-    project_root = Path(__file__).parent.parent.parent
-    spreadsheet_path = project_root / "Demo_Data" / "Budget App Mappings.xlsx"
-
-    if not spreadsheet_path.exists():
-        print(f"  ERROR: Spreadsheet not found at {spreadsheet_path}")
-        return
-
-    df = pd.read_excel(spreadsheet_path)
-    print(f"  Found {len(df)} rows in spreadsheet")
-
     sort_order = 10
     accounts_created = 0
 
-    office_dept = departments.get('OFFICE')
+    hotel_group = approval_groups.get('HOTEL')
 
-    for _, row in df.iterrows():
-        name = str(row.get('Expense Accounts', '')).strip()
-        if not name or name.lower() == 'nan':
-            continue
+    # --- Hotel Rooms ---
+    # Three room types: Standard, Executive Suite, Hospitality Suite
+    # Three payment scenarios: MAGFest Paid, Third Party (Held), Staff Crash
+    # Placeholder prices — replace with real negotiated rates per event
+    # via admin UI (Expense Accounts > edit unit price)
 
-        # Parse basic fields
-        spend_type_codes = parse_spend_types(row.get('Spend Type', ''))
-        budget_availability = str(row.get('Budget Availability', '')).strip().upper()
-        is_admin_only = budget_availability == 'ADMIN'
-        is_contract_eligible = str(row.get('Contract/Approval Check', '')).strip().upper() == 'YES'
-        fixed_cost_text = str(row.get('Fixed Cost', ''))
-        has_fixed_cost = fixed_cost_text and fixed_cost_text.lower() != 'nan'
+    # MAGFest Paid variants (hits department budget)
+    magfest_paid_variants = [
+        ("HTL_STD_MAGPAID", "Standard Room (MAGFest Paid)", 15000, "Standard hotel room - MAGFest covers cost"),
+        ("HTL_EXEC_MAGPAID", "Executive Suite (MAGFest Paid)", 30000, "Executive suite - MAGFest covers cost"),
+        ("HTL_HOSP_MAGPAID", "Hospitality Suite (MAGFest Paid)", 60000, "Hospitality suite with attached bedrooms - MAGFest covers cost"),
+    ]
 
-        # Determine approval group
-        approval_group_code = determine_approval_group(row)
-        approval_group = approval_groups.get(approval_group_code)
-
-        # Check if this is Hotel Rooms (needs expansion into variants)
-        if name == 'Hotel Rooms' and has_fixed_cost:
-            # Create hotel room expense accounts for the wizard
-            # Three room types: Standard, Executive Suite, Hospitality Suite
-            # Three payment scenarios: MAGFest Paid, Third Party (Held), Staff Crash
-            # Placeholder prices for demo/dev — replace with real negotiated rates per event
-            # via admin UI (Expense Accounts > edit unit price)
-
-            # MAGFest Paid variants (hits department budget)
-            magfest_paid_variants = [
-                ("HTL_STD_MAGPAID", "Standard Room (MAGFest Paid)", 15000, "Standard hotel room - MAGFest covers cost"),
-                ("HTL_EXEC_MAGPAID", "Executive Suite (MAGFest Paid)", 30000, "Executive suite - MAGFest covers cost"),
-                ("HTL_HOSP_MAGPAID", "Hospitality Suite (MAGFest Paid)", 60000, "Hospitality suite with attached bedrooms - MAGFest covers cost"),
-            ]
-
-            for code, variant_name, price_cents, desc in magfest_paid_variants:
-                account = create_expense_account(
-                    code=code,
-                    name=variant_name,
-                    description=desc,
-                    spend_type_codes=['BANK'],
-                    spend_types=spend_types,
-                    approval_group=approval_groups.get('HOTEL'),
-                    is_admin_only=False,
-                    is_contract_eligible=is_contract_eligible,
-                    is_fixed_cost=True,
-                    default_unit_price_cents=price_cents,
-                    office_dept=office_dept,
-                    sort_order=sort_order,
-                    ui_display_group=UI_GROUP_HOTEL_SERVICES,
-                )
-                sort_order += 10
-                accounts_created += 1
-
-            # Third Party Held variants ($0 cost - partner books and pays, we just reserve it)
-            held_variants = [
-                ("HTL_STD_HELD", "Standard Room (Third Party Pays)", "Standard room held for partner to book - no budget impact"),
-                ("HTL_EXEC_HELD", "Executive Suite (Third Party Pays)", "Executive suite held for partner to book - no budget impact"),
-                ("HTL_HOSP_HELD", "Hospitality Suite (Third Party Pays)", "Hospitality suite held for partner to book - no budget impact"),
-            ]
-
-            for code, variant_name, desc in held_variants:
-                account = create_expense_account(
-                    code=code,
-                    name=variant_name,
-                    description=desc,
-                    spend_type_codes=['BANK'],
-                    spend_types=spend_types,
-                    approval_group=approval_groups.get('HOTEL'),
-                    is_admin_only=False,
-                    is_contract_eligible=False,
-                    is_fixed_cost=True,
-                    default_unit_price_cents=0,
-                    office_dept=office_dept,
-                    sort_order=sort_order,
-                    prompt_mode_override=PROMPT_MODE_NONE,
-                    ui_display_group=UI_GROUP_HOTEL_SERVICES,
-                )
-                sort_order += 10
-                accounts_created += 1
-
-            # Staff Crash variants ($0 cost - informational, staffers pay out of pocket)
-            # No standard room for crash - only suites per policy
-            crash_variants = [
-                ("HTL_EXEC_CRASH", "Executive Suite (Staff Crash)", "Executive suite for staff crash space - paid out of pocket by staffers, not department budget"),
-                ("HTL_HOSP_CRASH", "Hospitality Suite (Staff Crash)", "Hospitality suite for staff crash space - paid out of pocket by staffers, not department budget"),
-            ]
-
-            for code, variant_name, desc in crash_variants:
-                account = create_expense_account(
-                    code=code,
-                    name=variant_name,
-                    description=desc,
-                    spend_type_codes=['BANK'],
-                    spend_types=spend_types,
-                    approval_group=approval_groups.get('HOTEL'),
-                    is_admin_only=False,
-                    is_contract_eligible=False,
-                    is_fixed_cost=True,
-                    default_unit_price_cents=0,
-                    office_dept=office_dept,
-                    sort_order=sort_order,
-                    prompt_mode_override=PROMPT_MODE_NONE,
-                    ui_display_group=UI_GROUP_HOTEL_SERVICES,
-                )
-                sort_order += 10
-                accounts_created += 1
-            continue
-
-        # Check if this is Parking & Tolls (add Gaylord variant)
-        if name == 'Parking & Tolls' and has_fixed_cost:
-            # Create generic parking account
-            code = slugify(name)
-            account = create_expense_account(
-                code=code,
-                name=name,
-                description="General parking and tolls",
-                spend_type_codes=spend_type_codes,
-                spend_types=spend_types,
-                approval_group=approval_group,
-                is_admin_only=is_admin_only,
-                is_contract_eligible=is_contract_eligible,
-                is_fixed_cost=False,
-                default_unit_price_cents=None,
-                office_dept=office_dept,
-                sort_order=sort_order,
-            )
-            sort_order += 10
-            accounts_created += 1
-
-            # Create Gaylord parking variant (GNH = Gaylord National Harbor)
-            account = create_expense_account(
-                code="PARKING_GNH",
-                name="Parking - Gaylord",
-                description="Gaylord hotel parking",
-                spend_type_codes=['DIVVY'],
-                spend_types=spend_types,
-                approval_group=approval_groups.get('HOTEL'),
-                is_admin_only=False,
-                is_contract_eligible=is_contract_eligible,
-                is_fixed_cost=True,
-                default_unit_price_cents=2500,  # Placeholder — replace with real rate
-                office_dept=office_dept,
-                sort_order=sort_order,
-                ui_display_group=UI_GROUP_HOTEL_SERVICES,
-            )
-            sort_order += 10
-            accounts_created += 1
-            continue
-
-        # Standard expense account
-        code = slugify(name)
-
-        # Parse price if fixed cost
-        price_cents = None
-        if has_fixed_cost:
-            price_cents = parse_price(fixed_cost_text)
-
-        # Appearance/Performance Fees is marked as fixed cost YES in "For Review By" column
-        # but doesn't have specific pricing - it means price is confirmed per contract
-        for_review = str(row.get('For Review By', '')).strip().upper()
-        if for_review == 'YES' and not has_fixed_cost:
-            # This indicates it needs special review, possibly tech
-            # but we already determined approval group above
-            pass
-
-        account = create_expense_account(
+    for code, name, price_cents, desc in magfest_paid_variants:
+        create_expense_account(
             code=code,
             name=name,
-            description=None,
-            spend_type_codes=spend_type_codes,
+            description=desc,
+            spend_type_codes=['BANK'],
             spend_types=spend_types,
-            approval_group=approval_group,
-            is_admin_only=is_admin_only,
-            is_contract_eligible=is_contract_eligible,
-            is_fixed_cost=has_fixed_cost and price_cents is not None,
+            approval_group=hotel_group,
+            is_admin_only=False,
+            is_contract_eligible=False,
+            is_fixed_cost=True,
             default_unit_price_cents=price_cents,
-            office_dept=office_dept,
             sort_order=sort_order,
+            ui_display_group=UI_GROUP_HOTEL_SERVICES,
         )
         sort_order += 10
         accounts_created += 1
+
+    # Third Party Held variants ($0 cost - partner books and pays, we just reserve it)
+    held_variants = [
+        ("HTL_STD_HELD", "Standard Room (Third Party Pays)", "Standard room held for partner to book - no budget impact"),
+        ("HTL_EXEC_HELD", "Executive Suite (Third Party Pays)", "Executive suite held for partner to book - no budget impact"),
+        ("HTL_HOSP_HELD", "Hospitality Suite (Third Party Pays)", "Hospitality suite held for partner to book - no budget impact"),
+    ]
+
+    for code, name, desc in held_variants:
+        create_expense_account(
+            code=code,
+            name=name,
+            description=desc,
+            spend_type_codes=['BANK'],
+            spend_types=spend_types,
+            approval_group=hotel_group,
+            is_admin_only=False,
+            is_contract_eligible=False,
+            is_fixed_cost=True,
+            default_unit_price_cents=0,
+            sort_order=sort_order,
+            prompt_mode_override=PROMPT_MODE_NONE,
+            ui_display_group=UI_GROUP_HOTEL_SERVICES,
+        )
+        sort_order += 10
+        accounts_created += 1
+
+    # Staff Crash variants ($0 cost - informational, staffers pay out of pocket)
+    # No standard room for crash - only suites per policy
+    crash_variants = [
+        ("HTL_EXEC_CRASH", "Executive Suite (Staff Crash)", "Executive suite for staff crash space - paid out of pocket by staffers, not department budget"),
+        ("HTL_HOSP_CRASH", "Hospitality Suite (Staff Crash)", "Hospitality suite for staff crash space - paid out of pocket by staffers, not department budget"),
+    ]
+
+    for code, name, desc in crash_variants:
+        create_expense_account(
+            code=code,
+            name=name,
+            description=desc,
+            spend_type_codes=['BANK'],
+            spend_types=spend_types,
+            approval_group=hotel_group,
+            is_admin_only=False,
+            is_contract_eligible=False,
+            is_fixed_cost=True,
+            default_unit_price_cents=0,
+            sort_order=sort_order,
+            prompt_mode_override=PROMPT_MODE_NONE,
+            ui_display_group=UI_GROUP_HOTEL_SERVICES,
+        )
+        sort_order += 10
+        accounts_created += 1
+
+    # --- Parking ---
+    # General parking (flexible cost, user enters amount)
+    create_expense_account(
+        code="PARKING_TOLLS",
+        name="Parking & Tolls",
+        description="General parking and tolls",
+        spend_type_codes=['DIVVY', 'BANK'],
+        spend_types=spend_types,
+        approval_group=approval_groups.get('GEN'),
+        is_admin_only=False,
+        is_contract_eligible=False,
+        is_fixed_cost=False,
+        default_unit_price_cents=None,
+        sort_order=sort_order,
+    )
+    sort_order += 10
+    accounts_created += 1
+
+    # Gaylord parking variant (GNH = Gaylord National Harbor, fixed rate)
+    create_expense_account(
+        code="PARKING_GNH",
+        name="Parking - Gaylord",
+        description="Gaylord hotel parking",
+        spend_type_codes=['DIVVY'],
+        spend_types=spend_types,
+        approval_group=hotel_group,
+        is_admin_only=False,
+        is_contract_eligible=False,
+        is_fixed_cost=True,
+        default_unit_price_cents=2500,  # Placeholder — replace with real rate
+        sort_order=sort_order,
+        ui_display_group=UI_GROUP_HOTEL_SERVICES,
+    )
+    accounts_created += 1
 
     db.session.flush()
     print(f"  Created {accounts_created} expense accounts")
@@ -809,7 +676,6 @@ def create_expense_account(
     is_contract_eligible: bool,
     is_fixed_cost: bool,
     default_unit_price_cents: Optional[int],
-    office_dept: Optional[Department],
     sort_order: int,
     prompt_mode_override: Optional[str] = None,
     ui_display_group: Optional[str] = None,
@@ -863,10 +729,6 @@ def create_expense_account(
         if st:
             account.allowed_spend_types.append(st)
 
-    # Add department restriction if admin-only
-    if is_admin_only and office_dept:
-        account.visible_to_departments.append(office_dept)
-
     return account
 
 
@@ -885,8 +747,8 @@ def run_all_seeds():
     seed_reference_data()
     divisions = seed_divisions()
     departments = seed_departments(divisions)
-    event_cycles = seed_event_cycles()
-    seed_expense_accounts_from_spreadsheet(approval_groups, spend_types, departments)
+    seed_event_cycles()
+    seed_expense_accounts(approval_groups, spend_types)
 
     db.session.commit()
 
