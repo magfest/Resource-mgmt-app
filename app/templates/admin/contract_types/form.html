@@ -53,9 +53,10 @@
       </div>
 
       <div>
-        <label for="sort_order" class="form-label">Sort Order</label>
+        <label for="sort_order" class="form-label">Display Priority</label>
         <input id="sort_order" name="sort_order" type="number"
-               value="{{ contract_type.sort_order if contract_type else 0 }}" />
+               value="{{ contract_type.sort_order if contract_type and contract_type.sort_order is not none else '' }}" />
+        <div class="muted small mt-4">Leave blank for alphabetical ordering. Items with a value appear first, sorted by this number.</div>
       </div>
 
       <div>

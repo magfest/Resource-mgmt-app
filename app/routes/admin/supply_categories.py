@@ -22,6 +22,7 @@ from .helpers import (
     CODE_MAX_LENGTH,
     safe_int,
     safe_int_or_none,
+    sort_with_override,
 )
 
 supply_categories_bp = Blueprint('supply_categories', __name__, url_prefix='/supply-categories')
@@ -40,7 +41,7 @@ def _get_form_context():
     approval_groups = (
         db.session.query(ApprovalGroup)
         .filter(ApprovalGroup.is_active == True)
-        .order_by(ApprovalGroup.sort_order, ApprovalGroup.name)
+        .order_by(*sort_with_override(ApprovalGroup))
         .all()
     )
     return {
@@ -66,7 +67,7 @@ def list_supply_categories():
     """List all supply categories."""
     categories = (
         db.session.query(SupplyCategory)
-        .order_by(SupplyCategory.sort_order, SupplyCategory.name)
+        .order_by(*sort_with_override(SupplyCategory))
         .all()
     )
     return render_admin_config_page(
@@ -113,7 +114,7 @@ def create_supply_category():
         description=request.form.get("description", "").strip() or None,
         approval_group_id=safe_int_or_none(request.form.get("approval_group_id")),
         is_active=bool(request.form.get("is_active")),
-        sort_order=safe_int(request.form.get("sort_order"), 0),
+        sort_order=safe_int_or_none(request.form.get("sort_order")),
         created_by_user_id=h.get_active_user_id(),
     )
     db.session.add(cat)
@@ -170,7 +171,7 @@ def update_supply_category(cat_id: int):
     cat.description = request.form.get("description", "").strip() or None
     cat.approval_group_id = safe_int_or_none(request.form.get("approval_group_id"))
     cat.is_active = bool(request.form.get("is_active"))
-    cat.sort_order = safe_int(request.form.get("sort_order"), 0)
+    cat.sort_order = safe_int_or_none(request.form.get("sort_order"))
     cat.updated_by_user_id = h.get_active_user_id()
 
     new_state = _cat_to_dict(cat)

@@ -25,7 +25,7 @@ class SpendType(db.Model):
     description = db.Column(db.Text, nullable=True)
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    sort_order = db.Column(db.Integer, nullable=True, default=None)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     created_by_user_id = db.Column(db.String(64), nullable=True)
@@ -42,7 +42,7 @@ class FrequencyOption(db.Model):
     description = db.Column(db.Text, nullable=True)
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    sort_order = db.Column(db.Integer, nullable=True, default=None)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     created_by_user_id = db.Column(db.String(64), nullable=True)
@@ -59,7 +59,7 @@ class ConfidenceLevel(db.Model):
     description = db.Column(db.Text, nullable=True)
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    sort_order = db.Column(db.Integer, nullable=True, default=None)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     created_by_user_id = db.Column(db.String(64), nullable=True)
@@ -76,7 +76,7 @@ class PriorityLevel(db.Model):
     description = db.Column(db.Text, nullable=True)
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    sort_order = db.Column(db.Integer, nullable=True, default=None)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     created_by_user_id = db.Column(db.String(64), nullable=True)
@@ -140,7 +140,7 @@ class ExpenseAccount(db.Model):
     ui_display_group = db.Column(db.String(32), nullable=True, index=True)
     prompt_mode = db.Column(db.String(32), nullable=False, default=PROMPT_MODE_NONE, index=True)
 
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    sort_order = db.Column(db.Integer, nullable=True, default=None)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     created_by_user_id = db.Column(db.String(64), nullable=True)

@@ -40,7 +40,7 @@
       <th style="width: 100px;">{{ sort_header('code', 'Code', sort_by, sort_dir) }}</th>
       <th style="width: 200px;">{{ sort_header('name', 'Name', sort_by, sort_dir) }}</th>
       <th style="width: 100px;">Portfolios</th>
-      <th style="width: 80px;">{{ sort_header('sort_order', 'Order', sort_by, sort_dir) }}</th>
+      <th style="width: 80px;">{{ sort_header('sort_order', 'Priority', sort_by, sort_dir) }}</th>
       <th style="width: 80px;">Default</th>
       <th style="width: 70px;">Status</th>
       <th style="width: 140px;">Actions</th>
@@ -52,7 +52,7 @@
         <td class="num">{{ cycle.code }}</td>
         <td>{{ cycle.name }}</td>
         <td class="num">{{ portfolio_counts.get(cycle.id, 0) }}</td>
-        <td class="num">{{ cycle.sort_order }}</td>
+        <td class="num">{{ cycle.sort_order if cycle.sort_order is not none else '—' }}</td>
         <td>
           {% if cycle.is_default %}
             <span class="pill" style="background: #eef5ff; border-color: #b7d3ff;">Default</span>

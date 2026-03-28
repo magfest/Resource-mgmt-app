@@ -20,6 +20,7 @@ from .helpers import (
     track_changes,
     safe_int,
     safe_int_or_none,
+    sort_with_override,
 )
 
 supply_items_bp = Blueprint('supply_items', __name__, url_prefix='/supply-items')
@@ -38,7 +39,7 @@ def _get_form_context():
     categories = (
         db.session.query(SupplyCategory)
         .filter(SupplyCategory.is_active == True)
-        .order_by(SupplyCategory.sort_order, SupplyCategory.name)
+        .order_by(*sort_with_override(SupplyCategory))
         .all()
     )
     return {
@@ -75,7 +76,7 @@ def list_supply_items():
     items = (
         db.session.query(SupplyItem)
         .join(SupplyCategory)
-        .order_by(SupplyCategory.sort_order, SupplyCategory.name, SupplyItem.sort_order, SupplyItem.item_name)
+        .order_by(*sort_with_override(SupplyCategory), *sort_with_override(SupplyItem, name_attr=SupplyItem.item_name))
         .all()
     )
 
@@ -143,7 +144,7 @@ def create_supply_item():
         qty_on_hand=safe_int_or_none(request.form.get("qty_on_hand")),
         location_zone=request.form.get("location_zone", "").strip() or None,
         bin_location=request.form.get("bin_location", "").strip() or None,
-        sort_order=safe_int(request.form.get("sort_order"), 0),
+        sort_order=safe_int_or_none(request.form.get("sort_order")),
         created_by_user_id=h.get_active_user_id(),
     )
     db.session.add(item)
@@ -208,7 +209,7 @@ def update_supply_item(item_id: int):
     item.qty_on_hand = safe_int_or_none(request.form.get("qty_on_hand"))
     item.location_zone = request.form.get("location_zone", "").strip() or None
     item.bin_location = request.form.get("bin_location", "").strip() or None
-    item.sort_order = safe_int(request.form.get("sort_order"), 0)
+    item.sort_order = safe_int_or_none(request.form.get("sort_order"))
     item.updated_by_user_id = h.get_active_user_id()
 
     new_state = _item_to_dict(item)

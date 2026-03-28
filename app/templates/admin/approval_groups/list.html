@@ -41,7 +41,7 @@
       <th style="width: 200px;">{{ sort_header('name', 'Name', sort_by, sort_dir) }}</th>
       <th>Description</th>
       <th style="width: 100px;">Accounts</th>
-      <th style="width: 80px;">{{ sort_header('sort_order', 'Order', sort_by, sort_dir) }}</th>
+      <th style="width: 80px;">{{ sort_header('sort_order', 'Priority', sort_by, sort_dir) }}</th>
       <th style="width: 70px;">Status</th>
       <th style="width: 80px;">Actions</th>
     </tr>
@@ -53,7 +53,7 @@
         <td>{{ group.name }}</td>
         <td class="muted small">{{ group.description or '—' }}</td>
         <td class="num">{{ account_counts.get(group.id, 0) }}</td>
-        <td class="num">{{ group.sort_order }}</td>
+        <td class="num">{{ group.sort_order if group.sort_order is not none else '—' }}</td>
         <td>
           {% if group.is_active %}
             <span class="pill" style="background: #e9f7ef;">Active</span>

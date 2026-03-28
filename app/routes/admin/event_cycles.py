@@ -47,6 +47,8 @@ from .helpers import (
     validate_code_length,
     CODE_MAX_LENGTH,
     safe_int,
+    safe_int_or_none,
+    sort_with_override,
 )
 
 event_cycles_bp = Blueprint('event_cycles', __name__, url_prefix='/event-cycles')
@@ -81,6 +83,8 @@ def _cycle_to_dict(cycle: EventCycle) -> dict:
         "is_active": cycle.is_active,
         "is_default": cycle.is_default,
         "sort_order": cycle.sort_order,
+        "qb_class": cycle.qb_class,
+        "dates_are_public": cycle.dates_are_public,
         "event_start_date": cycle.event_start_date.isoformat() if cycle.event_start_date else None,
         "event_end_date": cycle.event_end_date.isoformat() if cycle.event_end_date else None,
         "submission_deadline": cycle.submission_deadline.isoformat() if cycle.submission_deadline else None,
@@ -123,7 +127,7 @@ def list_event_cycles():
         order = col.desc() if sort_dir == "desc" else col.asc()
         query = query.order_by(order)
     else:
-        query = query.order_by(EventCycle.sort_order, EventCycle.name)
+        query = query.order_by(*sort_with_override(EventCycle))
 
     cycles = query.all()
 
@@ -189,7 +193,9 @@ def create_event_cycle():
         name=name,
         is_active=request.form.get("is_active") == "1",
         is_default=is_default,
-        sort_order=safe_int(request.form.get("sort_order")),
+        sort_order=safe_int_or_none(request.form.get("sort_order")),
+        qb_class=(request.form.get("qb_class") or "").strip() or None,
+        dates_are_public=request.form.get("dates_are_public") == "1",
         event_start_date=_parse_date(request.form.get("event_start_date")),
         event_end_date=_parse_date(request.form.get("event_end_date")),
         submission_deadline=_parse_date(request.form.get("submission_deadline")),
@@ -287,7 +293,9 @@ def update_event_cycle(cycle_id: int):
     cycle.name = name
     cycle.is_active = request.form.get("is_active") == "1"
     cycle.is_default = is_default
-    cycle.sort_order = safe_int(request.form.get("sort_order"))
+    cycle.sort_order = safe_int_or_none(request.form.get("sort_order"))
+    cycle.qb_class = (request.form.get("qb_class") or "").strip() or None
+    cycle.dates_are_public = request.form.get("dates_are_public") == "1"
     cycle.event_start_date = _parse_date(request.form.get("event_start_date"))
     cycle.event_end_date = _parse_date(request.form.get("event_end_date"))
     cycle.submission_deadline = _parse_date(request.form.get("submission_deadline"))
@@ -394,12 +402,12 @@ def organization_enablement(cycle_id: int):
 
     # Get all active divisions with their departments
     divisions = Division.query.filter_by(is_active=True).order_by(
-        Division.sort_order, Division.name
+        *sort_with_override(Division)
     ).all()
 
     # Get all departments (including those without a division)
     departments = Department.query.filter_by(is_active=True).order_by(
-        Department.sort_order, Department.name
+        *sort_with_override(Department)
     ).all()
 
     # ========================================
@@ -527,7 +535,7 @@ def organization_enablement(cycle_id: int):
     other_cycles = EventCycle.query.filter(
         EventCycle.id != cycle_id,
         EventCycle.is_active == True,
-    ).order_by(EventCycle.sort_order, EventCycle.name).all()
+    ).order_by(*sort_with_override(EventCycle)).all()
 
     # Count enabled/disabled
     enabled_div_count = sum(1 for s in division_status.values() if s["is_enabled"])

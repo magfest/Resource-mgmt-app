@@ -44,9 +44,10 @@
       </div>
 
       <div>
-        <label for="sort_order" class="form-label">Sort Order</label>
+        <label for="sort_order" class="form-label">Display Priority</label>
         <input id="sort_order" name="sort_order" type="number"
-               value="{{ division.sort_order if division else 0 }}" />
+               value="{{ division.sort_order if division and division.sort_order is not none else '' }}" />
+        <div class="muted small mt-4">Leave blank for alphabetical ordering. Items with a value appear first, sorted by this number.</div>
       </div>
 
       <div>
@@ -55,6 +56,14 @@
                  {% if not division or division.is_active %}checked{% endif %} />
           Active
         </label>
+      </div>
+
+      <div style="grid-column: 1 / -1;">
+        <label for="qb_class" class="form-label">QuickBooks Class</label>
+        <input id="qb_class" name="qb_class" type="text"
+               value="{{ division.qb_class if division else '' }}"
+               placeholder="e.g. Gaming" />
+        <div class="muted small mt-4">QuickBooks class name for financial reporting. Multiple divisions can share the same class.</div>
       </div>
 
     </div>

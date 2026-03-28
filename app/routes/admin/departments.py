@@ -21,8 +21,7 @@ from app.models import (
     CONFIG_AUDIT_ARCHIVE,
     CONFIG_AUDIT_RESTORE,
 )
-from app.routes import h
-from app.routes import get_user_ctx
+from app.routes import h, get_user_ctx
 from .helpers import (
     require_super_admin,
     render_admin_config_page,
@@ -32,6 +31,8 @@ from .helpers import (
     validate_code_length,
     CODE_MAX_LENGTH,
     safe_int,
+    safe_int_or_none,
+    sort_with_override,
     can_manage_department_members,
     can_manage_department_members_any_cycle,
     can_set_department_head,
@@ -74,6 +75,7 @@ def _dept_to_dict(dept: Department) -> dict:
         "slack_channel": dept.slack_channel,
         "is_active": dept.is_active,
         "sort_order": dept.sort_order,
+        "qb_class": dept.qb_class,
     }
 
 
@@ -82,7 +84,7 @@ def _get_active_divisions():
     return (
         db.session.query(Division)
         .filter(Division.is_active == True)
-        .order_by(Division.sort_order, Division.name)
+        .order_by(*sort_with_override(Division))
         .all()
     )
 
@@ -92,7 +94,7 @@ def _get_active_work_types():
     return (
         db.session.query(WorkType)
         .filter(WorkType.is_active == True)
-        .order_by(WorkType.sort_order, WorkType.name)
+        .order_by(*sort_with_override(WorkType))
         .all()
     )
 
@@ -123,7 +125,7 @@ def list_departments():
         order = col.desc() if sort_dir == "desc" else col.asc()
         query = query.order_by(order)
     else:
-        query = query.order_by(Department.sort_order, Department.name)
+        query = query.order_by(*sort_with_override(Department))
 
     departments = query.all()
 
@@ -191,7 +193,8 @@ def create_department():
         mailing_list=(request.form.get("mailing_list") or "").strip() or None,
         slack_channel=(request.form.get("slack_channel") or "").strip() or None,
         is_active=request.form.get("is_active") == "1",
-        sort_order=safe_int(request.form.get("sort_order")),
+        sort_order=safe_int_or_none(request.form.get("sort_order")),
+        qb_class=(request.form.get("qb_class") or "").strip() or None,
         created_by_user_id=h.get_active_user_id(),
         updated_by_user_id=h.get_active_user_id(),
     )
@@ -283,7 +286,8 @@ def update_department(dept_id: int):
     dept.mailing_list = (request.form.get("mailing_list") or "").strip() or None
     dept.slack_channel = (request.form.get("slack_channel") or "").strip() or None
     dept.is_active = request.form.get("is_active") == "1"
-    dept.sort_order = safe_int(request.form.get("sort_order"))
+    dept.sort_order = safe_int_or_none(request.form.get("sort_order"))
+    dept.qb_class = (request.form.get("qb_class") or "").strip() or None
     dept.updated_by_user_id = h.get_active_user_id()
 
     new_values = _dept_to_dict(dept)
@@ -371,14 +375,14 @@ def list_members(dept_id: int):
         )
 
     memberships = memberships_query.order_by(
-        EventCycle.sort_order, User.display_name
+        *sort_with_override(EventCycle), User.display_name
     ).all()
 
     # Get available event cycles for adding new members and filtering
     event_cycles = (
         db.session.query(EventCycle)
         .filter(EventCycle.is_active == True)
-        .order_by(EventCycle.sort_order)
+        .order_by(*sort_with_override(EventCycle))
         .all()
     )
 
@@ -423,7 +427,7 @@ def add_member_form(dept_id: int):
     event_cycles = (
         db.session.query(EventCycle)
         .filter(EventCycle.is_active == True)
-        .order_by(EventCycle.sort_order)
+        .order_by(*sort_with_override(EventCycle))
         .all()
     )
 

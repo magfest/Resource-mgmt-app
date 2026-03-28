@@ -27,7 +27,7 @@ class ContractType(db.Model):
     )
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    sort_order = db.Column(db.Integer, nullable=True, default=None)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     created_by_user_id = db.Column(db.String(64), nullable=True)

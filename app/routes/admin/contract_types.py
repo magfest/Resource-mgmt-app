@@ -22,6 +22,7 @@ from .helpers import (
     CODE_MAX_LENGTH,
     safe_int,
     safe_int_or_none,
+    sort_with_override,
 )
 
 contract_types_bp = Blueprint('contract_types', __name__, url_prefix='/contract-types')
@@ -40,7 +41,7 @@ def _get_form_context():
     approval_groups = (
         db.session.query(ApprovalGroup)
         .filter(ApprovalGroup.is_active == True)
-        .order_by(ApprovalGroup.sort_order, ApprovalGroup.name)
+        .order_by(*sort_with_override(ApprovalGroup))
         .all()
     )
     return {
@@ -66,7 +67,7 @@ def list_contract_types():
     """List all contract types."""
     contract_types = (
         db.session.query(ContractType)
-        .order_by(ContractType.sort_order, ContractType.name)
+        .order_by(*sort_with_override(ContractType))
         .all()
     )
     return render_admin_config_page(
@@ -113,7 +114,7 @@ def create_contract_type():
         description=request.form.get("description", "").strip() or None,
         approval_group_id=safe_int_or_none(request.form.get("approval_group_id")),
         is_active=bool(request.form.get("is_active")),
-        sort_order=safe_int(request.form.get("sort_order"), 0),
+        sort_order=safe_int_or_none(request.form.get("sort_order")),
         created_by_user_id=h.get_active_user_id(),
     )
     db.session.add(ct)
@@ -170,7 +171,7 @@ def update_contract_type(ct_id: int):
     ct.description = request.form.get("description", "").strip() or None
     ct.approval_group_id = safe_int_or_none(request.form.get("approval_group_id"))
     ct.is_active = bool(request.form.get("is_active"))
-    ct.sort_order = safe_int(request.form.get("sort_order"), 0)
+    ct.sort_order = safe_int_or_none(request.form.get("sort_order"))
     ct.updated_by_user_id = h.get_active_user_id()
 
     new_state = _ct_to_dict(ct)

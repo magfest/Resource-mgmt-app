@@ -44,7 +44,7 @@
       <th style="width: 150px;">Mailing List</th>
       <th style="width: 120px;">Slack</th>
       <th style="width: 80px;">Members</th>
-      <th style="width: 80px;">Order</th>
+      <th style="width: 80px;">Priority</th>
       <th style="width: 70px;">Status</th>
       <th style="width: 80px;">Actions</th>
     </tr>
@@ -61,7 +61,7 @@
         <td class="num">
           <a href="{{ url_for('admin_config.departments.list_members', dept_id=dept.id) }}">{{ member_counts.get(dept.id, 0) }}</a>
         </td>
-        <td class="num">{{ dept.sort_order }}</td>
+        <td class="num">{{ dept.sort_order if dept.sort_order is not none else '—' }}</td>
         <td>
           {% if dept.is_active %}
             <span class="pill" style="background: #e9f7ef;">Active</span>

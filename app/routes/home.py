@@ -43,6 +43,8 @@ def get_selected_event_cycle():
         Tuple of (selected_cycle, show_all_events)
         - If show_all_events is True, selected_cycle is None
     """
+    from app.routes.admin.helpers import sort_with_override
+
     selected_id = session.get('selected_event_cycle_id')
 
     if selected_id == 'all':
@@ -63,7 +65,7 @@ def get_selected_event_cycle():
         default_cycle = (
             db.session.query(EventCycle)
             .filter(EventCycle.is_active == True)
-            .order_by(EventCycle.sort_order)
+            .order_by(*sort_with_override(EventCycle))
             .first()
         )
 
@@ -109,6 +111,7 @@ def health_check():
 def index():
     """Home page - shows personalized dashboard based on user role."""
     from flask import current_app
+    from app.routes.admin.helpers import sort_with_override
 
     # Check if user is authenticated
     user_ctx = get_user_ctx()
@@ -130,7 +133,7 @@ def index():
     active_cycles = (
         db.session.query(EventCycle)
         .filter(EventCycle.is_active == True)
-        .order_by(EventCycle.sort_order)
+        .order_by(*sort_with_override(EventCycle))
         .all()
     )
 
@@ -162,7 +165,7 @@ def index():
             db.session.query(ApprovalGroup)
             .filter(ApprovalGroup.id.in_(user_ctx.approval_group_ids))
             .filter(ApprovalGroup.is_active == True)
-            .order_by(ApprovalGroup.sort_order)
+            .order_by(*sort_with_override(ApprovalGroup))
             .all()
         )
     context["approval_groups"] = approval_groups
@@ -176,7 +179,7 @@ def index():
             .filter(DivisionMembership.user_id == user_ctx.user_id)
             .filter(DivisionMembership.event_cycle_id == default_cycle.id)
             .filter(Division.is_active == True)
-            .order_by(Division.sort_order, Division.name)
+            .order_by(*sort_with_override(Division))
             .all()
         )
     context["div_memberships"] = div_memberships
@@ -392,8 +395,11 @@ def index():
             ("submission_deadline", "Submission Deadline", "Budget submissions due"),
             ("approval_target_date", "Reviews Started", "Target for completing reviews"),
             ("finalization_date", "Budget Finalization", "Budgets locked"),
-            ("event_start_date", "Event Starts", default_cycle.name),
         ]
+        if default_cycle.dates_are_public:
+            milestone_defs.append(
+                ("event_start_date", "Event Starts", default_cycle.name)
+            )
 
         for field, label, description in milestone_defs:
             milestone_date = getattr(default_cycle, field)

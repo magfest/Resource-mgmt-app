@@ -52,7 +52,7 @@ def _seed_test_data(app):
         db.session.add(dept)
 
         # Work type + config
-        wt = WorkType(code="BUDGET", name="Budget", is_active=True, sort_order=0)
+        wt = WorkType(code="BUDGET", name="Budget", is_active=True)
         db.session.add(wt)
         db.session.flush()
 

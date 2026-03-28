@@ -775,10 +775,11 @@ def create_app() -> Flask:
     def _get_approval_groups_for_template():
         """Get all active approval groups for the role override dropdown."""
         from .models import ApprovalGroup
+        from .routes.admin.helpers import sort_with_override
         return (
             db.session.query(ApprovalGroup)
             .filter(ApprovalGroup.is_active == True)  # noqa: E712
-            .order_by(ApprovalGroup.sort_order)
+            .order_by(*sort_with_override(ApprovalGroup))
             .all()
         )
 
@@ -821,6 +822,8 @@ def create_app() -> Flask:
                         work_type_id=budget_wt.id,
                     ).first() is not None
 
+            from .routes.admin.helpers import sort_with_override as _sort_override
+
             # Approval groups the user can review (for Review menu)
             ag_ids = active_user_approval_group_ids()
             if ag_ids:
@@ -828,7 +831,7 @@ def create_app() -> Flask:
                     ApprovalGroup.query
                     .filter(ApprovalGroup.id.in_(ag_ids))
                     .filter(ApprovalGroup.is_active.is_(True))
-                    .order_by(ApprovalGroup.sort_order)
+                    .order_by(*_sort_override(ApprovalGroup))
                     .all()
                 )
 
@@ -845,7 +848,7 @@ def create_app() -> Flask:
                 ) or (
                     EventCycle.query
                     .filter(EventCycle.is_active.is_(True))
-                    .order_by(EventCycle.sort_order)
+                    .order_by(*_sort_override(EventCycle))
                     .first()
                 )
 

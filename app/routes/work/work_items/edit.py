@@ -247,6 +247,7 @@ def work_item_edit(event: str, dept: str, public_id: str):
         event_nights=event_nights,
         event_start_date=ctx.event_cycle.event_start_date,
         event_end_date=ctx.event_cycle.event_end_date,
+        dates_are_public=ctx.event_cycle.dates_are_public,
         totals=totals,
         comments=comments,
         expense_accounts=expense_accounts,

@@ -27,7 +27,7 @@ class SupplyCategory(db.Model):
     )
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    sort_order = db.Column(db.Integer, nullable=True, default=None)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     created_by_user_id = db.Column(db.String(64), nullable=True)
@@ -67,7 +67,7 @@ class SupplyItem(db.Model):
     location_zone = db.Column(db.String(32), nullable=True)
     bin_location = db.Column(db.String(32), nullable=True)
 
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    sort_order = db.Column(db.Integer, nullable=True, default=None)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     created_by_user_id = db.Column(db.String(64), nullable=True)
