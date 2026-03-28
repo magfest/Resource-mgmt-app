@@ -532,7 +532,11 @@
                 <input type="checkbox" name="use_event_dates" id="use_event_dates" checked>
                 <span>
                   <strong>Standard event dates</strong>
-                  <span class="muted">({{ event_start_date.strftime('%a %b %d') }} → {{ event_end_date.strftime('%a %b %d, %Y') }}, {{ event_nights }} nights)</span>
+                  {% if dates_are_public %}
+                    <span class="muted">({{ event_start_date.strftime('%a %b %d') }} → {{ event_end_date.strftime('%a %b %d, %Y') }}, {{ event_nights }} nights)</span>
+                  {% else %}
+                    <span class="muted">({{ event_nights }} nights)</span>
+                  {% endif %}
                 </span>
               </label>
             </div>

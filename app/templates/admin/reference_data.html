@@ -273,7 +273,7 @@
                   <input type="text" name="description" value="{{ record.description or '' }}" placeholder="Optional description..." />
                 </td>
                 <td>
-                  <input type="number" name="sort_order" value="{{ record.sort_order }}" />
+                  <input type="number" name="sort_order" value="{{ record.sort_order if record.sort_order is not none else '' }}" placeholder="—" />
                 </td>
                 <td style="text-align: center;">
                   <input type="checkbox" name="is_active" value="1" class="backend-checkbox"

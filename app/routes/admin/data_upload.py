@@ -48,6 +48,7 @@ from .helpers import (
     CODE_MAX_LENGTH,
     validate_upload_file,
     safe_int_or_none,
+    sort_with_override,
 )
 
 data_upload_bp = Blueprint('data_upload', __name__, url_prefix='/data-upload')
@@ -867,7 +868,7 @@ def department_memberships_form():
     event_cycles = (
         db.session.query(EventCycle)
         .filter(EventCycle.is_active == True)
-        .order_by(EventCycle.sort_order)
+        .order_by(*sort_with_override(EventCycle))
         .all()
     )
     return render_admin_config_page(
@@ -999,7 +1000,7 @@ def division_memberships_form():
     event_cycles = (
         db.session.query(EventCycle)
         .filter(EventCycle.is_active == True)
-        .order_by(EventCycle.sort_order)
+        .order_by(*sort_with_override(EventCycle))
         .all()
     )
     return render_admin_config_page(
@@ -1131,7 +1132,7 @@ def user_roles_form():
     approval_groups = (
         db.session.query(ApprovalGroup)
         .filter(ApprovalGroup.is_active == True)
-        .order_by(ApprovalGroup.sort_order)
+        .order_by(*sort_with_override(ApprovalGroup))
         .all()
     )
     return render_admin_config_page(

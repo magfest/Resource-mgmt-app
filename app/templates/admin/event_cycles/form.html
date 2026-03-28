@@ -47,9 +47,18 @@
       </div>
 
       <div>
-        <label for="sort_order" class="form-label">Sort Order</label>
+        <label for="sort_order" class="form-label">Display Priority</label>
         <input id="sort_order" name="sort_order" type="number"
-               value="{{ cycle.sort_order if cycle else 0 }}" />
+               value="{{ cycle.sort_order if cycle and cycle.sort_order is not none else '' }}" />
+        <div class="muted small mt-4">Leave blank for alphabetical ordering. Items with a value appear first, sorted by this number.</div>
+      </div>
+
+      <div>
+        <label for="qb_class" class="form-label">QuickBooks Class</label>
+        <input id="qb_class" name="qb_class" type="text"
+               value="{{ cycle.qb_class if cycle else '' }}"
+               placeholder="e.g. Super_MAGFest" />
+        <div class="muted small mt-4">QuickBooks class name for financial reporting. Multiple events can share the same class.</div>
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 12px; padding-top: 28px;">
@@ -71,7 +80,16 @@
     <div style="border-top: 1px solid #eee; margin-top: 20px; padding-top: 20px;">
       <h3 style="margin: 0 0 16px 0; font-size: 1rem;">Key Dates</h3>
       <div class="muted small mb-16">
-        These dates are shown on the homepage to help everyone track the budget timeline.
+        Budget timeline dates are always shown on the homepage. Event dates (start/end) are only shown when marked as public below.
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="display: flex; gap: 8px; align-items: center; font-weight: normal;">
+          <input type="checkbox" name="dates_are_public" value="1"
+                 {% if cycle and cycle.dates_are_public %}checked{% endif %} />
+          Event dates are public
+        </label>
+        <div class="muted small mt-4">When checked, event start/end dates are visible on the homepage and in the hotel wizard. Leave unchecked if dates haven't been announced yet.</div>
       </div>
 
       <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">

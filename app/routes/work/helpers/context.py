@@ -141,9 +141,11 @@ def get_work_type_by_code(code: str) -> WorkType:
 
 def get_active_work_types() -> list[WorkType]:
     """Get all active work types with configs."""
+    from app.routes.admin.helpers import sort_with_override
+
     return WorkType.query.join(WorkTypeConfig).filter(
         WorkType.is_active == True
-    ).order_by(WorkType.sort_order.asc()).all()
+    ).order_by(*sort_with_override(WorkType)).all()
 
 
 def get_portfolio_context(

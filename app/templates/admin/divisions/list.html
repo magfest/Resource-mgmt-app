@@ -42,7 +42,7 @@
       <th>Description</th>
       <th style="width: 100px;">Departments</th>
       <th style="width: 80px;">Members</th>
-      <th style="width: 80px;">{{ sort_header('sort_order', 'Order', sort_by, sort_dir) }}</th>
+      <th style="width: 80px;">{{ sort_header('sort_order', 'Priority', sort_by, sort_dir) }}</th>
       <th style="width: 70px;">Status</th>
       <th style="width: 120px;">Actions</th>
     </tr>
@@ -55,7 +55,7 @@
         <td class="muted small">{{ div.description or '—' }}</td>
         <td class="num">{{ dept_counts.get(div.id, 0) }}</td>
         <td class="num">{{ member_counts.get(div.id, 0) }}</td>
-        <td class="num">{{ div.sort_order }}</td>
+        <td class="num">{{ div.sort_order if div.sort_order is not none else '—' }}</td>
         <td>
           {% if div.is_active %}
             <span class="pill" style="background: #e9f7ef;">Active</span>

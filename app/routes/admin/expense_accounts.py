@@ -43,6 +43,7 @@ from .helpers import (
     CODE_MAX_LENGTH,
     safe_int,
     safe_int_or_none,
+    sort_with_override,
 )
 
 expense_accounts_bp = Blueprint('expense_accounts', __name__, url_prefix='/expense-accounts')
@@ -83,25 +84,25 @@ def _get_form_context():
     approval_groups = (
         db.session.query(ApprovalGroup)
         .filter(ApprovalGroup.is_active == True)
-        .order_by(ApprovalGroup.sort_order, ApprovalGroup.name)
+        .order_by(*sort_with_override(ApprovalGroup))
         .all()
     )
     spend_types = (
         db.session.query(SpendType)
         .filter(SpendType.is_active == True)
-        .order_by(SpendType.sort_order, SpendType.name)
+        .order_by(*sort_with_override(SpendType))
         .all()
     )
     departments = (
         db.session.query(Department)
         .filter(Department.is_active == True)
-        .order_by(Department.sort_order, Department.name)
+        .order_by(*sort_with_override(Department))
         .all()
     )
     frequencies = (
         db.session.query(FrequencyOption)
         .filter(FrequencyOption.is_active == True)
-        .order_by(FrequencyOption.sort_order, FrequencyOption.name)
+        .order_by(*sort_with_override(FrequencyOption))
         .all()
     )
     return {
@@ -177,14 +178,14 @@ def list_expense_accounts():
         order = col.desc() if sort_dir == "desc" else col.asc()
         query = query.order_by(order)
     else:
-        query = query.order_by(ExpenseAccount.sort_order, ExpenseAccount.name)
+        query = query.order_by(*sort_with_override(ExpenseAccount))
 
     accounts = query.all()
 
     approval_groups = (
         db.session.query(ApprovalGroup)
         .filter(ApprovalGroup.is_active == True)
-        .order_by(ApprovalGroup.sort_order, ApprovalGroup.name)
+        .order_by(*sort_with_override(ApprovalGroup))
         .all()
     )
 
@@ -268,7 +269,7 @@ def create_expense_account():
         warehouse_default=False,
         ui_display_group=ui_display_group,
         prompt_mode=request.form.get("prompt_mode") or PROMPT_MODE_NONE,
-        sort_order=safe_int(request.form.get("sort_order")),
+        sort_order=safe_int_or_none(request.form.get("sort_order")),
         created_by_user_id=h.get_active_user_id(),
         updated_by_user_id=h.get_active_user_id(),
     )
@@ -388,7 +389,7 @@ def update_expense_account(account_id: int):
     account.unit_price_locked = unit_price_locked
     account.ui_display_group = ui_display_group
     account.prompt_mode = request.form.get("prompt_mode") or PROMPT_MODE_NONE
-    account.sort_order = safe_int(request.form.get("sort_order"))
+    account.sort_order = safe_int_or_none(request.form.get("sort_order"))
     account.updated_by_user_id = h.get_active_user_id()
 
     # Update allowed spend types
@@ -471,14 +472,14 @@ def list_overrides(account_id: int):
         db.session.query(ExpenseAccountEventOverride)
         .filter(ExpenseAccountEventOverride.expense_account_id == account_id)
         .join(EventCycle)
-        .order_by(EventCycle.sort_order, EventCycle.name)
+        .order_by(*sort_with_override(EventCycle))
         .all()
     )
 
     event_cycles = (
         db.session.query(EventCycle)
         .filter(EventCycle.is_active == True)
-        .order_by(EventCycle.sort_order, EventCycle.name)
+        .order_by(*sort_with_override(EventCycle))
         .all()
     )
 
@@ -512,7 +513,7 @@ def new_override(account_id: int):
         db.session.query(EventCycle)
         .filter(EventCycle.is_active == True)
         .filter(~EventCycle.id.in_(existing_cycle_ids))
-        .order_by(EventCycle.sort_order, EventCycle.name)
+        .order_by(*sort_with_override(EventCycle))
         .all()
     )
 
@@ -523,14 +524,14 @@ def new_override(account_id: int):
     frequencies = (
         db.session.query(FrequencyOption)
         .filter(FrequencyOption.is_active == True)
-        .order_by(FrequencyOption.sort_order)
+        .order_by(*sort_with_override(FrequencyOption))
         .all()
     )
 
     spend_types = (
         db.session.query(SpendType)
         .filter(SpendType.is_active == True)
-        .order_by(SpendType.sort_order)
+        .order_by(*sort_with_override(SpendType))
         .all()
     )
 
@@ -602,14 +603,14 @@ def edit_override(account_id: int, override_id: int):
     frequencies = (
         db.session.query(FrequencyOption)
         .filter(FrequencyOption.is_active == True)
-        .order_by(FrequencyOption.sort_order)
+        .order_by(*sort_with_override(FrequencyOption))
         .all()
     )
 
     spend_types = (
         db.session.query(SpendType)
         .filter(SpendType.is_active == True)
-        .order_by(SpendType.sort_order)
+        .order_by(*sort_with_override(SpendType))
         .all()
     )
 

@@ -28,6 +28,8 @@ from .helpers import (
     validate_code_length,
     CODE_MAX_LENGTH,
     safe_int,
+    safe_int_or_none,
+    sort_with_override,
 )
 
 divisions_bp = Blueprint('divisions', __name__, url_prefix='/divisions')
@@ -49,6 +51,7 @@ def _division_to_dict(division: Division) -> dict:
         "description": division.description,
         "is_active": division.is_active,
         "sort_order": division.sort_order,
+        "qb_class": division.qb_class,
     }
 
 
@@ -57,7 +60,7 @@ def _get_active_work_types():
     return (
         db.session.query(WorkType)
         .filter(WorkType.is_active == True)
-        .order_by(WorkType.sort_order, WorkType.name)
+        .order_by(*sort_with_override(WorkType))
         .all()
     )
 
@@ -86,7 +89,7 @@ def list_divisions():
         order = col.desc() if sort_dir == "desc" else col.asc()
         query = query.order_by(order)
     else:
-        query = query.order_by(Division.sort_order, Division.name)
+        query = query.order_by(*sort_with_override(Division))
 
     divisions = query.all()
 
@@ -152,7 +155,8 @@ def create_division():
         name=name,
         description=(request.form.get("description") or "").strip() or None,
         is_active=request.form.get("is_active") == "1",
-        sort_order=safe_int(request.form.get("sort_order")),
+        sort_order=safe_int_or_none(request.form.get("sort_order")),
+        qb_class=(request.form.get("qb_class") or "").strip() or None,
     )
 
     db.session.add(division)
@@ -217,7 +221,8 @@ def update_division(division_id: int):
     division.name = name
     division.description = (request.form.get("description") or "").strip() or None
     division.is_active = request.form.get("is_active") == "1"
-    division.sort_order = safe_int(request.form.get("sort_order"))
+    division.sort_order = safe_int_or_none(request.form.get("sort_order"))
+    division.qb_class = (request.form.get("qb_class") or "").strip() or None
 
     new_values = _division_to_dict(division)
     changes = track_changes(old_values, new_values)
@@ -298,14 +303,14 @@ def list_members(division_id: int):
         )
 
     memberships = memberships_query.order_by(
-        EventCycle.sort_order, User.display_name
+        *sort_with_override(EventCycle), User.display_name
     ).all()
 
     # Get available event cycles for adding new members and filtering
     event_cycles = (
         db.session.query(EventCycle)
         .filter(EventCycle.is_active == True)
-        .order_by(EventCycle.sort_order)
+        .order_by(*sort_with_override(EventCycle))
         .all()
     )
 
@@ -346,7 +351,7 @@ def add_member_form(division_id: int):
     event_cycles = (
         db.session.query(EventCycle)
         .filter(EventCycle.is_active == True)
-        .order_by(EventCycle.sort_order)
+        .order_by(*sort_with_override(EventCycle))
         .all()
     )
 

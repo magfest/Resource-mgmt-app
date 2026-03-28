@@ -215,12 +215,12 @@
         <h3 style="margin: 0 0 16px 0;">Display</h3>
 
         <div>
-          <label for="sort_order" class="form-label">Sort Order</label>
+          <label for="sort_order" class="form-label">Display Priority</label>
           <input id="sort_order" name="sort_order" type="number"
-                 value="{{ account.sort_order if account else 0 }}"
+                 value="{{ account.sort_order if account and account.sort_order is not none else '' }}"
                  style="max-width: 100px;"
                  {% if not can_modify %}disabled{% endif %} />
-          <div class="muted small mt-4">Lower numbers appear first</div>
+          <div class="muted small mt-4">Leave blank for alphabetical ordering. Items with a value appear first, sorted by this number.</div>
         </div>
       </section>
 

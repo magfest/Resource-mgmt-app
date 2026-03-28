@@ -23,6 +23,8 @@ from .helpers import (
     validate_code_length,
     CODE_MAX_LENGTH,
     safe_int,
+    safe_int_or_none,
+    sort_with_override,
 )
 
 approval_groups_bp = Blueprint('approval_groups', __name__, url_prefix='/approval-groups')
@@ -71,7 +73,7 @@ def list_approval_groups():
         order = col.desc() if sort_dir == "desc" else col.asc()
         query = query.order_by(order)
     else:
-        query = query.order_by(ApprovalGroup.sort_order, ApprovalGroup.name)
+        query = query.order_by(*sort_with_override(ApprovalGroup))
 
     groups = query.all()
 
@@ -132,7 +134,7 @@ def create_approval_group():
         name=name,
         description=(request.form.get("description") or "").strip() or None,
         is_active=request.form.get("is_active") == "1",
-        sort_order=safe_int(request.form.get("sort_order")),
+        sort_order=safe_int_or_none(request.form.get("sort_order")),
         created_by_user_id=h.get_active_user_id(),
         updated_by_user_id=h.get_active_user_id(),
     )
@@ -199,7 +201,7 @@ def update_approval_group(group_id: int):
     group.name = name
     group.description = (request.form.get("description") or "").strip() or None
     group.is_active = request.form.get("is_active") == "1"
-    group.sort_order = safe_int(request.form.get("sort_order"))
+    group.sort_order = safe_int_or_none(request.form.get("sort_order"))
     group.updated_by_user_id = h.get_active_user_id()
 
     new_values = _group_to_dict(group)

@@ -19,9 +19,11 @@ class EventCycle(db.Model):
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     is_default = db.Column(db.Boolean, nullable=False, default=False)
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    sort_order = db.Column(db.Integer, nullable=True, default=None)
+    qb_class = db.Column(db.String(128), nullable=True)
 
     # Key dates for the budget cycle
+    dates_are_public = db.Column(db.Boolean, nullable=False, default=False)
     event_start_date = db.Column(db.Date, nullable=True)          # When the event starts
     event_end_date = db.Column(db.Date, nullable=True)            # When the event ends
     submission_deadline = db.Column(db.Date, nullable=True)       # Budget submission deadline
@@ -43,7 +45,8 @@ class Division(db.Model):
     description = db.Column(db.Text, nullable=True)
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    sort_order = db.Column(db.Integer, nullable=True, default=None)
+    qb_class = db.Column(db.String(128), nullable=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -71,7 +74,8 @@ class Department(db.Model):
     slack_channel = db.Column(db.String(128), nullable=True)
 
     is_active = db.Column(db.Boolean, nullable=False, default=True)
-    sort_order = db.Column(db.Integer, nullable=False, default=0)
+    sort_order = db.Column(db.Integer, nullable=True, default=None)
+    qb_class = db.Column(db.String(128), nullable=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     created_by_user_id = db.Column(db.String(64), nullable=True)

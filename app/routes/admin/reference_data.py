@@ -18,7 +18,7 @@ from app.models import (
     CONFIG_AUDIT_UPDATE,
 )
 from app.routes import h
-from .helpers import require_super_admin, render_admin_config_page, log_config_change, track_changes, safe_int
+from .helpers import require_super_admin, render_admin_config_page, log_config_change, track_changes, safe_int, safe_int_or_none, sort_with_override
 
 
 reference_data_bp = Blueprint('reference_data', __name__, url_prefix='/reference-data')
@@ -74,7 +74,7 @@ def index():
         model = table_info["model"]
         records = (
             db.session.query(model)
-            .order_by(model.sort_order, model.name)
+            .order_by(*sort_with_override(model))
             .all()
         )
         tables_data[table_key] = {
@@ -111,7 +111,7 @@ def update_record(table_key: str, record_id: int):
     record.name = (request.form.get("name") or "").strip()
     record.description = (request.form.get("description") or "").strip() or None
     record.is_active = request.form.get("is_active") == "1"
-    record.sort_order = safe_int(request.form.get("sort_order"))
+    record.sort_order = safe_int_or_none(request.form.get("sort_order"))
     record.updated_by_user_id = h.get_active_user_id()
 
     # Validate

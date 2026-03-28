@@ -154,6 +154,19 @@ def flash_errors(form_errors: dict[str, list[str]]):
             flash(f"{field}: {error}", "error")
 
 
+def sort_with_override(model, name_attr=None):
+    """
+    Return ORDER BY clauses for nullable sort_order with alphabetical fallback.
+
+    Items with sort_order set appear first (ordered by sort_order ASC, then name ASC).
+    Items with sort_order NULL appear after, ordered by name ASC.
+
+    Usage: .order_by(*sort_with_override(Model))
+    """
+    name_col = name_attr or model.name
+    return (model.sort_order.is_(None), model.sort_order.asc(), name_col.asc())
+
+
 def safe_int(value: str | None, default: int = 0) -> int:
     """
     Safely convert a string to int, returning default on failure.
@@ -422,7 +435,7 @@ def get_manageable_departments_for_user(user_ctx, event_cycle_id: int) -> list:
     if user_ctx.is_super_admin:
         # Super admin can manage all departments
         return Department.query.filter_by(is_active=True).order_by(
-            Department.sort_order, Department.name
+            *sort_with_override(Department)
         ).all()
 
     manageable_dept_ids = set()
@@ -457,4 +470,4 @@ def get_manageable_departments_for_user(user_ctx, event_cycle_id: int) -> list:
     return Department.query.filter(
         Department.id.in_(manageable_dept_ids),
         Department.is_active == True,
-    ).order_by(Department.sort_order, Department.name).all()
+    ).order_by(*sort_with_override(Department)).all()

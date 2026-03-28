@@ -28,6 +28,7 @@ from .helpers import (
     render_admin_config_page,
     log_config_change,
     track_changes,
+    sort_with_override,
 )
 
 users_bp = Blueprint('users', __name__, url_prefix='/users')
@@ -55,13 +56,13 @@ def _get_role_context():
     work_types = (
         db.session.query(WorkType)
         .filter(WorkType.is_active == True)
-        .order_by(WorkType.sort_order, WorkType.name)
+        .order_by(*sort_with_override(WorkType))
         .all()
     )
     approval_groups = (
         db.session.query(ApprovalGroup)
         .filter(ApprovalGroup.is_active == True)
-        .order_by(ApprovalGroup.sort_order, ApprovalGroup.name)
+        .order_by(*sort_with_override(ApprovalGroup))
         .all()
     )
     return {
