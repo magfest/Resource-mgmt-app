@@ -33,6 +33,7 @@ from .helpers import (
     safe_int,
     safe_int_or_none,
     sort_with_override,
+    safe_redirect_url,
     can_manage_department_members,
     can_manage_department_members_any_cycle,
     can_set_department_head,
@@ -712,7 +713,8 @@ def update_info(dept_id: int):
     flash(f"Updated department info for {dept.name}", "success")
 
     # Redirect back to referring page or department list
-    referrer = request.form.get("referrer")
-    if referrer:
-        return redirect(referrer)
-    return redirect(url_for(".list_departments"))
+    referrer = safe_redirect_url(
+        request.form.get("referrer"),
+        fallback=url_for(".list_departments"),
+    )
+    return redirect(referrer)

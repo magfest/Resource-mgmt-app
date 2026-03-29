@@ -1,7 +1,7 @@
 """
 Unit tests for pure functions in app/routes/admin/helpers.py
 """
-from app.routes.admin.helpers import track_changes, safe_int, safe_int_or_none, sort_with_override
+from app.routes.admin.helpers import track_changes, safe_int, safe_int_or_none, sort_with_override, safe_redirect_url
 
 
 class TestTrackChanges:
@@ -161,3 +161,35 @@ class TestSortWithOverride:
         ).all()
         assert result[0].item_name == "Alpha Glue"
         assert result[1].item_name == "Zebra Tape"
+
+
+class TestSafeRedirectUrl:
+    """Tests for the safe_redirect_url function (open redirect prevention)."""
+
+    def test_allows_relative_paths(self):
+        assert safe_redirect_url("/admin/config") == "/admin/config"
+        assert safe_redirect_url("/") == "/"
+        assert safe_redirect_url("/some/deep/path?q=1") == "/some/deep/path?q=1"
+
+    def test_rejects_external_urls(self):
+        assert safe_redirect_url("https://attacker-site.com") == "/"
+        assert safe_redirect_url("http://attacker-site.com/phish") == "/"
+
+    def test_rejects_protocol_relative_urls(self):
+        assert safe_redirect_url("//attacker-site.com") == "/"
+        assert safe_redirect_url("//attacker-site.com/path") == "/"
+
+    def test_rejects_javascript_urls(self):
+        assert safe_redirect_url("javascript:alert(1)") == "/"
+
+    def test_rejects_data_urls(self):
+        assert safe_redirect_url("data:text/html,<h1>hi</h1>") == "/"
+
+    def test_returns_fallback_for_empty(self):
+        assert safe_redirect_url(None) == "/"
+        assert safe_redirect_url("") == "/"
+        assert safe_redirect_url("   ") == "/"
+
+    def test_custom_fallback(self):
+        assert safe_redirect_url("https://attacker-site.com", fallback="/dashboard") == "/dashboard"
+        assert safe_redirect_url(None, fallback="/home") == "/home"

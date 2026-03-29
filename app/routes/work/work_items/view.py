@@ -133,7 +133,8 @@ def work_item_comment(event: str, dept: str, public_id: str):
     perms = require_work_item_view(work_item, ctx)
 
     # Get return URL (for redirecting back to edit page if that's where they came from)
-    return_to = (request.form.get("return_to") or "").strip()
+    from app.routes.admin.helpers import safe_redirect_url
+    return_to = safe_redirect_url(request.form.get("return_to"), fallback="")
     default_redirect = url_for("work.work_item_detail", event=event, dept=dept,
                                public_id=public_id)
 

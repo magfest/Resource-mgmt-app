@@ -115,7 +115,11 @@ def finalize(work_item_id: int):
         db.session.commit()  # Commit notification log
 
     # Redirect back to referrer or dashboard
-    referrer = request.form.get("referrer") or url_for("admin_final.dashboard")
+    from app.routes.admin.helpers import safe_redirect_url
+    referrer = safe_redirect_url(
+        request.form.get("referrer"),
+        fallback=url_for("admin_final.dashboard"),
+    )
     return redirect(referrer)
 
 

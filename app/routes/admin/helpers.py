@@ -154,6 +154,28 @@ def flash_errors(form_errors: dict[str, list[str]]):
             flash(f"{field}: {error}", "error")
 
 
+def safe_redirect_url(url: str | None, fallback: str = "/") -> str:
+    """
+    Validate a user-supplied redirect URL to prevent open redirect attacks.
+
+    Only allows relative paths on the same host. Rejects external URLs,
+    javascript: URIs, data: URIs, and protocol-relative URLs.
+
+    Returns the URL if safe, otherwise returns the fallback.
+    """
+    if not url or not url.strip():
+        return fallback
+
+    url = url.strip()
+
+    # Only allow paths that start with / (relative to our host)
+    # Reject protocol-relative URLs (//evil.com), absolute URLs, and schemes
+    if not url.startswith("/") or url.startswith("//"):
+        return fallback
+
+    return url
+
+
 def sort_with_override(model, name_attr=None):
     """
     Return ORDER BY clauses for nullable sort_order with alphabetical fallback.
