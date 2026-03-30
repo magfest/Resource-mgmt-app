@@ -181,9 +181,18 @@ def get_or_create_admin_review(line: WorkLine, user_ctx: UserContext) -> Tuple[W
     """
     Get or create an ADMIN_FINAL WorkLineReview.
 
+    Uses SELECT ... FOR UPDATE to prevent duplicate ADMIN_FINAL reviews
+    from concurrent requests (the standard unique constraint doesn't protect
+    rows where approval_group_id IS NULL due to SQL NULL semantics).
+
     Returns (review, created) tuple.
     """
-    review = get_admin_final_review(line)
+    # Lock existing review row if present, preventing concurrent creation
+    review = WorkLineReview.query.filter_by(
+        work_line_id=line.id,
+        stage=REVIEW_STAGE_ADMIN_FINAL,
+    ).with_for_update().first()
+
     if review:
         return review, False
 
