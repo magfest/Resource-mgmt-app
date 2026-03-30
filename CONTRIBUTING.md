@@ -71,7 +71,3 @@ Thanks for your interest in contributing! MAGFest is volunteer-run, and this pro
 ## AI Tools
 
 AI-assisted development tools (Copilot, Claude, etc.) are permitted. We expect contributors to **understand and own what they submit**. PRs should reflect thoughtful changes, not bulk-generated rewrites. If AI helped, that's fine. Just make sure the output makes sense for this codebase and you can explain what it does.
-
-## Questions?
-
-Open an issue or reach out to the maintainers. We're happy to help you get oriented.
