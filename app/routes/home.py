@@ -271,11 +271,11 @@ def index():
                             "is_head": div_m.is_division_head,
                         })
 
-        # Sort by division, then department
+        # Sort by division, then department (handle None sort_order from nullable columns)
         accessible_depts.sort(key=lambda x: (
-            x["department"].division.sort_order if x["department"].division else 999,
+            x["department"].division.sort_order if x["department"].division and x["department"].division.sort_order is not None else 999,
             x["department"].division.name if x["department"].division else "ZZZ",
-            x["department"].sort_order,
+            x["department"].sort_order if x["department"].sort_order is not None else 999,
             x["department"].name,
         ))
 
