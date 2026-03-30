@@ -40,9 +40,9 @@ Thanks for your interest in contributing! MAGFest is volunteer-run, and this pro
 
 ### Code style
 
-- No strict linter enforced yet, but try to match the style of surrounding code
+- Try to match the style of surrounding code
 - Use meaningful variable names — this is a workflow app, clarity matters more than brevity
-- Follow existing patterns for routes, templates, and models (see `CLAUDE.md` for architecture reference)
+- Follow existing patterns for routes, templates, and models.
 
 ### Templates and frontend
 
@@ -54,7 +54,7 @@ Thanks for your interest in contributing! MAGFest is volunteer-run, and this pro
 
 - Run tests before submitting: `pytest`
 - If you're adding a new route or changing business logic, adding tests is appreciated but not required for every PR
-- The test suite uses SQLite in-memory — no database setup needed
+- The test suite uses SQLite in-memory, mainly, but may switch to needing a full PostgreSQL soon
 
 ### What makes a good PR
 
@@ -65,13 +65,8 @@ Thanks for your interest in contributing! MAGFest is volunteer-run, and this pro
 
 ## What to Work On
 
-- Check the [Roadmap](ROADMAP.md) for planned features and known issues
-- If you want to take on something larger, open an issue first to discuss the approach
+- If you want to take on something larger, reach out to Stoldal on Slack or open an issue first to discuss the approach
 
 ## AI Tools
 
 AI-assisted development tools (Copilot, Claude, etc.) are permitted. We expect contributors to **understand and own what they submit**. PRs should reflect thoughtful changes, not bulk-generated rewrites. If AI helped, that's fine. Just make sure the output makes sense for this codebase and you can explain what it does.
-
-## Questions?
-
-Open an issue or reach out to the maintainers. We're happy to help you get oriented.
