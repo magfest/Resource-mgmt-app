@@ -342,7 +342,7 @@ def all_requests():
     page = request.args.get("page", 1, type=int)
     per_page = 25
 
-    # Build base query
+    # Build base query with eager loading to avoid N+1 queries
     query = WorkItem.query.filter(
         WorkItem.is_archived == False
     ).join(
@@ -351,6 +351,10 @@ def all_requests():
         Department, WorkPortfolio.department_id == Department.id
     ).join(
         EventCycle, WorkPortfolio.event_cycle_id == EventCycle.id
+    ).options(
+        joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.department),
+        joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.event_cycle),
+        selectinload(WorkItem.lines).joinedload(WorkLine.budget_detail),
     )
 
     # Apply event filter
