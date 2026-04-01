@@ -27,6 +27,11 @@ from app.models import (
 )
 from .email import send_email
 from .email_templates import render_email_template
+from .slack import send_slack_message, is_slack_enabled
+from .slack_messages import (
+    format_submitted, format_dispatched, format_needs_attention,
+    format_response_received, format_finalized,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +76,12 @@ def notify_budget_submitted(work_item: WorkItem) -> int:
             sent_count += 1
 
     logger.info(f"Sent {sent_count}/{len(recipients)} submission notifications for {work_item.public_id}")
+
+    # Slack channel notification
+    if is_slack_enabled():
+        text, blocks = format_submitted(work_item)
+        send_slack_message(text=text, blocks=blocks, template_key='submitted', work_item_id=work_item.id)
+
     return sent_count
 
 
@@ -113,6 +124,12 @@ def notify_budget_dispatched(work_item: WorkItem, approval_group_ids: List[int])
             sent_count += 1
 
     logger.info(f"Sent {sent_count}/{len(recipients)} dispatch notifications for {work_item.public_id}")
+
+    # Slack channel notification
+    if is_slack_enabled():
+        text, blocks = format_dispatched(work_item)
+        send_slack_message(text=text, blocks=blocks, template_key='dispatched', work_item_id=work_item.id)
+
     return sent_count
 
 
@@ -154,6 +171,12 @@ def notify_needs_attention(work_item: WorkItem) -> int:
             sent_count += 1
 
     logger.info(f"Sent {sent_count}/{len(recipients)} needs_attention notifications for {work_item.public_id}")
+
+    # Slack channel notification
+    if is_slack_enabled():
+        text, blocks = format_needs_attention(work_item)
+        send_slack_message(text=text, blocks=blocks, template_key='needs_attention', work_item_id=work_item.id)
+
     return sent_count
 
 
@@ -194,6 +217,11 @@ def notify_response_received(work_item: WorkItem, reviewer_user_id: str) -> bool
 
     if success:
         logger.info(f"Sent response_received notification to {user.email} for {work_item.public_id}")
+
+    # Slack channel notification
+    if is_slack_enabled():
+        text, blocks = format_response_received(work_item)
+        send_slack_message(text=text, blocks=blocks, template_key='response_received', work_item_id=work_item.id)
 
     return success
 
@@ -236,6 +264,12 @@ def notify_budget_finalized(work_item: WorkItem) -> int:
             sent_count += 1
 
     logger.info(f"Sent {sent_count}/{len(recipients)} finalized notifications for {work_item.public_id}")
+
+    # Slack channel notification
+    if is_slack_enabled():
+        text, blocks = format_finalized(work_item)
+        send_slack_message(text=text, blocks=blocks, template_key='finalized', work_item_id=work_item.id)
+
     return sent_count
 
 

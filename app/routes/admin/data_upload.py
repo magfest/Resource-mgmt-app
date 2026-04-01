@@ -20,11 +20,14 @@ from app.models import (
     User,
     UserRole,
     DepartmentMembership,
+    DepartmentMembershipWorkTypeAccess,
     DivisionMembership,
+    DivisionMembershipWorkTypeAccess,
     EventCycle,
     ApprovalGroup,
     SpendType,
     FrequencyOption,
+    WorkType,
     CONFIG_AUDIT_CREATE,
     CONFIG_AUDIT_UPDATE,
     ROLE_SUPER_ADMIN,
@@ -214,6 +217,67 @@ def _parse_bool(value: str | None) -> bool:
         return False
     val_lower = value.lower().strip()
     return val_lower in ('true', 'yes', '1', 'x', 'y', 'on')
+
+
+def _detect_work_type_columns(df: pd.DataFrame) -> dict:
+    """
+    Detect work type columns in the DataFrame.
+
+    Looks for columns named {work_type_code}_view and {work_type_code}_edit
+    (case-insensitive) for each active work type.
+
+    Returns a dict mapping work_type_id to
+    {"work_type": WorkType, "view_col": str|None, "edit_col": str|None}.
+    Only includes work types that have at least one matching column.
+    """
+    work_types = db.session.query(WorkType).filter(WorkType.is_active == True).all()
+    df_cols_lower = {col.lower().strip(): col for col in df.columns}
+    result = {}
+    for wt in work_types:
+        code_lower = wt.code.lower()
+        view_col = df_cols_lower.get(f"{code_lower}_view")
+        edit_col = df_cols_lower.get(f"{code_lower}_edit")
+        if view_col or edit_col:
+            result[wt.id] = {
+                "work_type": wt,
+                "view_col": view_col,
+                "edit_col": edit_col,
+            }
+    return result
+
+
+def _apply_work_type_access(membership, access_model_class, membership_fk_name, wt_columns, row):
+    """
+    Create or update WorkTypeAccess records for a membership based on CSV row data.
+
+    Args:
+        membership: DepartmentMembership or DivisionMembership instance (must be flushed/have an id)
+        access_model_class: DepartmentMembershipWorkTypeAccess or DivisionMembershipWorkTypeAccess
+        membership_fk_name: FK column name, e.g. "department_membership_id"
+        wt_columns: dict from _detect_work_type_columns()
+        row: pandas DataFrame row
+    """
+    for wt_id, col_info in wt_columns.items():
+        can_view = _parse_bool(_get_cell_value(row, col_info["view_col"]))
+        can_edit = _parse_bool(_get_cell_value(row, col_info["edit_col"]))
+
+        existing_access = (
+            db.session.query(access_model_class)
+            .filter_by(**{membership_fk_name: membership.id}, work_type_id=wt_id)
+            .first()
+        )
+
+        if existing_access:
+            existing_access.can_view = can_view
+            existing_access.can_edit = can_edit
+        elif can_view or can_edit:
+            access = access_model_class(
+                **{membership_fk_name: membership.id},
+                work_type_id=wt_id,
+                can_view=can_view,
+                can_edit=can_edit,
+            )
+            db.session.add(access)
 
 
 def _generate_user_id(email: str) -> str:
@@ -922,6 +986,9 @@ def department_memberships_upload():
     depts_by_code, depts_by_name = _build_lookup_dicts(Department)
     cycles_by_code = _build_code_lookup(EventCycle)
 
+    # Detect work type columns (e.g. budget_view, budget_edit, contract_view, ...)
+    wt_columns = _detect_work_type_columns(df)
+
     created = 0
     updated = 0
     skipped = 0
@@ -969,6 +1036,7 @@ def department_memberships_upload():
 
         if existing:
             existing.is_department_head = is_head
+            membership = existing
             updated += 1
         else:
             membership = DepartmentMembership(
@@ -978,7 +1046,15 @@ def department_memberships_upload():
                 is_department_head=is_head,
             )
             db.session.add(membership)
+            db.session.flush()  # Ensure membership.id is available for FK
             created += 1
+
+        # Apply work type access if columns were present
+        if wt_columns:
+            _apply_work_type_access(
+                membership, DepartmentMembershipWorkTypeAccess,
+                "department_membership_id", wt_columns, row,
+            )
 
     db.session.commit()
 
@@ -1054,6 +1130,9 @@ def division_memberships_upload():
     divs_by_code, divs_by_name = _build_lookup_dicts(Division)
     cycles_by_code = _build_code_lookup(EventCycle)
 
+    # Detect work type columns (e.g. budget_view, budget_edit, contract_view, ...)
+    wt_columns = _detect_work_type_columns(df)
+
     created = 0
     updated = 0
     skipped = 0
@@ -1101,6 +1180,7 @@ def division_memberships_upload():
 
         if existing:
             existing.is_division_head = is_head
+            membership = existing
             updated += 1
         else:
             membership = DivisionMembership(
@@ -1110,7 +1190,15 @@ def division_memberships_upload():
                 is_division_head=is_head,
             )
             db.session.add(membership)
+            db.session.flush()  # Ensure membership.id is available for FK
             created += 1
+
+        # Apply work type access if columns were present
+        if wt_columns:
+            _apply_work_type_access(
+                membership, DivisionMembershipWorkTypeAccess,
+                "division_membership_id", wt_columns, row,
+            )
 
     db.session.commit()
 
@@ -1316,12 +1404,12 @@ david@example.org,David Brown,
 @require_super_admin
 def download_department_memberships_template():
     """Download a CSV template for department memberships."""
-    csv_content = """email,department,event_cycle,is_department_head
-alice@example.org,TECHOPS,SMF2026,yes
-bob@example.org,TECHOPS,SMF2026,no
-carol@example.org,TECHOPS,SMF2026,no
-david@example.org,REGISTRATION,SMF2026,yes
-alice@example.org,REGISTRATION,SMF2026,no
+    csv_content = """email,department,event_cycle,is_department_head,budget_view,budget_edit,contract_view,contract_edit
+alice@example.org,TECHOPS,SMF2026,yes,yes,yes,yes,yes
+bob@example.org,TECHOPS,SMF2026,no,yes,no,yes,no
+carol@example.org,TECHOPS,SMF2026,no,yes,yes,no,no
+david@example.org,REGISTRATION,SMF2026,yes,yes,yes,yes,yes
+alice@example.org,REGISTRATION,SMF2026,no,yes,no,no,no
 """
     return _make_csv_response(csv_content, 'department_memberships_template.csv')
 
@@ -1330,9 +1418,9 @@ alice@example.org,REGISTRATION,SMF2026,no
 @require_super_admin
 def download_division_memberships_template():
     """Download a CSV template for division memberships."""
-    csv_content = """email,division,event_cycle,is_division_head
-alice@example.org,OPERATIONS,SMF2026,yes
-bob@example.org,ENTERTAINMENT,SMF2026,yes
+    csv_content = """email,division,event_cycle,is_division_head,budget_view,budget_edit,contract_view,contract_edit
+alice@example.org,OPERATIONS,SMF2026,yes,yes,yes,yes,yes
+bob@example.org,ENTERTAINMENT,SMF2026,yes,yes,yes,no,no
 """
     return _make_csv_response(csv_content, 'division_memberships_template.csv')
 

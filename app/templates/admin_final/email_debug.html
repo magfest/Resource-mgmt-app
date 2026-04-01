@@ -1,16 +1,16 @@
 {# templates/admin_final/email_debug.html #}
 {% extends "layout/base.html" %}
 
-{% block title %}Email Debug{% endblock %}
+{% block title %}Notifications Debug{% endblock %}
 
 {% block content %}
 
   {# Header #}
   <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap: wrap; margin-bottom: 24px;">
     <div>
-      <h1 style="margin:0;">Email Debug</h1>
+      <h1 style="margin:0;">Notifications Debug</h1>
       <div class="muted" style="margin-top:4px;">
-        Test email sending and view notification logs
+        Test sending and view notification logs (Email &amp; Slack)
       </div>
     </div>
   </div>
@@ -62,6 +62,45 @@
     </table>
   </section>
 
+  {# Slack Configuration Status #}
+  <section class="card" style="margin-bottom: 24px; {% if slack_config.enabled %}background: #f0fdf4; border: 1px solid #059669;{% else %}background: #fef3c7; border: 1px solid #f59e0b;{% endif %}">
+    <h3 style="margin:0 0 16px 0;">
+      {% if slack_config.enabled %}
+        Slack Notifications: Enabled
+      {% else %}
+        Slack Notifications: Disabled
+      {% endif %}
+    </h3>
+
+    <table style="width: auto;">
+      <tr>
+        <td class="muted" style="padding-right: 24px;">SLACK_ENABLED</td>
+        <td>
+          {% if slack_config.enabled %}
+            <span style="color: #059669; font-weight: 600;">true</span>
+          {% else %}
+            <span style="color: #d97706; font-weight: 600;">false</span>
+            <span class="muted small"> (messages logged as SUPPRESSED)</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td class="muted">SLACK_BOT_TOKEN</td>
+        <td>
+          {% if slack_config.has_token %}
+            <span style="color: #059669;">Configured</span>
+          {% else %}
+            <span class="muted">Not set</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td class="muted">SLACK_CHANNEL_ID</td>
+        <td><code>{{ slack_config.channel_id }}</code></td>
+      </tr>
+    </table>
+  </section>
+
   {# Rate Limits #}
   <section class="card" style="margin-bottom: 24px;">
     <h3 style="margin:0 0 16px 0;">Rate Limits (Safety Mechanisms)</h3>
@@ -107,18 +146,24 @@
     </p>
   </section>
 
-  {# Send Test Email #}
+  {# Send Test Notifications #}
   <section class="card" style="margin-bottom: 24px;">
-    <h3 style="margin:0 0 16px 0;">Send Test Email</h3>
-    <form method="post" action="{{ url_for('admin_final.email_test_send') }}" style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div>
-        <label class="small muted" style="display: block; margin-bottom: 4px;">Recipient Email</label>
-        <input type="email" name="recipient" placeholder="{{ user_ctx.user.email if user_ctx.user else 'your@email.com' }}" style="width: 300px;">
-      </div>
-      <button type="submit" class="btn btn-primary">Send Test Email</button>
-      <span class="muted small">Leave blank to send to yourself</span>
-    </form>
+    <h3 style="margin:0 0 16px 0;">Send Test Notifications</h3>
+    <div style="display: flex; gap: 24px; flex-wrap: wrap;">
+      <form method="post" action="{{ url_for('admin_final.email_test_send') }}" style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div>
+          <label class="small muted" style="display: block; margin-bottom: 4px;">Recipient Email</label>
+          <input type="email" name="recipient" placeholder="{{ user_ctx.user.email if user_ctx.user else 'your@email.com' }}" style="width: 300px;">
+        </div>
+        <button type="submit" class="btn btn-primary">Send Test Email</button>
+        <span class="muted small">Leave blank to send to yourself</span>
+      </form>
+      <form method="post" action="{{ url_for('admin_final.slack_test_send') }}" style="display: flex; gap: 12px; align-items: flex-end;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn" style="background: #4A154B; color: white; border-color: #4A154B;">Send Test Slack Message</button>
+      </form>
+    </div>
   </section>
 
   {# Status Summary #}
@@ -127,7 +172,7 @@
     {% for status, count in status_counts.items() %}
       <div class="card" style="text-align: center; min-width: 120px; padding: 16px;">
         <div style="font-size: 24px; font-weight: 700;
-          {% if status == 'SENT' %}color: #059669;
+          {% if 'SENT' in status %}color: #059669;
           {% elif status == 'FAILED' %}color: #dc2626;
           {% elif status == 'SUPPRESSED' %}color: #d97706;
           {% elif status == 'DEBOUNCED' %}color: #6366f1;
@@ -161,6 +206,15 @@
         </select>
       </div>
       <div>
+        <label class="small muted" style="display: block; margin-bottom: 4px;">Channel</label>
+        <select name="channel">
+          <option value="">All Channels</option>
+          {% for channel in all_channels %}
+            <option value="{{ channel }}" {% if channel == channel_filter %}selected{% endif %}>{{ channel }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
         <label class="small muted" style="display: block; margin-bottom: 4px;">Time Range</label>
         <select name="days">
           <option value="1" {% if days == 1 %}selected{% endif %}>Last 24 hours</option>
@@ -170,7 +224,7 @@
         </select>
       </div>
       <button type="submit" class="btn">Filter</button>
-      {% if status_filter or template_filter or days != 7 %}
+      {% if status_filter or template_filter or channel_filter or days != 7 %}
         <a href="{{ url_for('admin_final.email_debug') }}" class="btn">Clear</a>
       {% endif %}
     </form>
@@ -186,6 +240,7 @@
           <thead>
             <tr>
               <th>Time</th>
+              <th>Channel</th>
               <th>Status</th>
               <th>Template</th>
               <th>Recipient</th>
@@ -199,6 +254,13 @@
               <tr>
                 <td class="nowrap small">
                   {{ log.created_at.strftime("%Y-%m-%d %H:%M") }}
+                </td>
+                <td>
+                  {% if log.channel == 'SLACK' %}
+                    <span class="pill" style="background: #e8d5f5; color: #7c3aed;">SLACK</span>
+                  {% else %}
+                    <span class="pill" style="background: #dbeafe; color: #2563eb;">EMAIL</span>
+                  {% endif %}
                 </td>
                 <td>
                   {% if log.status == 'SENT' %}

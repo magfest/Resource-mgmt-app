@@ -79,15 +79,20 @@
         <td><code>is_department_head</code>, <code>department_head</code>, <code>head</code>, <code>dh</code>, <code>is_head</code></td>
         <td>yes/no/true/false/1/0 (defaults to no)</td>
       </tr>
+      <tr>
+        <td><strong>Work Type Access</strong></td>
+        <td>No</td>
+        <td><code>{work_type}_view</code>, <code>{work_type}_edit</code></td>
+        <td>
+          One pair of columns per work type, using the work type code (e.g. <code>budget_view</code>, <code>budget_edit</code>, <code>contract_view</code>, <code>contract_edit</code>).
+          yes/no/true/false/1/0. If omitted, work type access is not modified.
+        </td>
+      </tr>
     </tbody>
   </table>
 </div>
 
 <div style="margin-top: 16px; padding: 16px; background: #fff8e1; border: 1px solid #ffcc02;">
   <strong>Note:</strong> Memberships are matched by user + department + event cycle. Existing memberships will be updated with new permissions.
-</div>
-
-<div style="margin-top: 16px; padding: 16px; background: #f3e5f5; border: 1px solid #9c27b0;">
-  <strong>Note:</strong> Work type-specific access (view/edit permissions per work type) is configured separately via the member edit form after uploading memberships.
 </div>
 {% endblock %}

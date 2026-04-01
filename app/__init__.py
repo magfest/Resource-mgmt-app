@@ -150,6 +150,11 @@ def create_app() -> Flask:
     app.config["EMAIL_CIRCUIT_BREAKER_THRESHOLD"] = int(os.environ.get("EMAIL_CIRCUIT_BREAKER_THRESHOLD", "5"))
     app.config["EMAIL_CIRCUIT_BREAKER_WINDOW"] = int(os.environ.get("EMAIL_CIRCUIT_BREAKER_WINDOW", "10"))
 
+    # --- Slack Notifications ---
+    app.config["SLACK_ENABLED"] = os.environ.get("SLACK_ENABLED", "").lower() == "true"
+    app.config["SLACK_BOT_TOKEN"] = os.environ.get("SLACK_BOT_TOKEN")
+    app.config["SLACK_CHANNEL_ID"] = os.environ.get("SLACK_CHANNEL_ID")
+
     # --- Proxy Fix for AWS AppRunner ---
     if os.environ.get("BEHIND_PROXY", "false").lower() == "true":
         from werkzeug.middleware.proxy_fix import ProxyFix
