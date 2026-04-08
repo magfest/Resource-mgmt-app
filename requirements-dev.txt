@@ -16,13 +16,13 @@ blinker==1.9.0 \
     --hash=sha256:b4ce2265a7abece45e7cc896e98dbebe6cead56bcf805a3d23136d145f5445bf \
     --hash=sha256:ba0efaa9080b619ff2f3459d1d500c57bddea4a6b424b60a91141db6fd2f08bc
     # via flask
-boto3==1.42.75 \
-    --hash=sha256:16bc657d16403ee8e11c8b6920c245629e37a36ea60352b919da566f82b4cb4c \
-    --hash=sha256:3c7fd95a50c69271bd7707b7eda07dcfddb30e961a392613010f7ee81d91acb3
+boto3==1.42.85 \
+    --hash=sha256:1cd3dcbfaba85c6071ba9397c1804b6a94a1a97031b8f1993fdba27c0c5d6eba \
+    --hash=sha256:4f6ac066e41d18ec33f532253fac0f35e0fdca373724458f983ce3d531340b7a
     # via -r requirements.in
-botocore==1.42.75 \
-    --hash=sha256:915e43b7ac8f50cf3dbc937ba713de5acb999ea48ad8fecd1589d92ad415f787 \
-    --hash=sha256:95c8e716b6be903ee1601531caa4f50217400aa877c18fe9a2c3047d2945d477
+botocore==1.42.85 \
+    --hash=sha256:2ee61f80b7724a143e16d0a85408ef5fa20b99dce7a3c8ec5d25cc8dced164c1 \
+    --hash=sha256:828b67722caeb7e240eefedee74050e803d1fa102958ead9c4009101eefd5381
     # via
     #   boto3
     #   s3transfer
