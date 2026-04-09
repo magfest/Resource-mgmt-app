@@ -9,7 +9,6 @@ from __future__ import annotations
 import re
 from io import BytesIO
 
-import pandas as pd
 from flask import Blueprint, redirect, url_for, request, flash, Response
 
 from app import db
@@ -180,6 +179,8 @@ def _read_uploaded_file(file) -> pd.DataFrame | None:
 
     Validates file extension, MIME type, and size before reading.
     """
+    import pandas as pd
+
     # Validate file first
     if not validate_upload_file(file):
         return None
@@ -204,6 +205,8 @@ def _read_uploaded_file(file) -> pd.DataFrame | None:
 
 def _get_cell_value(row, col_name: str | None) -> str | None:
     """Safely get a trimmed string value from a DataFrame row."""
+    import pandas as pd
+
     if col_name is None:
         return None
     val = row.get(col_name, '')
