@@ -37,7 +37,7 @@
       {% for lock in locks %}
         <tr>
           <td>
-            <a href="{{ url_for('work.work_item_detail', event=lock.event_cycle.code if lock.event_cycle else 'UNKNOWN', dept=lock.department.code if lock.department else 'UNKNOWN', public_id=lock.work_item.public_id) }}">
+            <a href="{{ url_for('work.work_item_detail', event=lock.event_cycle.code if lock.event_cycle else 'UNKNOWN', dept=lock.department.code if lock.department else 'UNKNOWN', public_id=lock.work_item.public_id, work_type_slug=lock.work_item.portfolio.work_type_slug if lock.work_item.portfolio else 'budget') }}">
               {{ lock.work_item.public_id }}
             </a>
           </td>

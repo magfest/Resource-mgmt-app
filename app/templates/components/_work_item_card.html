@@ -23,7 +23,7 @@
   <div style="display:flex; justify-content:space-between; gap:12px; align-items:flex-start;">
     <div>
       <h3 style="margin:0;">
-        <a href="{{ url_for('work.work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=item.public_id) }}"
+        <a href="{{ url_for('work.work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=item.public_id, work_type_slug=ctx.work_type_slug) }}"
            style="text-decoration: none; color: inherit;">
           {# Show "Supplementary #N" for supplementary items, otherwise public ID #}
           {% if item.request_kind == 'SUPPLEMENTARY' and supp_number %}
@@ -89,11 +89,11 @@
   </div>
 
   <div class="btn-row" style="margin-top: 10px;">
-    <a class="btn" href="{{ url_for('work.work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=item.public_id) }}">
+    <a class="btn" href="{{ url_for('work.work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=item.public_id, work_type_slug=ctx.work_type_slug) }}">
       View
     </a>
     {% if status == "DRAFT" and perms and perms.can_edit %}
-      <a class="btn" href="{{ url_for('work.work_item_edit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=item.public_id) }}">
+      <a class="btn" href="{{ url_for('work.work_item_edit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=item.public_id, work_type_slug=ctx.work_type_slug) }}">
         Edit
       </a>
     {% endif %}

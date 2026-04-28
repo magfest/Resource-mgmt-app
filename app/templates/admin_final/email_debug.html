@@ -285,7 +285,8 @@
                     <a href="{{ url_for('work.work_item_detail',
                       event=log.work_item.portfolio.event_cycle.code,
                       dept=log.work_item.portfolio.department.code,
-                      public_id=log.work_item.public_id) }}">
+                      public_id=log.work_item.public_id,
+                      work_type_slug=log.work_item.portfolio.work_type_slug) }}">
                       {{ log.work_item.public_id }}
                     </a>
                   {% else %}
