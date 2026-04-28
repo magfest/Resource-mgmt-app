@@ -32,10 +32,11 @@
       {% set portfolio = wi.portfolio %}
       {% set event_code = portfolio.event_cycle.code if portfolio else '' %}
       {% set dept_code = portfolio.department.code if portfolio else '' %}
+      {% set work_type_slug = portfolio.work_type_slug if portfolio else 'budget' %}
 
       <tr>
         <td>
-          <a href="{{ url_for('work.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
+          <a href="{{ url_for('work.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id, work_type_slug=work_type_slug) }}">
             {{ wi.public_id }}
           </a>
           <div class="muted small">{{ portfolio.department.name if portfolio else '-' }}</div>
@@ -85,7 +86,7 @@
           </td>
         {% endif %}
         <td>
-          <a class="btn" href="{{ url_for('approvals.line_review', event=event_code, dept=dept_code, public_id=wi.public_id, line_num=line.line_number) }}">
+          <a class="btn" href="{{ url_for('approvals.line_review', event=event_code, dept=dept_code, public_id=wi.public_id, line_num=line.line_number, work_type_slug=work_type_slug) }}">
             Review
           </a>
         </td>
