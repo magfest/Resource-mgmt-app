@@ -56,134 +56,68 @@ def notify_work_item_submitted(work_item: WorkItem) -> int:
     Called after: work_item.status transitions out of DRAFT.
     Returns: Number of emails sent.
     """
-    recipients = _get_submit_recipients(work_item)
+    sent_count = _send_emails(
+        recipients=_get_submit_recipients(work_item),
+        template_key='submitted',
+        work_item=work_item,
+        empty_recipients_msg="No recipients found for submission notification",
+    )
 
-    if not recipients:
-        logger.warning(f"No recipients found for submission notification: {work_item.public_id}")
-        return 0
-
-    # Render template from database
-    rendered = render_email_template('submitted', {
-        'work_item': work_item,
-        'base_url': get_base_url(),
-    })
-
-    if not rendered:
-        logger.error(f"Failed to render 'submitted' template for {work_item.public_id}")
-        return 0
-
-    sent_count = 0
-    for email in recipients:
-        if send_email(
-            to=email,
-            subject=rendered.subject,
-            body_text=rendered.body_text,
-            template_key='submitted',
-            work_item_id=work_item.id,
-        ):
-            sent_count += 1
-
-    logger.info(f"Sent {sent_count}/{len(recipients)} submission notifications for {work_item.public_id}")
-
-    # Slack channel notification
-    if is_slack_enabled():
-        text, blocks = format_submitted(work_item)
-        send_slack_message(text=text, blocks=blocks, template_key='submitted', work_item_id=work_item.id)
+    _send_slack(work_item, 'submitted', format_submitted)
 
     return sent_count
 
 
 def notify_work_item_dispatched(work_item: WorkItem, approval_group_ids: List[int]) -> int:
     """
-    Notify approval group members that a budget is ready for their review.
+    Notify approval group members that a work item is ready for their review.
 
-    Called after: work_item dispatched to approval groups
-    Returns: Number of emails sent
+    Called after: work_item dispatched to approval groups.
+    Returns: Number of emails sent.
+
+    The Slack channel announcement fires whenever the dispatch action
+    succeeded (approval_group_ids is non-empty), even if no individual
+    approvers have email — channel-level visibility is independent of
+    whether approvers are configured yet.
     """
     if not approval_group_ids:
         logger.warning(f"No approval groups provided for dispatch notification: {work_item.public_id}")
         return 0
 
     recipients = _get_approval_group_emails(approval_group_ids)
+    sent_count = _send_emails(
+        recipients=recipients,
+        template_key='dispatched',
+        work_item=work_item,
+        empty_recipients_msg=(
+            f"No approver recipients found for groups {approval_group_ids}"
+        ),
+    )
 
-    if not recipients:
-        logger.warning(f"No approver recipients found for groups {approval_group_ids}: {work_item.public_id}")
-        return 0
-
-    # Render template from database
-    rendered = render_email_template('dispatched', {
-        'work_item': work_item,
-        'base_url': get_base_url(),
-    })
-
-    if not rendered:
-        logger.error(f"Failed to render 'dispatched' template for {work_item.public_id}")
-        return 0
-
-    sent_count = 0
-    for email in recipients:
-        if send_email(
-            to=email,
-            subject=rendered.subject,
-            body_text=rendered.body_text,
-            template_key='dispatched',
-            work_item_id=work_item.id,
-        ):
-            sent_count += 1
-
-    logger.info(f"Sent {sent_count}/{len(recipients)} dispatch notifications for {work_item.public_id}")
-
-    # Slack channel notification
-    if is_slack_enabled():
-        text, blocks = format_dispatched(work_item)
-        send_slack_message(text=text, blocks=blocks, template_key='dispatched', work_item_id=work_item.id)
+    _send_slack(work_item, 'dispatched', format_dispatched)
 
     return sent_count
 
 
 def notify_needs_attention(work_item: WorkItem) -> int:
     """
-    Notify department members that their budget request needs attention.
+    Notify department members that their work item needs attention.
 
-    Called after: reviewer marks a line as NEEDS_INFO or NEEDS_ADJUSTMENT
-    Returns: Number of emails sent
+    Called after: reviewer marks a line as NEEDS_INFO or NEEDS_ADJUSTMENT.
+    Returns: Number of emails sent.
     """
     recipients = _get_department_member_emails(
         department_id=work_item.portfolio.department_id,
         event_cycle_id=work_item.portfolio.event_cycle_id,
     )
+    sent_count = _send_emails(
+        recipients=recipients,
+        template_key='needs_attention',
+        work_item=work_item,
+        empty_recipients_msg="No department member recipients found for needs_attention",
+    )
 
-    if not recipients:
-        logger.warning(f"No department member recipients found for needs_attention: {work_item.public_id}")
-        return 0
-
-    # Render template from database
-    rendered = render_email_template('needs_attention', {
-        'work_item': work_item,
-        'base_url': get_base_url(),
-    })
-
-    if not rendered:
-        logger.error(f"Failed to render 'needs_attention' template for {work_item.public_id}")
-        return 0
-
-    sent_count = 0
-    for email in recipients:
-        if send_email(
-            to=email,
-            subject=rendered.subject,
-            body_text=rendered.body_text,
-            template_key='needs_attention',
-            work_item_id=work_item.id,
-        ):
-            sent_count += 1
-
-    logger.info(f"Sent {sent_count}/{len(recipients)} needs_attention notifications for {work_item.public_id}")
-
-    # Slack channel notification
-    if is_slack_enabled():
-        text, blocks = format_needs_attention(work_item)
-        send_slack_message(text=text, blocks=blocks, template_key='needs_attention', work_item_id=work_item.id)
+    _send_slack(work_item, 'needs_attention', format_needs_attention)
 
     return sent_count
 
@@ -236,28 +170,55 @@ def notify_response_received(work_item: WorkItem, reviewer_user_id: str) -> bool
 
 def notify_work_item_finalized(work_item: WorkItem) -> int:
     """
-    Notify department members that their budget has been finalized.
+    Notify department members that their work item has been finalized.
 
-    Called after: admin finalizes the work item
-    Returns: Number of emails sent
+    Called after: admin finalizes the work item.
+    Returns: Number of emails sent.
     """
     recipients = _get_department_member_emails(
         department_id=work_item.portfolio.department_id,
         event_cycle_id=work_item.portfolio.event_cycle_id,
     )
+    sent_count = _send_emails(
+        recipients=recipients,
+        template_key='finalized',
+        work_item=work_item,
+        empty_recipients_msg="No department member recipients found for finalized notification",
+    )
 
+    _send_slack(work_item, 'finalized', format_finalized)
+
+    return sent_count
+
+
+# ============================================================
+# Email + Slack send helpers
+# ============================================================
+
+def _send_emails(
+    recipients: List[str],
+    template_key: str,
+    work_item: WorkItem,
+    empty_recipients_msg: str,
+) -> int:
+    """
+    Render a DB-backed email template and send to each recipient.
+
+    Returns the number of emails actually sent. Logs warnings for empty
+    recipient lists and errors for template-render failures, but does
+    not raise — callers depend on this being non-blocking.
+    """
     if not recipients:
-        logger.warning(f"No department member recipients found for finalized notification: {work_item.public_id}")
+        logger.warning(f"{empty_recipients_msg}: {work_item.public_id}")
         return 0
 
-    # Render template from database
-    rendered = render_email_template('finalized', {
+    rendered = render_email_template(template_key, {
         'work_item': work_item,
         'base_url': get_base_url(),
     })
 
     if not rendered:
-        logger.error(f"Failed to render 'finalized' template for {work_item.public_id}")
+        logger.error(f"Failed to render {template_key!r} template for {work_item.public_id}")
         return 0
 
     sent_count = 0
@@ -266,19 +227,35 @@ def notify_work_item_finalized(work_item: WorkItem) -> int:
             to=email,
             subject=rendered.subject,
             body_text=rendered.body_text,
-            template_key='finalized',
+            template_key=template_key,
             work_item_id=work_item.id,
         ):
             sent_count += 1
 
-    logger.info(f"Sent {sent_count}/{len(recipients)} finalized notifications for {work_item.public_id}")
-
-    # Slack channel notification
-    if is_slack_enabled():
-        text, blocks = format_finalized(work_item)
-        send_slack_message(text=text, blocks=blocks, template_key='finalized', work_item_id=work_item.id)
-
+    logger.info(
+        f"Sent {sent_count}/{len(recipients)} {template_key} notifications "
+        f"for {work_item.public_id}"
+    )
     return sent_count
+
+
+def _send_slack(work_item: WorkItem, template_key: str, formatter) -> None:
+    """
+    Send the channel-level Slack announcement for a work-item event.
+
+    Fires whenever Slack is enabled — independent of whether email
+    recipients exist. Channel announcements are about visibility for the
+    whole team, not personal notifications.
+    """
+    if not is_slack_enabled():
+        return
+    text, blocks = formatter(work_item)
+    send_slack_message(
+        text=text,
+        blocks=blocks,
+        template_key=template_key,
+        work_item_id=work_item.id,
+    )
 
 
 # ============================================================
