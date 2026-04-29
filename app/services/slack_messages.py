@@ -18,9 +18,10 @@ def _get_base_url() -> str:
 
 def _build_item_url(work_item: WorkItem) -> str:
     base = _get_base_url()
-    event = work_item.portfolio.event_cycle.code
-    dept = work_item.portfolio.department.code
-    return f"{base}/{event}/{dept}/budget/item/{work_item.public_id}"
+    portfolio = work_item.portfolio
+    event = portfolio.event_cycle.code
+    dept = portfolio.department.code
+    return f"{base}/{event}/{dept}/{portfolio.work_type_slug}/item/{work_item.public_id}"
 
 
 def _format_message(emoji: str, title: str, work_item: WorkItem, detail: str = "") -> tuple:
