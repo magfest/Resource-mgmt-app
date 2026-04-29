@@ -4,8 +4,8 @@
   <div class="top-nav-left">
     <a href="{{ url_for('home.index') }}" class="top-nav-brand">MAGFest Budget</a>
 
-    {# Budget Admin menu (budget admins + super admins) #}
-    {% if nav_is_budget_admin %}
+    {# Budget Admin menu (BUDGET worktype admins + super admins) #}
+    {% if "BUDGET" in nav_admin_work_types %}
     <div class="top-nav-dropdown">
       <button type="button" class="top-nav-link top-nav-toggle">Budget Admin <span class="top-nav-caret">&#9662;</span></button>
       <div class="top-nav-menu">
