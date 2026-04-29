@@ -901,7 +901,7 @@ def create_app() -> Flask:
                 "real_user_id": None,
                 "env_banner_enabled": app.config.get("ENV_BANNER_ENABLED", False),
                 "env_banner_message": app.config.get("ENV_BANNER_MESSAGE", ""),
-                "nav_is_budget_admin": False,
+                "nav_admin_work_types": [],
                 "nav_approval_groups": [],
                 "nav_event_cycle": None,
                 "nav_dept_memberships": [],
@@ -920,7 +920,7 @@ def create_app() -> Flask:
 
         # --- Nav bar context (role-gated menus) ---
         _is_super = is_super_admin()
-        nav_is_budget_admin = False
+        nav_admin_work_types: list[str] = []
         nav_approval_groups = []
         nav_event_cycle = None
         nav_dept_memberships = []
@@ -933,17 +933,37 @@ def create_app() -> Flask:
                 ROLE_WORKTYPE_ADMIN,
             )
 
-            # Budget admin = super admin OR WORKTYPE_ADMIN for the BUDGET work type
+            # nav_admin_work_types is the codes of work types this user can
+            # admin (e.g. ["BUDGET"], ["BUDGET", "TECHOPS"]). Templates gate
+            # per-work-type admin dropdowns on membership in this list.
+            # Super admins implicitly admin every active work type.
             if _is_super:
-                nav_is_budget_admin = True
+                nav_admin_work_types = [
+                    wt.code for wt in (
+                        WorkType.query
+                        .filter(WorkType.is_active.is_(True))
+                        .order_by(WorkType.sort_order.asc(), WorkType.code.asc())
+                        .all()
+                    )
+                ]
             else:
-                budget_wt = WorkType.query.filter_by(code="BUDGET").first()
-                if budget_wt:
-                    nav_is_budget_admin = UserRole.query.filter_by(
-                        user_id=u.id,
-                        role_code=ROLE_WORKTYPE_ADMIN,
-                        work_type_id=budget_wt.id,
-                    ).first() is not None
+                admin_role_rows = (
+                    db.session.query(UserRole.work_type_id)
+                    .filter(UserRole.user_id == u.id)
+                    .filter(UserRole.role_code == ROLE_WORKTYPE_ADMIN)
+                    .filter(UserRole.work_type_id.isnot(None))
+                    .all()
+                )
+                wt_ids = [int(r[0]) for r in admin_role_rows if r[0] is not None]
+                if wt_ids:
+                    nav_admin_work_types = [
+                        wt.code for wt in (
+                            WorkType.query
+                            .filter(WorkType.id.in_(wt_ids))
+                            .order_by(WorkType.sort_order.asc(), WorkType.code.asc())
+                            .all()
+                        )
+                    ]
 
             from .routes.admin.helpers import sort_with_override as _sort_override
 
@@ -1019,7 +1039,7 @@ def create_app() -> Flask:
             "env_banner_enabled": app.config.get("ENV_BANNER_ENABLED", False),
             "env_banner_message": app.config.get("ENV_BANNER_MESSAGE", ""),
             # Navigation bar
-            "nav_is_budget_admin": nav_is_budget_admin,
+            "nav_admin_work_types": nav_admin_work_types,
             "nav_approval_groups": nav_approval_groups,
             "nav_event_cycle": nav_event_cycle,
             "nav_dept_memberships": nav_dept_memberships,
