@@ -11,6 +11,12 @@ from flask import abort
 from sqlalchemy.orm import joinedload, selectinload, contains_eager
 
 from app import db
+from app.line_details import (
+    LineDetail,
+    get_line_detail,
+    get_line_amount_cents,
+    get_line_routing_approval_group,
+)
 from app.models import (
     WorkLine,
     WorkLineReview,
@@ -22,6 +28,8 @@ from app.models import (
     EventCycle,
     Department,
     BudgetLineDetail,
+    ContractLineDetail,
+    SupplyOrderLineDetail,
     User,
     REVIEW_STAGE_APPROVAL_GROUP,
     REVIEW_STATUS_PENDING,
@@ -77,11 +85,17 @@ VALID_TRANSITIONS = {
 
 @dataclass(frozen=True)
 class ReviewQueueItem:
-    """A line item in the review queue (used for kicked-back lines)."""
+    """A line item in the review queue (used for kicked-back lines).
+
+    `detail` is the type-specific line detail (BudgetLineDetail,
+    ContractLineDetail, SupplyOrderLineDetail, etc.). Templates that
+    show worktype-specific columns dispatch on
+    work_item.portfolio.work_type.code.
+    """
     work_item: WorkItem
     work_line: WorkLine
     review: WorkLineReview
-    budget_detail: BudgetLineDetail
+    detail: Optional[LineDetail]
     line_total_cents: int
 
 
@@ -123,14 +137,11 @@ def is_reviewer_for_line(line: WorkLine, user_ctx: UserContext) -> bool:
     if user_ctx.is_super_admin:
         return True
 
-    if not line.budget_detail:
+    routed_group = get_line_routing_approval_group(line)
+    if routed_group is None:
         return False
 
-    routed_group_id = line.budget_detail.routed_approval_group_id
-    if not routed_group_id:
-        return False
-
-    return routed_group_id in user_ctx.approval_group_ids
+    return routed_group.id in user_ctx.approval_group_ids
 
 
 def can_respond_to_work_item(work_item: WorkItem, ctx, user_ctx: UserContext) -> bool:
@@ -216,10 +227,11 @@ def get_or_create_review(line: WorkLine, user_ctx: UserContext) -> Tuple[WorkLin
 
     Returns (review, created) tuple.
     """
-    if not line.budget_detail:
-        abort(400, "Line has no budget detail.")
+    routed_group = get_line_routing_approval_group(line)
+    if routed_group is None:
+        abort(400, "Line has no routed approval group.")
 
-    routed_group_id = line.budget_detail.routed_approval_group_id
+    routed_group_id = routed_group.id
 
     # Look for existing review at APPROVAL_GROUP stage
     review = WorkLineReview.query.filter_by(
@@ -247,13 +259,14 @@ def get_or_create_review(line: WorkLine, user_ctx: UserContext) -> Tuple[WorkLin
 
 def get_review_for_line(line: WorkLine) -> Optional[WorkLineReview]:
     """Get the APPROVAL_GROUP stage review for a line, if it exists."""
-    if not line.budget_detail:
+    routed_group = get_line_routing_approval_group(line)
+    if routed_group is None:
         return None
 
     return WorkLineReview.query.filter_by(
         work_line_id=line.id,
         stage=REVIEW_STAGE_APPROVAL_GROUP,
-        approval_group_id=line.budget_detail.routed_approval_group_id,
+        approval_group_id=routed_group.id,
     ).first()
 
 
@@ -597,16 +610,15 @@ def build_approval_queues(
     - kicked_back: Lines with NEEDS_INFO or NEEDS_ADJUSTMENT (line-level)
     - recently_decided_requests: Requests with recently decided lines (grouped)
     """
-    # Base query for reviews in this group at APPROVAL_GROUP stage
-    # Use contains_eager for joined tables, joinedload for additional relations
+    # Base query for reviews in this group at APPROVAL_GROUP stage.
+    # Detail tables are loaded polymorphically via selectinload so non-BUDGET
+    # work types (TechOps, Contract, Supply) aren't excluded by an inner join.
     base_query = (
         db.session.query(WorkLineReview)
         .join(WorkLine, WorkLineReview.work_line_id == WorkLine.id)
         .join(WorkItem, WorkLine.work_item_id == WorkItem.id)
-        .join(BudgetLineDetail, BudgetLineDetail.work_line_id == WorkLine.id)
         .join(WorkPortfolio, WorkItem.portfolio_id == WorkPortfolio.id)
         .options(
-            # Use contains_eager for tables already joined, then extend with joinedload
             contains_eager(WorkLineReview.work_line)
                 .contains_eager(WorkLine.work_item)
                 .contains_eager(WorkItem.portfolio)
@@ -616,7 +628,11 @@ def build_approval_queues(
                 .contains_eager(WorkItem.portfolio)
                 .joinedload(WorkPortfolio.department),
             contains_eager(WorkLineReview.work_line)
-                .contains_eager(WorkLine.budget_detail),
+                .selectinload(WorkLine.budget_detail),
+            contains_eager(WorkLineReview.work_line)
+                .selectinload(WorkLine.contract_detail),
+            contains_eager(WorkLineReview.work_line)
+                .selectinload(WorkLine.supply_detail),
         )
         .filter(WorkLineReview.stage == REVIEW_STAGE_APPROVAL_GROUP)
         .filter(WorkLineReview.approval_group_id == group_id)
@@ -646,13 +662,16 @@ def build_approval_queues(
             pending_by_item[wi_id] = []
         pending_by_item[wi_id].append(review)
 
-    # Batch load all work items with their lines and budget details
+    # Batch load all work items with their lines and details.
+    # Loading all three detail relationships keeps the queue polymorphic.
     work_items_map = {}
     if work_item_ids:
         work_items_with_lines = WorkItem.query.filter(
             WorkItem.id.in_(work_item_ids)
         ).options(
             selectinload(WorkItem.lines).joinedload(WorkLine.budget_detail),
+            selectinload(WorkItem.lines).joinedload(WorkLine.contract_detail),
+            selectinload(WorkItem.lines).joinedload(WorkLine.supply_detail),
             joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.event_cycle),
             joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.department),
         ).all()
@@ -664,18 +683,14 @@ def build_approval_queues(
         work_item = work_items_map.get(wi_id, reviews[0].work_line.work_item)
         portfolio = work_item.portfolio
 
-        # Count total lines in this group for this request
-        total_lines_in_group = sum(
-            1 for line in work_item.lines
-            if line.budget_detail and line.budget_detail.routed_approval_group_id == group_id
-        )
+        # Lines whose routing snapshot points at this approval group, regardless of work type
+        lines_in_group = [
+            line for line in work_item.lines
+            if (g := get_line_routing_approval_group(line)) and g.id == group_id
+        ]
 
-        # Calculate total amount for lines in this group
-        total_cents = sum(
-            line.budget_detail.unit_price_cents * int(line.budget_detail.quantity)
-            for line in work_item.lines
-            if line.budget_detail and line.budget_detail.routed_approval_group_id == group_id
-        )
+        total_lines_in_group = len(lines_in_group)
+        total_cents = sum(get_line_amount_cents(line) for line in lines_in_group)
 
         pending_requests.append(RequestQueueItem(
             work_item=work_item,
@@ -697,14 +712,12 @@ def build_approval_queues(
     def to_queue_item(review: WorkLineReview) -> ReviewQueueItem:
         """Convert a WorkLineReview to a ReviewQueueItem for display."""
         line = review.work_line
-        detail = line.budget_detail
-        line_total = detail.unit_price_cents * int(detail.quantity) if detail else 0
         return ReviewQueueItem(
             work_item=line.work_item,
             work_line=line,
             review=review,
-            budget_detail=detail,
-            line_total_cents=line_total,
+            detail=get_line_detail(line),
+            line_total_cents=get_line_amount_cents(line),
         )
 
     # Recently decided (last 72 hours) - group by request
@@ -734,6 +747,8 @@ def build_approval_queues(
             WorkItem.id.in_(decided_work_item_ids - set(work_items_map.keys()))
         ).options(
             selectinload(WorkItem.lines).joinedload(WorkLine.budget_detail),
+            selectinload(WorkItem.lines).joinedload(WorkLine.contract_detail),
+            selectinload(WorkItem.lines).joinedload(WorkLine.supply_detail),
             joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.event_cycle),
             joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.department),
         ).all()
@@ -745,16 +760,12 @@ def build_approval_queues(
         work_item = work_items_map.get(wi_id, reviews[0].work_line.work_item)
         portfolio = work_item.portfolio
 
-        total_lines_in_group = sum(
-            1 for line in work_item.lines
-            if line.budget_detail and line.budget_detail.routed_approval_group_id == group_id
-        )
+        lines_in_group = [
+            line for line in work_item.lines
+            if (g := get_line_routing_approval_group(line)) and g.id == group_id
+        ]
 
-        total_cents = sum(
-            line.budget_detail.unit_price_cents * int(line.budget_detail.quantity)
-            for line in work_item.lines
-            if line.budget_detail and line.budget_detail.routed_approval_group_id == group_id
-        )
+        total_cents = sum(get_line_amount_cents(line) for line in lines_in_group)
 
         recently_decided_requests.append(RequestQueueItem(
             work_item=work_item,

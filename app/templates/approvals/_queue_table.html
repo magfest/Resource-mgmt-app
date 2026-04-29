@@ -4,12 +4,19 @@
 
 {% set items = queue_items if queue_items is defined else queues.pending %}
 
+{# All rows in a single approval group's queue belong to the same worktype
+   (approval groups are scoped to a worktype after E3). Pull the code from
+   the first item to drive per-worktype column rendering. #}
+{% set work_type_code = items[0].work_item.portfolio.work_type.code if items else "BUDGET" %}
+
 <table>
   <thead>
     <tr>
       <th style="width: 110px;">Request</th>
       <th style="width: 80px;">Line #</th>
-      <th>Expense Account</th>
+      {% if work_type_code == "BUDGET" %}
+        <th>Expense Account</th>
+      {% endif %}
       <th>Description</th>
       <th style="width: 100px;" class="right">Amount</th>
       {% if show_status %}
@@ -25,7 +32,7 @@
     {% for item in items %}
       {% set wi = item.work_item %}
       {% set line = item.work_line %}
-      {% set detail = item.budget_detail %}
+      {% set detail = item.detail %}
       {% set review = item.review %}
 
       {# Get event/dept codes from portfolio #}
@@ -42,16 +49,18 @@
           <div class="muted small">{{ portfolio.department.name if portfolio else '-' }}</div>
         </td>
         <td>{{ line.line_number }}</td>
-        <td>
-          {% if detail and detail.expense_account %}
-            <strong>{{ detail.expense_account.name }}</strong>
-            {% if detail.spend_type %}
-              <div class="muted small">{{ detail.spend_type.name }}</div>
+        {% if work_type_code == "BUDGET" %}
+          <td>
+            {% if detail and detail.expense_account %}
+              <strong>{{ detail.expense_account.name }}</strong>
+              {% if detail.spend_type %}
+                <div class="muted small">{{ detail.spend_type.name }}</div>
+              {% endif %}
+            {% else %}
+              <span class="muted">-</span>
             {% endif %}
-          {% else %}
-            <span class="muted">-</span>
-          {% endif %}
-        </td>
+          </td>
+        {% endif %}
         <td>
           {% if detail and detail.description %}
             {{ detail.description[:80] }}{% if detail.description|length > 80 %}...{% endif %}

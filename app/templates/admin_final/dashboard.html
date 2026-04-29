@@ -172,7 +172,7 @@
           {% for item in queues.kicked_back %}
             {% set wi = item.work_item %}
             {% set line = item.work_line %}
-            {% set detail = item.budget_detail %}
+            {% set detail = item.detail %}
             {% set portfolio = wi.portfolio %}
             {% set event_code = portfolio.event_cycle.code if portfolio else '' %}
             {% set dept_code = portfolio.department.code if portfolio else '' %}
