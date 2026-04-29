@@ -43,6 +43,13 @@ def require_dispatch_admin():
     return user_ctx
 
 
+def _require_uses_dispatch(work_item: WorkItem) -> None:
+    """Abort 404 if the work item belongs to a worktype that doesn't use dispatch."""
+    config = work_item.portfolio.work_type.config
+    if config is None or not config.uses_dispatch:
+        abort(404)
+
+
 # ============================================================
 # Dashboard Route
 # ============================================================
@@ -113,6 +120,8 @@ def dispatch_item(work_item_id: int):
         joinedload(WorkItem.portfolio),
     ).get_or_404(work_item_id)
 
+    _require_uses_dispatch(work_item)
+
     if work_item.status != WORK_ITEM_STATUS_AWAITING_DISPATCH:
         flash("This budget request is not pending review.", "error")
         return redirect(url_for("dispatch.dashboard"))
@@ -168,6 +177,8 @@ def assign_approval_groups(work_item_id: int):
         selectinload(WorkItem.lines).joinedload(WorkLine.budget_detail),
     ).get_or_404(work_item_id)
 
+    _require_uses_dispatch(work_item)
+
     # Lock the work item row to prevent concurrent assignment/dispatch
     db.session.query(WorkItem).with_for_update().get(work_item_id)
 
@@ -209,6 +220,8 @@ def dispatch_to_queue(work_item_id: int):
     work_item = WorkItem.query.options(
         selectinload(WorkItem.lines).joinedload(WorkLine.budget_detail),
     ).get_or_404(work_item_id)
+
+    _require_uses_dispatch(work_item)
 
     # Lock the work item row to prevent concurrent dispatch
     db.session.query(WorkItem).with_for_update().get(work_item_id)

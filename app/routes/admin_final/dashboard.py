@@ -1,7 +1,7 @@
 """
 Admin Final Review dashboard routes.
 """
-from flask import render_template, redirect, url_for, request, flash
+from flask import render_template, redirect, url_for, request, flash, abort
 from sqlalchemy.orm import selectinload, joinedload
 
 from app import db
@@ -36,6 +36,13 @@ from .helpers import (
     finalize_work_item,
     unfinalize_work_item,
 )
+
+
+def _require_has_admin_final(work_item: WorkItem) -> None:
+    """Abort 404 if the work item belongs to a worktype without admin_final."""
+    config = work_item.portfolio.work_type.config
+    if config is None or not config.has_admin_final:
+        abort(404)
 
 
 @admin_final_bp.get("/admin/final-review/")
@@ -99,6 +106,7 @@ def finalize(work_item_id: int):
     work_item = WorkItem.query.options(
         selectinload(WorkItem.lines).joinedload(WorkLine.budget_detail),
     ).get_or_404(work_item_id)
+    _require_has_admin_final(work_item)
     note = (request.form.get("note") or "").strip()
 
     success, error = finalize_work_item(work_item, user_ctx, note)
@@ -143,6 +151,7 @@ def unfinalize_form(work_item_id: int):
         joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.event_cycle),
         joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.department),
     ).get_or_404(work_item_id)
+    _require_has_admin_final(work_item)
 
     return render_template(
         "admin_final/unfinalize.html",
@@ -165,6 +174,7 @@ def unfinalize(work_item_id: int):
     work_item = WorkItem.query.options(
         selectinload(WorkItem.lines).joinedload(WorkLine.budget_detail),
     ).get_or_404(work_item_id)
+    _require_has_admin_final(work_item)
 
     reason = (request.form.get("reason") or "").strip()
     reset_lines = request.form.get("reset_lines") == "yes"
