@@ -263,6 +263,22 @@ def is_budget_admin(user_ctx: UserContext, work_type_id: int | None = None) -> b
     return is_worktype_admin(user_ctx, work_type_id)
 
 
+def is_any_worktype_admin(user_ctx: UserContext) -> bool:
+    """True if user is SUPER_ADMIN or holds WORKTYPE_ADMIN for any work type.
+
+    Used by shared admin infrastructure (approval groups, email templates,
+    dispatch dashboard) where an admin of any work type has a legitimate
+    reason to view/edit shared config. Per-work-type admin separation is
+    still enforced at work-type-specific routes via is_worktype_admin().
+    """
+    if user_ctx.is_super_admin:
+        return True
+    return UserRole.query.filter_by(
+        user_id=user_ctx.user_id,
+        role_code=ROLE_WORKTYPE_ADMIN,
+    ).first() is not None
+
+
 def build_portfolio_perms(ctx: PortfolioContext) -> PortfolioPerms:
     """Build permission flags for a portfolio."""
     is_wt_admin = is_budget_admin(ctx.user_ctx, ctx.work_type.id)

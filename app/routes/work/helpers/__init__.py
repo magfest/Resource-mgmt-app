@@ -27,6 +27,7 @@ from .context import (
     # Permission building
     is_worktype_admin,
     is_budget_admin,
+    is_any_worktype_admin,
     build_portfolio_perms,
     # Permission enforcement
     require_budget_work_type,
@@ -144,6 +145,7 @@ __all__ = [
     # Permission building
     "is_worktype_admin",
     "is_budget_admin",
+    "is_any_worktype_admin",
     "build_portfolio_perms",
     "build_work_item_perms",
     # Permission enforcement
