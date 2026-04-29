@@ -97,6 +97,11 @@ class WorkTypeConfig(db.Model):
     supports_supplementary = db.Column(db.Boolean, nullable=False, default=True)
     supports_fixed_costs = db.Column(db.Boolean, nullable=False, default=False)
 
+    # Lifecycle stage flags. Default False so any new worktype opts in
+    # explicitly. Both default True for BUDGET via seed/backfill.
+    uses_dispatch = db.Column(db.Boolean, nullable=False, default=False)
+    has_admin_final = db.Column(db.Boolean, nullable=False, default=False)
+
     # Display labels
     item_singular = db.Column(db.String(32), nullable=False, default="Request")
     item_plural = db.Column(db.String(32), nullable=False, default="Requests")
