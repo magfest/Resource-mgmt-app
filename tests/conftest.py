@@ -128,6 +128,7 @@ def seed_workflow_data(app):
     db.session.add(wtc)
 
     ag = ApprovalGroup(
+        work_type_id=wt.id,
         code="TECH", name="Tech Team", is_active=True,
     )
     db.session.add(ag)

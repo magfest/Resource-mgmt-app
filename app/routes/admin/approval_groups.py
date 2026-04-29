@@ -9,6 +9,7 @@ from app import db
 from app.models import (
     ApprovalGroup,
     ExpenseAccount,
+    WorkType,
     CONFIG_AUDIT_CREATE,
     CONFIG_AUDIT_UPDATE,
     CONFIG_AUDIT_ARCHIVE,
@@ -16,8 +17,8 @@ from app.models import (
 )
 from app.routes import h
 from .helpers import (
-    require_budget_admin,
-    render_budget_admin_page,
+    require_super_admin,
+    render_admin_config_page,
     log_config_change,
     track_changes,
     validate_code_length,
@@ -41,6 +42,7 @@ def _get_approval_group_or_404(group_id: int) -> ApprovalGroup:
 def _group_to_dict(group: ApprovalGroup) -> dict:
     """Convert approval group to dict for change tracking."""
     return {
+        "work_type_id": group.work_type_id,
         "code": group.code,
         "name": group.name,
         "description": group.description,
@@ -49,8 +51,19 @@ def _group_to_dict(group: ApprovalGroup) -> dict:
     }
 
 
+def _all_work_types() -> list[WorkType]:
+    """Work types selectable in the approval-group form. Includes inactive
+    work types so admins can pre-create approval groups before a work type
+    is flipped on."""
+    return (
+        db.session.query(WorkType)
+        .order_by(*sort_with_override(WorkType))
+        .all()
+    )
+
+
 @approval_groups_bp.get("/")
-@require_budget_admin
+@require_super_admin
 def list_approval_groups():
     """List all approval groups."""
     show_inactive = request.args.get("show_inactive") == "1"
@@ -88,7 +101,7 @@ def list_approval_groups():
         )
         account_counts[group.id] = count
 
-    return render_budget_admin_page(
+    return render_admin_config_page(
         "admin/approval_groups/list.html",
         groups=groups,
         account_counts=account_counts,
@@ -99,37 +112,48 @@ def list_approval_groups():
 
 
 @approval_groups_bp.get("/new")
-@require_budget_admin
+@require_super_admin
 def new_approval_group():
     """Show new approval group form."""
-    return render_budget_admin_page(
+    return render_admin_config_page(
         "admin/approval_groups/form.html",
         group=None,
+        work_types=_all_work_types(),
     )
 
 
 @approval_groups_bp.post("/")
-@require_budget_admin
+@require_super_admin
 def create_approval_group():
     """Create a new approval group."""
     code = (request.form.get("code") or "").strip().upper()
     name = (request.form.get("name") or "").strip()
+    work_type_id = safe_int_or_none(request.form.get("work_type_id"))
 
     if not code or not name:
         flash("Code and name are required", "error")
+        return redirect(url_for(".new_approval_group"))
+
+    if work_type_id is None or db.session.get(WorkType, work_type_id) is None:
+        flash("A valid work type is required", "error")
         return redirect(url_for(".new_approval_group"))
 
     # Validate code length
     if not validate_code_length(code, "Code"):
         return redirect(url_for(".new_approval_group"))
 
-    # Check for duplicate code
-    existing = db.session.query(ApprovalGroup).filter_by(code=code).first()
+    # Check for duplicate code within the same work type
+    existing = (
+        db.session.query(ApprovalGroup)
+        .filter_by(work_type_id=work_type_id, code=code)
+        .first()
+    )
     if existing:
-        flash(f"An approval group with code '{code}' already exists", "error")
+        flash(f"An approval group with code '{code}' already exists for this work type", "error")
         return redirect(url_for(".new_approval_group"))
 
     group = ApprovalGroup(
+        work_type_id=work_type_id,
         code=code,
         name=name,
         description=(request.form.get("description") or "").strip() or None,
@@ -150,7 +174,7 @@ def create_approval_group():
 
 
 @approval_groups_bp.get("/<int:group_id>")
-@require_budget_admin
+@require_super_admin
 def edit_approval_group(group_id: int):
     """Show edit form for approval group."""
     group = _get_approval_group_or_404(group_id)
@@ -162,17 +186,18 @@ def edit_approval_group(group_id: int):
         .count()
     )
 
-    return render_budget_admin_page(
+    return render_admin_config_page(
         "admin/approval_groups/form.html",
         group=group,
         account_count=account_count,
+        work_types=_all_work_types(),
     )
 
 
 @approval_groups_bp.post("/<int:group_id>")
-@require_budget_admin
+@require_super_admin
 def update_approval_group(group_id: int):
-    """Update an approval group."""
+    """Update an approval group. Work type is locked once a group exists."""
     group = _get_approval_group_or_404(group_id)
 
     old_values = _group_to_dict(group)
@@ -188,13 +213,14 @@ def update_approval_group(group_id: int):
     if not validate_code_length(code, "Code"):
         return redirect(url_for(".edit_approval_group", group_id=group_id))
 
-    # Check for duplicate code
+    # Check for duplicate code within the same work type
     existing = db.session.query(ApprovalGroup).filter(
+        ApprovalGroup.work_type_id == group.work_type_id,
         ApprovalGroup.code == code,
-        ApprovalGroup.id != group_id
+        ApprovalGroup.id != group_id,
     ).first()
     if existing:
-        flash(f"An approval group with code '{code}' already exists", "error")
+        flash(f"An approval group with code '{code}' already exists for this work type", "error")
         return redirect(url_for(".edit_approval_group", group_id=group_id))
 
     group.code = code
@@ -215,7 +241,7 @@ def update_approval_group(group_id: int):
 
 
 @approval_groups_bp.post("/<int:group_id>/archive")
-@require_budget_admin
+@require_super_admin
 def archive_approval_group(group_id: int):
     """Archive (soft-delete) an approval group."""
     group = _get_approval_group_or_404(group_id)
@@ -235,7 +261,7 @@ def archive_approval_group(group_id: int):
 
 
 @approval_groups_bp.post("/<int:group_id>/restore")
-@require_budget_admin
+@require_super_admin
 def restore_approval_group(group_id: int):
     """Restore an archived approval group."""
     group = _get_approval_group_or_404(group_id)

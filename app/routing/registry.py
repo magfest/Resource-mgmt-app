@@ -90,4 +90,14 @@ def get_approval_group_for_line(line: "WorkLine") -> Optional["ApprovalGroup"]:
 
     config = work_type.config
     strategy = get_routing_strategy(config.routing_strategy, config)
-    return strategy.get_approval_group(line)
+    group = strategy.get_approval_group(line)
+
+    if group is not None and group.work_type_id != work_type.id:
+        raise ValueError(
+            f"Routing produced a cross-work-type approval group: "
+            f"line {line.id} (work_type_id={work_type.id}) routed to "
+            f"group {group.code!r} (work_type_id={group.work_type_id}). "
+            f"Approval groups must belong to the same work type as the line."
+        )
+
+    return group

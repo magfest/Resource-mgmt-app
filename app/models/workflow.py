@@ -22,7 +22,15 @@ class ApprovalGroup(db.Model):
     __tablename__ = "approval_groups"
 
     id = db.Column(db.Integer, primary_key=True)
-    code = db.Column(db.String(32), unique=True, nullable=False, index=True)  # TECH, HOTEL, etc.
+
+    work_type_id = db.Column(
+        db.Integer,
+        db.ForeignKey("work_types.id", name="fk_approval_groups_work_type_id"),
+        nullable=False,
+        index=True,
+    )
+
+    code = db.Column(db.String(32), nullable=False, index=True)  # TECH, HOTEL, etc.
     name = db.Column(db.String(128), nullable=False)
     description = db.Column(db.Text, nullable=True)
 
@@ -33,6 +41,15 @@ class ApprovalGroup(db.Model):
     created_by_user_id = db.Column(db.String(64), nullable=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     updated_by_user_id = db.Column(db.String(64), nullable=True)
+
+    work_type = db.relationship("WorkType", foreign_keys=[work_type_id])
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "work_type_id", "code",
+            name="uq_approval_groups_work_type_code",
+        ),
+    )
 
 
 class WorkType(db.Model):

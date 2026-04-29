@@ -387,20 +387,7 @@ def create_app() -> Flask:
             PriorityLevel,
         )
 
-        # ApprovalGroups
-        if not db.session.query(ApprovalGroup).first():
-            groups = [
-                ("TECH", "Tech", True, 10),
-                ("HOTEL", "Hotel", True, 20),
-                ("OTHER", "Other", True, 30),
-            ]
-            for code, name, active, sort in groups:
-                db.session.add(
-                    ApprovalGroup(code=code, name=name, is_active=active, sort_order=sort)
-                )
-            db.session.flush()
-
-        # WorkTypes
+        # WorkTypes (seeded before approval groups so groups can reference one)
         if not db.session.query(WorkType).first():
             work_types = [
                 ("BUDGET", "Budget Request", True, 10),
@@ -408,6 +395,24 @@ def create_app() -> Flask:
             for code, name, active, sort in work_types:
                 db.session.add(
                     WorkType(code=code, name=name, is_active=active, sort_order=sort)
+                )
+            db.session.flush()
+
+        budget_wt = db.session.query(WorkType).filter_by(code="BUDGET").first()
+
+        # ApprovalGroups
+        if budget_wt and not db.session.query(ApprovalGroup).first():
+            groups = [
+                ("TECH", "Tech", True, 10),
+                ("HOTEL", "Hotel", True, 20),
+                ("OTHER", "Other", True, 30),
+            ]
+            for code, name, active, sort in groups:
+                db.session.add(
+                    ApprovalGroup(
+                        work_type_id=budget_wt.id,
+                        code=code, name=name, is_active=active, sort_order=sort,
+                    )
                 )
             db.session.flush()
 
