@@ -22,12 +22,29 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
 
+      <div style="grid-column: 1 / -1;">
+        <label for="work_type_id" class="form-label">Work Type</label>
+        {% if group %}
+          <input type="text" readonly
+                 value="{{ group.work_type.name }} ({{ group.work_type.code }})" />
+          <div class="muted small mt-4">Work type cannot be changed after a group is created — it would break routing snapshots and reviewer memberships.</div>
+        {% else %}
+          <select id="work_type_id" name="work_type_id" required>
+            <option value="">— Select work type —</option>
+            {% for wt in work_types %}
+              <option value="{{ wt.id }}">{{ wt.name }} ({{ wt.code }}){% if not wt.is_active %} — inactive{% endif %}</option>
+            {% endfor %}
+          </select>
+          <div class="muted small mt-4">Approval groups belong to a single work type. Inactive work types can still receive groups so they're ready when activated.</div>
+        {% endif %}
+      </div>
+
       <div>
         <label for="code" class="form-label">Code</label>
         <input id="code" name="code" type="text" required maxlength="16"
                value="{{ group.code if group else '' }}"
                placeholder="e.g. TECH" />
-        <div class="muted small mt-4">Unique identifier (max 16 chars). Will be uppercased.</div>
+        <div class="muted small mt-4">Unique identifier within the work type (max 16 chars). Will be uppercased.</div>
       </div>
 
       <div>

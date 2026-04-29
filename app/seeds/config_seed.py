@@ -48,9 +48,13 @@ from app.models import (
 )
 
 
-def seed_approval_groups() -> dict[str, ApprovalGroup]:
-    """Seed TECH, HOTEL, OTHER approval groups."""
+def seed_approval_groups(work_types: dict[str, WorkType]) -> dict[str, ApprovalGroup]:
+    """Seed approval groups. Existing seeded groups all belong to BUDGET."""
     print("Seeding approval groups...")
+
+    budget_wt = work_types.get("BUDGET")
+    if budget_wt is None:
+        raise RuntimeError("BUDGET work type must be seeded before approval groups")
 
     groups_data = [
         ("LOGISTICS", "Logistics / Warehouse", "Items that should be reviewed by the logistics or warehouse teams", 10),
@@ -64,12 +68,17 @@ def seed_approval_groups() -> dict[str, ApprovalGroup]:
 
     groups = {}
     for code, name, description, sort_order in groups_data:
-        existing = db.session.query(ApprovalGroup).filter_by(code=code).first()
+        existing = (
+            db.session.query(ApprovalGroup)
+            .filter_by(code=code, work_type_id=budget_wt.id)
+            .first()
+        )
         if existing:
             groups[code] = existing
             continue
 
         group = ApprovalGroup(
+            work_type_id=budget_wt.id,
             code=code,
             name=name,
             description=description,
@@ -781,8 +790,8 @@ def run_all_seeds():
     print("Running configuration seeds...")
     print("=" * 60)
 
-    approval_groups = seed_approval_groups()
     work_types = seed_work_types()
+    approval_groups = seed_approval_groups(work_types)
     seed_work_type_configs(work_types)
     seed_contract_types(approval_groups)
     seed_supply_categories(approval_groups)

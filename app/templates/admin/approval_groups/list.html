@@ -37,6 +37,7 @@
 <table>
   <thead>
     <tr>
+      <th style="width: 110px;">Work Type</th>
       <th style="width: 100px;">{{ sort_header('code', 'Code', sort_by, sort_dir) }}</th>
       <th style="width: 200px;">{{ sort_header('name', 'Name', sort_by, sort_dir) }}</th>
       <th>Description</th>
@@ -49,6 +50,7 @@
   <tbody>
     {% for group in groups %}
       <tr>
+        <td class="num small">{{ group.work_type.code }}</td>
         <td class="num">{{ group.code }}</td>
         <td>{{ group.name }}</td>
         <td class="muted small">{{ group.description or '—' }}</td>
@@ -67,7 +69,7 @@
       </tr>
     {% else %}
       <tr>
-        <td colspan="7" class="muted">No reviewer groups found.</td>
+        <td colspan="8" class="muted">No reviewer groups found.</td>
       </tr>
     {% endfor %}
   </tbody>
