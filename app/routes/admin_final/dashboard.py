@@ -119,8 +119,8 @@ def finalize(work_item_id: int):
 
         # Send notification to department members (non-blocking)
         try:
-            from app.services.notifications import notify_budget_finalized
-            notify_budget_finalized(work_item)
+            from app.services.notifications import notify_work_item_finalized
+            notify_work_item_finalized(work_item)
             db.session.commit()  # Commit notification log
         except Exception:
             db.session.rollback()
