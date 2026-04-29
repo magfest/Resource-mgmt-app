@@ -11,6 +11,7 @@ from flask import abort
 from sqlalchemy.orm import joinedload, selectinload
 
 from app import db
+from app.line_details import LineDetail, get_line_detail, get_line_amount_cents
 from app.models import (
     WorkItem,
     WorkLine,
@@ -54,12 +55,18 @@ from app.routes.work.helpers.checkout import is_checked_out
 
 @dataclass(frozen=True)
 class AdminQueueItem:
-    """A line item in the admin review queue (used for kicked-back lines)."""
+    """A line item in the admin review queue (used for kicked-back lines).
+
+    `detail` is the type-specific line detail. admin_final today is BUDGET-only
+    (gated by WorkTypeConfig.has_admin_final), so in practice this will always
+    be a BudgetLineDetail — but the polymorphic field shape matches
+    ReviewQueueItem for consistency.
+    """
     work_item: WorkItem
     work_line: WorkLine
     approval_group_review: Optional[WorkLineReview]
     admin_review: Optional[WorkLineReview]
-    budget_detail: BudgetLineDetail
+    detail: Optional[LineDetail]
     line_total_cents: int
     recommended_amount_cents: Optional[int]
 
@@ -758,13 +765,8 @@ def build_admin_queues(
             line_reviews = reviews_by_line.get(line.id, {'admin': None, 'ag': None})
             ag_review = line_reviews['ag']
             admin_review = line_reviews['admin']
-            detail = line.budget_detail
-
-            # Calculate line total
-            if detail:
-                line_total = detail.unit_price_cents * int(detail.quantity)
-            else:
-                line_total = 0
+            detail = get_line_detail(line)
+            line_total = get_line_amount_cents(line)
 
             # Get recommended amount from approval group review
             if ag_review:
@@ -780,7 +782,7 @@ def build_admin_queues(
                         work_line=line,
                         approval_group_review=ag_review,
                         admin_review=admin_review,
-                        budget_detail=detail,
+                        detail=detail,
                         line_total_cents=line_total,
                         recommended_amount_cents=recommended,
                     )
