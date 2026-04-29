@@ -10,7 +10,7 @@
     <div>
       <h1 style="margin:0;">Admin Final Review</h1>
       <div class="muted" style="margin-top:4px;">
-        Final approval and finalization of budget requests
+        Final approval and finalization of requests
       </div>
     </div>
   </div>
@@ -97,7 +97,7 @@
             {% set wi = item.work_item %}
             <tr>
               <td>
-                <a href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id) }}">
+                <a href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id, work_type_slug=wi.portfolio.work_type_slug) }}">
                   {{ wi.public_id }}
                 </a>
               </td>
@@ -132,7 +132,7 @@
                 {% endif %}
               </td>
               <td>
-                <a class="btn btn-primary" href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id) }}" style="padding: 4px 8px; font-size: 12px;">
+                <a class="btn btn-primary" href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id, work_type_slug=wi.portfolio.work_type_slug) }}" style="padding: 4px 8px; font-size: 12px;">
                   Review
                 </a>
               </td>
@@ -176,9 +176,10 @@
             {% set portfolio = wi.portfolio %}
             {% set event_code = portfolio.event_cycle.code if portfolio else '' %}
             {% set dept_code = portfolio.department.code if portfolio else '' %}
+            {% set work_type_slug = portfolio.work_type_slug if portfolio else 'budget' %}
             <tr>
               <td>
-                <a href="{{ url_for('work.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
+                <a href="{{ url_for('work.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id, work_type_slug=work_type_slug) }}">
                   {{ wi.public_id }}
                 </a>
                 <div class="muted small">{{ portfolio.department.name if portfolio else '-' }}</div>
@@ -200,7 +201,7 @@
                 {% endif %}
               </td>
               <td>
-                <a class="btn btn-muted" href="{{ url_for('admin_final.line_review', event=event_code, dept=dept_code, public_id=wi.public_id, line_num=line.line_number) }}" style="padding: 4px 8px; font-size: 12px;">
+                <a class="btn btn-muted" href="{{ url_for('admin_final.line_review', event=event_code, dept=dept_code, public_id=wi.public_id, line_num=line.line_number, work_type_slug=work_type_slug) }}" style="padding: 4px 8px; font-size: 12px;">
                   View
                 </a>
               </td>
@@ -240,10 +241,11 @@
             {% set portfolio = wi.portfolio %}
             {% set event_code = portfolio.event_cycle.code if portfolio else '' %}
             {% set dept_code = portfolio.department.code if portfolio else '' %}
+            {% set work_type_slug = portfolio.work_type_slug if portfolio else 'budget' %}
             {% set summary = get_finalization_summary(wi) %}
             <tr>
               <td>
-                <a href="{{ url_for('work.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id) }}">
+                <a href="{{ url_for('work.work_item_detail', event=event_code, dept=dept_code, public_id=wi.public_id, work_type_slug=work_type_slug) }}">
                   {{ wi.public_id }}
                 </a>
               </td>

@@ -30,6 +30,7 @@ from .context import (
     is_any_worktype_admin,
     build_portfolio_perms,
     # Permission enforcement
+    require_budget_work_type,
     require_portfolio_view,
     require_portfolio_edit,
     require_work_item_view,
@@ -148,6 +149,7 @@ __all__ = [
     "build_portfolio_perms",
     "build_work_item_perms",
     # Permission enforcement
+    "require_budget_work_type",
     "require_portfolio_view",
     "require_portfolio_edit",
     "require_work_item_view",

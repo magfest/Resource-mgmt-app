@@ -51,7 +51,7 @@
             {% set url_slug = 'budget' %}
           {% endif %}
           {% if url_slug == 'budget' %}
-            {% set wt_url = url_for('work.portfolio_landing', event=event_cycle.code, dept=dept.code) %}
+            {% set wt_url = url_for('work.portfolio_landing', event=event_cycle.code, dept=dept.code, work_type_slug=url_slug) %}
           {% else %}
             {% set wt_url = url_for('work.department_home', event=event_cycle.code, dept=dept.code) %}
           {% endif %}

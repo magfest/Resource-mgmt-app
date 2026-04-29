@@ -1,6 +1,8 @@
 """
 Admin Final Review line review routes.
 """
+from decimal import Decimal, InvalidOperation
+
 from flask import render_template, redirect, url_for, request, abort, flash, jsonify
 
 from app import db
@@ -18,6 +20,7 @@ from app.models import (
 from app.routes import get_user_ctx
 from app.routes.work.helpers import (
     get_portfolio_context,
+    require_budget_work_type,
     format_currency,
     get_comment_visibility,
 )
@@ -31,9 +34,10 @@ from .helpers import (
 )
 
 
-def _get_work_item_and_line(event: str, dept: str, public_id: str, line_num: int):
+def _get_work_item_and_line(event: str, dept: str, public_id: str, line_num: int, work_type_slug: str = "budget"):
     """Get work item and line, validating they exist."""
-    ctx = get_portfolio_context(event, dept)
+    ctx = get_portfolio_context(event, dept, work_type_slug)
+    require_budget_work_type(ctx)
 
     work_item = WorkItem.query.filter_by(
         public_id=public_id,
@@ -55,15 +59,16 @@ def _get_work_item_and_line(event: str, dept: str, public_id: str, line_num: int
     return work_item, line, ctx
 
 
+@admin_final_bp.get("/<event>/<dept>/<work_type_slug>/item/<public_id>/line/<int:line_num>/admin-review")
 @admin_final_bp.get("/<event>/<dept>/budget/item/<public_id>/line/<int:line_num>/admin-review")
-def line_review(event: str, dept: str, public_id: str, line_num: int):
+def line_review(event: str, dept: str, public_id: str, line_num: int, work_type_slug: str = "budget"):
     """
     Admin final review page for a specific line.
     """
     user_ctx = get_user_ctx()
     require_budget_admin(user_ctx)
 
-    work_item, line, ctx = _get_work_item_and_line(event, dept, public_id, line_num)
+    work_item, line, ctx = _get_work_item_and_line(event, dept, public_id, line_num, work_type_slug)
 
     # Get reviews
     ag_review = get_approval_group_review(line)
@@ -107,31 +112,35 @@ def line_review(event: str, dept: str, public_id: str, line_num: int):
     )
 
 
+@admin_final_bp.post("/<event>/<dept>/<work_type_slug>/item/<public_id>/line/<int:line_num>/admin-approve")
 @admin_final_bp.post("/<event>/<dept>/budget/item/<public_id>/line/<int:line_num>/admin-approve")
-def line_approve(event: str, dept: str, public_id: str, line_num: int):
+def line_approve(event: str, dept: str, public_id: str, line_num: int, work_type_slug: str = "budget"):
     """Admin approve a line."""
-    return _handle_admin_decision(event, dept, public_id, line_num, REVIEW_ACTION_APPROVE)
+    return _handle_admin_decision(event, dept, public_id, line_num, work_type_slug, REVIEW_ACTION_APPROVE)
 
 
+@admin_final_bp.post("/<event>/<dept>/<work_type_slug>/item/<public_id>/line/<int:line_num>/admin-reject")
 @admin_final_bp.post("/<event>/<dept>/budget/item/<public_id>/line/<int:line_num>/admin-reject")
-def line_reject(event: str, dept: str, public_id: str, line_num: int):
+def line_reject(event: str, dept: str, public_id: str, line_num: int, work_type_slug: str = "budget"):
     """Admin reject a line."""
-    return _handle_admin_decision(event, dept, public_id, line_num, REVIEW_ACTION_REJECT)
+    return _handle_admin_decision(event, dept, public_id, line_num, work_type_slug, REVIEW_ACTION_REJECT)
 
 
+@admin_final_bp.post("/<event>/<dept>/<work_type_slug>/item/<public_id>/line/<int:line_num>/admin-needs-info")
 @admin_final_bp.post("/<event>/<dept>/budget/item/<public_id>/line/<int:line_num>/admin-needs-info")
-def line_needs_info(event: str, dept: str, public_id: str, line_num: int):
+def line_needs_info(event: str, dept: str, public_id: str, line_num: int, work_type_slug: str = "budget"):
     """Admin request more info for a line."""
-    return _handle_admin_decision(event, dept, public_id, line_num, REVIEW_ACTION_NEEDS_INFO)
+    return _handle_admin_decision(event, dept, public_id, line_num, work_type_slug, REVIEW_ACTION_NEEDS_INFO)
 
 
+@admin_final_bp.post("/<event>/<dept>/<work_type_slug>/item/<public_id>/line/<int:line_num>/admin-reset")
 @admin_final_bp.post("/<event>/<dept>/budget/item/<public_id>/line/<int:line_num>/admin-reset")
-def line_reset(event: str, dept: str, public_id: str, line_num: int):
+def line_reset(event: str, dept: str, public_id: str, line_num: int, work_type_slug: str = "budget"):
     """Admin reset a line for re-review."""
     user_ctx = get_user_ctx()
     require_budget_admin(user_ctx)
 
-    work_item, line, ctx = _get_work_item_and_line(event, dept, public_id, line_num)
+    work_item, line, ctx = _get_work_item_and_line(event, dept, public_id, line_num, work_type_slug)
 
     success, error = reset_line_for_rereview(line, user_ctx)
 
@@ -150,7 +159,7 @@ def line_reset(event: str, dept: str, public_id: str, line_num: int):
     ))
 
 
-def _handle_admin_decision(event: str, dept: str, public_id: str, line_num: int, action: str):
+def _handle_admin_decision(event: str, dept: str, public_id: str, line_num: int, work_type_slug: str, action: str):
     """
     Common handler for admin final review decisions.
     Returns JSON if ajax=1 in form data, otherwise redirects.
@@ -158,7 +167,7 @@ def _handle_admin_decision(event: str, dept: str, public_id: str, line_num: int,
     user_ctx = get_user_ctx()
     require_budget_admin(user_ctx)
 
-    work_item, line, ctx = _get_work_item_and_line(event, dept, public_id, line_num)
+    work_item, line, ctx = _get_work_item_and_line(event, dept, public_id, line_num, work_type_slug)
 
     # Check if this is an AJAX request
     is_ajax = request.form.get("ajax") == "1"
@@ -171,9 +180,9 @@ def _handle_admin_decision(event: str, dept: str, public_id: str, line_num: int,
     amount_str = (request.form.get("approved_amount") or "").strip()
     if amount_str:
         try:
-            amount_dollars = float(amount_str.replace(",", "").replace("$", ""))
+            amount_dollars = Decimal(amount_str.replace(",", "").replace("$", ""))
             amount_cents = int(amount_dollars * 100)
-        except ValueError:
+        except (ValueError, InvalidOperation):
             if is_ajax:
                 return jsonify({"success": False, "error": "Invalid amount format."})
             flash("Invalid amount format.", "error")

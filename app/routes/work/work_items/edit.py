@@ -16,6 +16,8 @@ from app.models import (
     COMMENT_VISIBILITY_ADMIN,
 )
 from app.routes import get_user_ctx
+from app.routes.approvals.helpers import audit_line_created, audit_line_field_changes
+from app.models import WorkItemAuditEvent, AUDIT_EVENT_FIELD_CHANGE, AUDIT_EVENT_LINE_DELETED
 from app.routes.admin.site_content import get_site_content
 from .. import work_bp
 from ..helpers import (
@@ -45,12 +47,13 @@ from .common import get_work_item_by_public_id, calculate_event_nights
 # Work Item Edit Routes
 # ============================================================
 
+@work_bp.get("/<event>/<dept>/<work_type_slug>/item/<public_id>/edit")
 @work_bp.get("/<event>/<dept>/budget/item/<public_id>/edit")
-def work_item_edit(event: str, dept: str, public_id: str):
+def work_item_edit(event: str, dept: str, public_id: str, work_type_slug: str = "budget"):
     """
     Edit form for a DRAFT work item.
     """
-    work_item, ctx = get_work_item_by_public_id(event, dept, public_id)
+    work_item, ctx = get_work_item_by_public_id(event, dept, public_id, work_type_slug)
     perms = require_work_item_edit(work_item, ctx)
 
     # Compute totals
@@ -251,13 +254,14 @@ def work_item_edit(event: str, dept: str, public_id: str):
     )
 
 
+@work_bp.post("/<event>/<dept>/<work_type_slug>/item/<public_id>/reason")
 @work_bp.post("/<event>/<dept>/budget/item/<public_id>/reason")
-def work_item_reason_save(event: str, dept: str, public_id: str):
+def work_item_reason_save(event: str, dept: str, public_id: str, work_type_slug: str = "budget"):
     """
     Save reason/description for a DRAFT work item.
     Primarily used for supplementary requests.
     """
-    work_item, ctx = get_work_item_by_public_id(event, dept, public_id)
+    work_item, ctx = get_work_item_by_public_id(event, dept, public_id, work_type_slug)
     perms = require_work_item_edit(work_item, ctx)
 
     # Get reason from form
@@ -277,13 +281,14 @@ def work_item_reason_save(event: str, dept: str, public_id: str):
     ))
 
 
+@work_bp.post("/<event>/<dept>/<work_type_slug>/item/<public_id>/income")
 @work_bp.post("/<event>/<dept>/budget/item/<public_id>/income")
-def work_item_income_save(event: str, dept: str, public_id: str):
+def work_item_income_save(event: str, dept: str, public_id: str, work_type_slug: str = "budget"):
     """
     Save income information for a DRAFT work item.
     Income is informational only — does not affect approval workflow.
     """
-    work_item, ctx = get_work_item_by_public_id(event, dept, public_id)
+    work_item, ctx = get_work_item_by_public_id(event, dept, public_id, work_type_slug)
     perms = require_work_item_edit(work_item, ctx)
 
     # Parse dollar amount and convert to cents
@@ -314,12 +319,13 @@ def work_item_income_save(event: str, dept: str, public_id: str):
     ))
 
 
+@work_bp.post("/<event>/<dept>/<work_type_slug>/item/<public_id>/edit")
 @work_bp.post("/<event>/<dept>/budget/item/<public_id>/edit")
-def work_item_edit_save(event: str, dept: str, public_id: str):
+def work_item_edit_save(event: str, dept: str, public_id: str, work_type_slug: str = "budget"):
     """
     Save edits to a DRAFT work item (delete lines checked for deletion).
     """
-    work_item, ctx = get_work_item_by_public_id(event, dept, public_id)
+    work_item, ctx = get_work_item_by_public_id(event, dept, public_id, work_type_slug)
     perms = require_work_item_edit(work_item, ctx)
 
     # Process line deletions
@@ -356,8 +362,9 @@ def work_item_edit_save(event: str, dept: str, public_id: str):
     ))
 
 
+@work_bp.post("/<event>/<dept>/<work_type_slug>/item/<public_id>/fixed-costs")
 @work_bp.post("/<event>/<dept>/budget/item/<public_id>/fixed-costs")
-def work_item_fixed_costs_save(event: str, dept: str, public_id: str):
+def work_item_fixed_costs_save(event: str, dept: str, public_id: str, work_type_slug: str = "budget"):
     """
     Save fixed-cost line items.
 
@@ -366,7 +373,7 @@ def work_item_fixed_costs_save(event: str, dept: str, public_id: str):
     - If quantity > 0 and existing line: update quantity
     - If quantity = 0 and existing line: delete line
     """
-    work_item, ctx = get_work_item_by_public_id(event, dept, public_id)
+    work_item, ctx = get_work_item_by_public_id(event, dept, public_id, work_type_slug)
     perms = require_work_item_edit(work_item, ctx)
     user_ctx = get_user_ctx()
 
@@ -427,11 +434,20 @@ def work_item_fixed_costs_save(event: str, dept: str, public_id: str):
         existing_line_id = existing_line_ids_by_account.get(account_id)
 
         if quantity <= 0:
-            # Delete existing line if present
+            # Delete existing line if present (deactivation)
             if existing_line_id:
-                # Query fresh to avoid relationship caching issues
+                # Capture old qty for audit before deletion
                 detail = BudgetLineDetail.query.filter_by(work_line_id=existing_line_id).first()
                 if detail:
+                    old_qty = str(detail.quantity)
+                    db.session.add(WorkItemAuditEvent(
+                        work_item_id=work_item.id,
+                        event_type=AUDIT_EVENT_FIELD_CHANGE,
+                        old_value=old_qty,
+                        new_value="0",
+                        snapshot={"description": expense_account.name, "field": "quantity"},
+                        created_by_user_id=user_ctx.user_id,
+                    ))
                     db.session.delete(detail)
                     db.session.flush()
                 line_to_delete = WorkLine.query.get(existing_line_id)
@@ -448,12 +464,27 @@ def work_item_fixed_costs_save(event: str, dept: str, public_id: str):
                 if existing_line:
                     detail = BudgetLineDetail.query.filter_by(work_line_id=existing_line_id).first()
                     if detail:
+                        # Audit qty/price changes
+                        fc_changes = []
+                        if detail.quantity != quantity:
+                            fc_changes.append(("quantity", str(detail.quantity), str(quantity)))
+                        if detail.unit_price_cents != settings["unit_price_cents"]:
+                            fc_changes.append(("unit_price", f"${detail.unit_price_cents / 100:,.2f}", f"${settings['unit_price_cents'] / 100:,.2f}"))
+                        for field_name, old_val, new_val in fc_changes:
+                            db.session.add(WorkItemAuditEvent(
+                                work_item_id=work_item.id,
+                                event_type=AUDIT_EVENT_FIELD_CHANGE,
+                                old_value=old_val,
+                                new_value=new_val,
+                                snapshot={"description": expense_account.name, "field": field_name},
+                                created_by_user_id=user_ctx.user_id,
+                            ))
                         detail.quantity = quantity
                         detail.unit_price_cents = settings["unit_price_cents"]
                         detail.description = notes if notes else expense_account.name
                     existing_line.updated_by_user_id = user_ctx.user_id
             else:
-                # Create new line
+                # Create new line (first activation)
                 # Get spend type (fixed-cost accounts should have a default)
                 spend_type_id = expense_account.default_spend_type_id
                 if not spend_type_id:
@@ -490,6 +521,16 @@ def work_item_fixed_costs_save(event: str, dept: str, public_id: str):
                 )
                 db.session.add(budget_detail)
 
+                # Audit activation as FIELD_CHANGE qty 0 → new
+                db.session.add(WorkItemAuditEvent(
+                    work_item_id=work_item.id,
+                    event_type=AUDIT_EVENT_FIELD_CHANGE,
+                    old_value="0",
+                    new_value=str(quantity),
+                    snapshot={"description": expense_account.name, "field": "quantity"},
+                    created_by_user_id=user_ctx.user_id,
+                ))
+
     db.session.commit()
 
     if not has_errors:
@@ -503,8 +544,9 @@ def work_item_fixed_costs_save(event: str, dept: str, public_id: str):
     ))
 
 
+@work_bp.post("/<event>/<dept>/<work_type_slug>/item/<public_id>/badges")
 @work_bp.post("/<event>/<dept>/budget/item/<public_id>/badges")
-def work_item_badges_save(event: str, dept: str, public_id: str):
+def work_item_badges_save(event: str, dept: str, public_id: str, work_type_slug: str = "budget"):
     """
     Save badge line items.
 
@@ -515,7 +557,7 @@ def work_item_badges_save(event: str, dept: str, public_id: str):
 
     Badge items are informational only ($0 cost).
     """
-    work_item, ctx = get_work_item_by_public_id(event, dept, public_id)
+    work_item, ctx = get_work_item_by_public_id(event, dept, public_id, work_type_slug)
     perms = require_work_item_edit(work_item, ctx)
     user_ctx = get_user_ctx()
 
@@ -574,10 +616,19 @@ def work_item_badges_save(event: str, dept: str, public_id: str):
         existing_line_id = existing_line_ids_by_account.get(account_id)
 
         if quantity <= 0:
-            # Delete existing line if present
+            # Delete existing line if present (deactivation)
             if existing_line_id:
                 detail = BudgetLineDetail.query.filter_by(work_line_id=existing_line_id).first()
                 if detail:
+                    old_qty = str(detail.quantity)
+                    db.session.add(WorkItemAuditEvent(
+                        work_item_id=work_item.id,
+                        event_type=AUDIT_EVENT_FIELD_CHANGE,
+                        old_value=old_qty,
+                        new_value="0",
+                        snapshot={"description": expense_account.name, "field": "quantity"},
+                        created_by_user_id=user_ctx.user_id,
+                    ))
                     db.session.delete(detail)
                     db.session.flush()
                 line_to_delete = WorkLine.query.get(existing_line_id)
@@ -594,12 +645,27 @@ def work_item_badges_save(event: str, dept: str, public_id: str):
                 if existing_line:
                     detail = BudgetLineDetail.query.filter_by(work_line_id=existing_line_id).first()
                     if detail:
+                        # Audit qty/price changes
+                        badge_changes = []
+                        if detail.quantity != quantity:
+                            badge_changes.append(("quantity", str(detail.quantity), str(quantity)))
+                        if detail.unit_price_cents != settings["unit_price_cents"]:
+                            badge_changes.append(("unit_price", f"${detail.unit_price_cents / 100:,.2f}", f"${settings['unit_price_cents'] / 100:,.2f}"))
+                        for field_name, old_val, new_val in badge_changes:
+                            db.session.add(WorkItemAuditEvent(
+                                work_item_id=work_item.id,
+                                event_type=AUDIT_EVENT_FIELD_CHANGE,
+                                old_value=old_val,
+                                new_value=new_val,
+                                snapshot={"description": expense_account.name, "field": field_name},
+                                created_by_user_id=user_ctx.user_id,
+                            ))
                         detail.quantity = quantity
                         detail.unit_price_cents = settings["unit_price_cents"]  # Should be 0
                         detail.description = notes if notes else expense_account.name
                     existing_line.updated_by_user_id = user_ctx.user_id
             else:
-                # Create new line
+                # Create new line (first activation)
                 spend_type_id = expense_account.default_spend_type_id
                 if not spend_type_id:
                     allowed = get_allowed_spend_types(expense_account)
@@ -633,6 +699,16 @@ def work_item_badges_save(event: str, dept: str, public_id: str):
                 )
                 db.session.add(budget_detail)
 
+                # Audit activation as FIELD_CHANGE qty 0 → new
+                db.session.add(WorkItemAuditEvent(
+                    work_item_id=work_item.id,
+                    event_type=AUDIT_EVENT_FIELD_CHANGE,
+                    old_value="0",
+                    new_value=str(quantity),
+                    snapshot={"description": expense_account.name, "field": "quantity"},
+                    created_by_user_id=user_ctx.user_id,
+                ))
+
     db.session.commit()
 
     if not has_errors:
@@ -650,14 +726,15 @@ def work_item_badges_save(event: str, dept: str, public_id: str):
 # Hotel Wizard Route
 # ============================================================
 
+@work_bp.post("/<event>/<dept>/<work_type_slug>/item/<public_id>/hotel/add")
 @work_bp.post("/<event>/<dept>/budget/item/<public_id>/hotel/add")
-def hotel_wizard_add(event: str, dept: str, public_id: str):
+def hotel_wizard_add(event: str, dept: str, public_id: str, work_type_slug: str = "budget"):
     """
     Add a hotel room request via the wizard form.
 
     Maps wizard selections to the appropriate expense account and creates a line item.
     """
-    work_item, ctx = get_work_item_by_public_id(event, dept, public_id)
+    work_item, ctx = get_work_item_by_public_id(event, dept, public_id, work_type_slug)
     perms = require_work_item_edit(work_item, ctx)
     user_ctx = get_user_ctx()
 
@@ -800,6 +877,9 @@ def hotel_wizard_add(event: str, dept: str, public_id: str):
         description=description,
     )
     db.session.add(budget_detail)
+    db.session.flush()
+
+    audit_line_created(work_line, budget_detail, user_ctx)
     db.session.commit()
 
     # Calculate total for flash message

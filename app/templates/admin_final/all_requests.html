@@ -8,7 +8,7 @@
   {# Header #}
   <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap: wrap; margin-bottom: 16px;">
     <div>
-      <h1 style="margin:0;">All Budget Requests</h1>
+      <h1 style="margin:0;">All Requests</h1>
       <div class="muted" style="margin-top:4px;">
         {{ pagination.total }} total requests
       </div>
@@ -97,7 +97,7 @@
             {% set status = wi.status %}
             <tr>
               <td>
-                <a href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id) }}">
+                <a href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id, work_type_slug=wi.portfolio.work_type_slug) }}">
                   {{ wi.public_id }}
                 </a>
                 <div class="muted small">{{ wi.request_kind }}</div>
@@ -129,7 +129,7 @@
                 {% endif %}
               </td>
               <td>
-                <a class="btn btn-muted" href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id) }}" style="padding: 4px 8px; font-size: 12px;">
+                <a class="btn btn-muted" href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id, work_type_slug=wi.portfolio.work_type_slug) }}" style="padding: 4px 8px; font-size: 12px;">
                   View
                 </a>
               </td>
@@ -164,7 +164,7 @@
         {% if search_query or selected_event or selected_dept or selected_status %}
           No requests found matching your criteria.
         {% else %}
-          No budget requests yet.
+          No requests yet.
         {% endif %}
       </div>
     {% endif %}

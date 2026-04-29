@@ -10,7 +10,7 @@
     <div>
       <h1 style="margin:0;">Review Dashboard</h1>
       <div class="muted" style="margin-top:4px;">
-        Review budget line items for reviewer groups
+        Review line items for reviewer groups
       </div>
     </div>
   </div>
@@ -111,7 +111,7 @@
             {% set wi = item.work_item %}
             <tr>
               <td>
-                <a href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id) }}">
+                <a href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id, work_type_slug=wi.portfolio.work_type_slug) }}">
                   {{ wi.public_id }}
                 </a>
               </td>
@@ -132,7 +132,7 @@
                 {% endif %}
               </td>
               <td>
-                <a class="btn btn-primary" href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id) }}" style="padding: 4px 8px; font-size: 12px;">
+                <a class="btn btn-primary" href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id, work_type_slug=wi.portfolio.work_type_slug) }}" style="padding: 4px 8px; font-size: 12px;">
                   Review
                 </a>
               </td>
@@ -192,7 +192,7 @@
             {% set wi = item.work_item %}
             <tr>
               <td>
-                <a href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id) }}">
+                <a href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id, work_type_slug=wi.portfolio.work_type_slug) }}">
                   {{ wi.public_id }}
                 </a>
               </td>
@@ -203,7 +203,7 @@
               <td class="right num">{{ item.total_line_count }}</td>
               <td class="right num">{{ format_currency(item.total_requested_cents) }}</td>
               <td>
-                <a class="btn btn-muted" href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id) }}" style="padding: 4px 8px; font-size: 12px;">
+                <a class="btn btn-muted" href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id, work_type_slug=wi.portfolio.work_type_slug) }}" style="padding: 4px 8px; font-size: 12px;">
                   View
                 </a>
               </td>

@@ -10,7 +10,7 @@
     <div>
       <h1 style="margin:0;">Assign Reviewers</h1>
       <div class="muted" style="margin-top:4px;">
-        Assign reviewer groups to budget requests pending review
+        Assign reviewer groups to requests pending review
       </div>
     </div>
   </div>
@@ -88,7 +88,7 @@
             {% set wi = item.work_item %}
             <tr>
               <td>
-                <a href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id) }}">
+                <a href="{{ url_for('work.work_item_detail', event=item.event_cycle.code, dept=item.department.code, public_id=wi.public_id, work_type_slug=wi.portfolio.work_type_slug) }}">
                   {{ wi.public_id }}
                 </a>
               </td>

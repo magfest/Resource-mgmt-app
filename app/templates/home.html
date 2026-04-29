@@ -147,7 +147,7 @@
             {% set url_slug = wt.config.url_slug if wt.config else 'budget' %}
             {# Build the correct URL based on work type slug #}
             {% if url_slug == 'budget' %}
-              {% set wt_url = url_for('work.portfolio_landing', event=default_cycle.code, dept=dept.code) %}
+              {% set wt_url = url_for('work.portfolio_landing', event=default_cycle.code, dept=dept.code, work_type_slug=url_slug) %}
             {% elif url_slug == 'contracts' %}
               {% set wt_url = url_for('work.contracts_placeholder', event=default_cycle.code, dept=dept.code) %}
             {% elif url_slug == 'supply' %}
