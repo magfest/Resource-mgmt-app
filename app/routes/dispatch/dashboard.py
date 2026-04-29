@@ -316,8 +316,8 @@ def dispatch_to_queue(work_item_id: int):
 
     # Send notification to approval group members (non-blocking)
     try:
-        from app.services.notifications import notify_budget_dispatched
-        notify_budget_dispatched(work_item, list(approval_group_ids))
+        from app.services.notifications import notify_work_item_dispatched
+        notify_work_item_dispatched(work_item, list(approval_group_ids))
         db.session.commit()  # Commit notification log
     except Exception:
         db.session.rollback()

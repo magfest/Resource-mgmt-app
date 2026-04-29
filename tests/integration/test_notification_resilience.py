@@ -26,14 +26,14 @@ class TestNotificationResilience:
     def test_submit_succeeds_when_notification_raises(self, app, client, seed_draft_work_item):
         """
         Work item submission should complete (status=AWAITING_DISPATCH)
-        even if notify_budget_submitted raises an exception.
+        even if notify_work_item_submitted raises an exception.
         """
         with client.session_transaction() as sess:
             sess["active_user_id"] = "test:admin"
 
         # Mock the notification to raise an exception (simulates SES outage)
         with patch(
-            "app.services.notifications.notify_budget_submitted",
+            "app.services.notifications.notify_work_item_submitted",
             side_effect=RuntimeError("SES connection timeout"),
         ):
             response = client.post(
@@ -60,7 +60,7 @@ class TestNotificationResilience:
             sess["active_user_id"] = "test:admin"
 
         with patch(
-            "app.services.notifications.notify_budget_submitted",
+            "app.services.notifications.notify_work_item_submitted",
             return_value=1,
         ):
             response = client.post(
@@ -79,7 +79,7 @@ class TestNotificationResilience:
     def test_finalize_succeeds_when_notification_raises(self, app, client, seed_draft_work_item):
         """
         Finalization should complete (status=FINALIZED) even if
-        notify_budget_finalized raises an exception.
+        notify_work_item_finalized raises an exception.
         """
         # Move the work item to SUBMITTED with an approved review so it can be finalized
         with app.app_context():
@@ -109,7 +109,7 @@ class TestNotificationResilience:
 
         # Mock the notification to raise an exception
         with patch(
-            "app.services.notifications.notify_budget_finalized",
+            "app.services.notifications.notify_work_item_finalized",
             side_effect=RuntimeError("SES connection timeout"),
         ):
             response = client.post(

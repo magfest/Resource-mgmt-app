@@ -108,10 +108,10 @@ def work_item_submit(event: str, dept: str, public_id: str, work_type_slug: str 
 
     db.session.commit()
 
-    # Send notification to budget admins (non-blocking)
+    # Send notification (non-blocking) — recipients depend on uses_dispatch
     try:
-        from app.services.notifications import notify_budget_submitted
-        notify_budget_submitted(work_item)
+        from app.services.notifications import notify_work_item_submitted
+        notify_work_item_submitted(work_item)
         db.session.commit()  # Commit notification log
     except Exception:
         db.session.rollback()

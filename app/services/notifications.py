@@ -1,11 +1,15 @@
 """
-High-level notification functions for budget workflow events.
+High-level notification functions for work-item lifecycle events.
 
 Each function:
 - Gets recipient emails via helper functions
 - Renders email template from database
 - Sends via send_email() which handles rate limits, debounce, and logging
 - Logs warnings for edge cases (no recipients, user not found, etc.)
+
+Names are worktype-neutral (notify_work_item_*). The submit notification
+branches on WorkTypeConfig.uses_dispatch to pick between worktype admins
+(dispatch flow) and routed approval groups (no-dispatch flow).
 """
 from __future__ import annotations
 
@@ -41,17 +45,21 @@ def get_base_url() -> str:
     return current_app.config.get('BASE_URL', 'https://budget.magfest.org')
 
 
-def notify_budget_submitted(work_item: WorkItem) -> int:
+def notify_work_item_submitted(work_item: WorkItem) -> int:
     """
-    Notify budget admins that a new budget was submitted and is awaiting dispatch.
+    Notify the right people that a new work item was submitted.
 
-    Called after: work_item.status set to AWAITING_DISPATCH
-    Returns: Number of emails sent
+    Routing depends on the work type's uses_dispatch flag:
+    - uses_dispatch=True: notify worktype admins (so they can dispatch)
+    - uses_dispatch=False: notify routed approval groups directly
+
+    Called after: work_item.status transitions out of DRAFT.
+    Returns: Number of emails sent.
     """
-    recipients = _get_budget_admin_emails()
+    recipients = _get_submit_recipients(work_item)
 
     if not recipients:
-        logger.warning(f"No budget admin recipients found for submission notification: {work_item.public_id}")
+        logger.warning(f"No recipients found for submission notification: {work_item.public_id}")
         return 0
 
     # Render template from database
@@ -85,7 +93,7 @@ def notify_budget_submitted(work_item: WorkItem) -> int:
     return sent_count
 
 
-def notify_budget_dispatched(work_item: WorkItem, approval_group_ids: List[int]) -> int:
+def notify_work_item_dispatched(work_item: WorkItem, approval_group_ids: List[int]) -> int:
     """
     Notify approval group members that a budget is ready for their review.
 
@@ -226,7 +234,7 @@ def notify_response_received(work_item: WorkItem, reviewer_user_id: str) -> bool
     return success
 
 
-def notify_budget_finalized(work_item: WorkItem) -> int:
+def notify_work_item_finalized(work_item: WorkItem) -> int:
     """
     Notify department members that their budget has been finalized.
 
@@ -277,35 +285,27 @@ def notify_budget_finalized(work_item: WorkItem) -> int:
 # Recipient Helpers
 # ============================================================
 
-def _get_budget_admin_emails() -> List[str]:
+def _get_worktype_admin_emails(work_type_id: int) -> List[str]:
     """
-    Get emails of users who should receive budget submission notifications.
+    Get emails of users who should receive submit notifications for a work type.
 
-    Includes: SUPER_ADMIN and WORKTYPE_ADMIN (for budget work type)
+    Includes: SUPER_ADMIN (always) and WORKTYPE_ADMIN scoped to this work type
+    or unscoped (legacy WORKTYPE_ADMIN rows without a work_type_id).
     """
-    from app.models import WorkType
-
     emails: Set[str] = set()
 
-    # Get the budget work type ID
-    budget_wt = db.session.query(WorkType).filter_by(code="BUDGET").first()
-
-    # Find all admin users
     admin_roles = db.session.query(UserRole).filter(
         UserRole.role_code.in_([ROLE_SUPER_ADMIN, ROLE_WORKTYPE_ADMIN])
     ).all()
 
-    # Filter roles to those we want to notify
     relevant_user_ids = []
     for role in admin_roles:
         if role.role_code == ROLE_SUPER_ADMIN:
             relevant_user_ids.append(role.user_id)
         elif role.role_code == ROLE_WORKTYPE_ADMIN:
-            # Only include if this is the budget work type admin or unscoped
-            if budget_wt and (role.work_type_id == budget_wt.id or role.work_type_id is None):
+            if role.work_type_id == work_type_id or role.work_type_id is None:
                 relevant_user_ids.append(role.user_id)
 
-    # Batch load all users in one query
     if relevant_user_ids:
         users = db.session.query(User).filter(User.id.in_(relevant_user_ids)).all()
         for user in users:
@@ -313,6 +313,56 @@ def _get_budget_admin_emails() -> List[str]:
                 emails.add(user.email)
 
     return list(emails)
+
+
+def _get_submit_recipients(work_item: WorkItem) -> List[str]:
+    """
+    Pick submit-notification recipients based on the work type's uses_dispatch flag.
+
+    - uses_dispatch=True: notify worktype admins (they'll dispatch)
+    - uses_dispatch=False: notify routed approval groups directly
+
+    For the no-dispatch path, approval groups are computed by running the
+    routing strategy on each line. If the strategy isn't ready (e.g. a
+    not-yet-implemented worktype), we log and return [] rather than raise.
+    """
+    portfolio = work_item.portfolio
+    work_type = portfolio.work_type if portfolio else None
+    config = work_type.config if work_type else None
+
+    if config is None:
+        logger.warning(
+            f"No WorkTypeConfig for {work_item.public_id}; cannot pick submit recipients"
+        )
+        return []
+
+    if config.uses_dispatch:
+        return _get_worktype_admin_emails(work_type.id)
+
+    # No-dispatch worktype — recipients are the routed approval groups.
+    from app.routing.registry import get_approval_group_for_line
+
+    group_ids: Set[int] = set()
+    for line in work_item.lines:
+        try:
+            group = get_approval_group_for_line(line)
+        except ValueError:
+            logger.exception(
+                f"Routing failed for line {line.id} on {work_item.public_id} "
+                f"during submit notification — skipping line"
+            )
+            continue
+        if group:
+            group_ids.add(group.id)
+
+    if not group_ids:
+        logger.warning(
+            f"No routed approval groups found for {work_item.public_id} "
+            f"(work type {work_type.code}) — no submit notification recipients"
+        )
+        return []
+
+    return _get_approval_group_emails(list(group_ids))
 
 
 def _get_approval_group_emails(group_ids: List[int]) -> List[str]:
