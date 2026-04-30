@@ -1,0 +1,23 @@
+{# templates/macros/status_pill.html #}
+{# Renders a status pill using the engine-shared status → class mapping.
+
+   Unknown statuses fall through to pill-draft (neutral gray), so new
+   worktypes can introduce statuses without breaking existing renders.
+
+   Usage:
+     {% from "macros/status_pill.html" import render_status_pill %}
+     {{ render_status_pill(work_item.status) }}
+     {{ render_status_pill(status, label=friendly_status(status)) }}
+     {{ render_status_pill(status, extra_style="margin-left: 8px; font-weight: normal;") }}
+#}
+
+{% macro render_status_pill(status, label=None, extra_style=None) -%}
+{%- set status_upper = (status or "DRAFT")|upper -%}
+{%- set pill_class =
+    "pill-approved" if status_upper == "FINALIZED"
+    else "pill-submitted" if status_upper == "SUBMITTED"
+    else "pill-needs" if status_upper in ["UNDER_REVIEW", "NEEDS_INFO", "PAUSED", "AWAITING_DISPATCH"]
+    else "pill-draft" -%}
+{%- set display_label = label if label is not none else status_upper -%}
+<span class="pill {{ pill_class }}"{% if extra_style %} style="{{ extra_style }}"{% endif %}>{{ display_label }}</span>
+{%- endmacro %}

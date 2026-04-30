@@ -1,0 +1,189 @@
+{# templates/macros/audit_log.html #}
+{# Renders an audit-history panel: heading, "show page views" toggle, and event table.
+
+   The caller is responsible for any wrapping chrome (cards, tabs, panels) — the
+   macro emits only the section's content + its own VIEW-toggle script.
+
+   The script needs a CSP nonce; pass csp_nonce explicitly so the dependency is visible.
+
+   Snapshot rendering for LINE_DELETED, FIELD_CHANGE, SUBMIT, DISPATCH currently
+   reads BUDGET-shaped keys (expense_account, unit_price_cents, total_requested_cents).
+   Each is guarded so non-BUDGET events render the row without crashing; richer
+   per-worktype detail formatting can be added when those worktypes activate.
+
+   Usage:
+     {% from "macros/audit_log.html" import render_audit_log %}
+     {{ render_audit_log(audit_events, csp_nonce) }}
+#}
+
+{% macro render_audit_log(events, csp_nonce) -%}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+  <h3 style="margin:0;">Audit History</h3>
+  {% set view_count = events | selectattr('event_type', 'equalto', 'VIEW') | list | length %}
+  {% if view_count > 0 %}
+    <label style="font-size: 13px; cursor: pointer; color: #666;">
+      <input type="checkbox" id="show-view-events" style="margin-right: 6px;">
+      Show page views ({{ view_count }})
+    </label>
+  {% endif %}
+</div>
+{% if events %}
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 150px;">When</th>
+        <th style="width: 60px;">Scope</th>
+        <th style="width: 140px;">Event</th>
+        <th>Details</th>
+        <th style="width: 150px;">By</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for event in events %}
+        <tr class="{% if event.event_type == 'VIEW' %}audit-view-event{% endif %}" {% if event.event_type == 'VIEW' %}style="display: none;"{% endif %}>
+          <td class="muted small">{{ event.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+          <td class="small">
+            {% if event.line_number %}
+              <a href="#line-{{ event.line_number }}" style="color: #0a66c2;">Line {{ event.line_number }}</a>
+            {% else %}
+              <span class="muted">Request</span>
+            {% endif %}
+          </td>
+          <td>
+            {# Work item level events #}
+            {% if event.event_type == 'FINALIZE' %}
+              <span class="pill pill-approved">FINALIZED</span>
+            {% elif event.event_type == 'UNFINALIZE' %}
+              <span class="pill pill-needs">UNFINALIZED</span>
+            {% elif event.event_type == 'STATUS_CHANGE' %}
+              <span class="pill pill-submitted">STATUS CHANGE</span>
+            {% elif event.event_type == 'PAUSE' %}
+              <span class="pill">PAUSED</span>
+            {% elif event.event_type == 'UNPAUSE' %}
+              <span class="pill">RESUMED</span>
+            {% elif event.event_type == 'SUBMIT' %}
+              <span class="pill pill-submitted">SUBMITTED</span>
+            {% elif event.event_type == 'DISPATCH' %}
+              <span class="pill" style="background: #dbeafe; color: #1e40af;">DISPATCHED</span>
+            {% elif event.event_type == 'NEEDS_INFO_REQUESTED' %}
+              <span class="pill pill-needs">INFO REQUESTED</span>
+            {% elif event.event_type == 'NEEDS_INFO_RESPONDED' %}
+              <span class="pill" style="background: #d1fae5; color: #065f46;">INFO RESPONSE</span>
+            {% elif event.event_type == 'CHECKOUT' %}
+              <span class="pill" style="background: #fef3c7; color: #92400e;">CHECKED OUT</span>
+            {% elif event.event_type == 'CHECKIN' %}
+              <span class="pill" style="background: #e0e7ff; color: #3730a3;">CHECKED IN</span>
+            {% elif event.event_type == 'VIEW' %}
+              <span class="pill" style="background: #f3f4f6; color: #6b7280;">VIEWED</span>
+            {# Line level events #}
+            {% elif event.event_type == 'REVIEW_DECISION' %}
+              {% if event.new_value == 'APPROVED' %}
+                <span class="pill pill-approved">APPROVED</span>
+              {% elif event.new_value == 'REJECTED' %}
+                <span class="pill tag-kicked">REJECTED</span>
+              {% elif event.new_value == 'NEEDS_INFO' %}
+                <span class="pill pill-needs">NEEDS INFO</span>
+              {% elif event.new_value == 'NEEDS_ADJUSTMENT' %}
+                <span class="pill pill-needs">CHANGES REQUESTED</span>
+              {% elif event.new_value == 'PENDING' %}
+                <span class="pill">RESET TO PENDING</span>
+              {% else %}
+                <span class="pill">REVIEW: {{ event.new_value }}</span>
+              {% endif %}
+            {% elif event.event_type == 'REQUESTER_RESPONSE' %}
+              <span class="pill" style="background: #d1fae5; color: #065f46;">RESPONDED</span>
+            {% elif event.event_type == 'LINE_CREATED' %}
+              <span class="pill pill-approved">LINE ADDED</span>
+            {% elif event.event_type == 'FIELD_CHANGE' %}
+              <span class="pill pill-submitted">FIELD CHANGE</span>
+            {% elif event.event_type == 'LINE_DELETED' %}
+              <span class="pill tag-kicked">LINE DELETED</span>
+            {% else %}
+              <span class="pill">{{ event.event_type }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if event.event_type == 'LINE_CREATED' %}
+              {{ event.new_value }}
+              {% if event.reason %}
+                <div class="small muted" style="margin-top: 4px;">{{ event.reason }}</div>
+              {% endif %}
+            {% elif event.event_type == 'FIELD_CHANGE' %}
+              {% if event.snapshot and event.snapshot.field %}
+                <strong>{{ event.snapshot.description }}:</strong>
+                {{ event.snapshot.field }} <span class="muted">{{ event.old_value }}</span> &rarr; <strong>{{ event.new_value }}</strong>
+              {% elif event.field_name %}
+                <strong>{{ event.field_name }}:</strong>
+                <span class="muted">{{ event.old_value }}</span> &rarr; <strong>{{ event.new_value }}</strong>
+              {% else %}
+                <span class="muted">{{ event.old_value }}</span> &rarr; <strong>{{ event.new_value }}</strong>
+              {% endif %}
+            {% elif event.event_type == 'LINE_DELETED' %}
+              {% if event.snapshot %}
+                Line #{{ event.snapshot.line_number }}
+                {% if event.snapshot.expense_account %} — {{ event.snapshot.expense_account }}{% endif %}
+                {% if event.snapshot.description %} ({{ event.snapshot.description }}){% endif %}
+                {% if event.snapshot.quantity and event.snapshot.unit_price_cents %}
+                  <div class="small muted" style="margin-top: 4px;">
+                    qty={{ event.snapshot.quantity }}, price=${{ "%.2f"|format(event.snapshot.unit_price_cents / 100) }}
+                  </div>
+                {% endif %}
+              {% else %}
+                {{ event.old_value }}
+              {% endif %}
+            {% elif event.snapshot %}
+              {% if event.event_type == 'SUBMIT' %}
+                {{ event.snapshot.line_count }} line{% if event.snapshot.line_count != 1 %}s{% endif %}{% if event.snapshot.total_requested_cents is defined %},
+                {{ format_currency(event.snapshot.total_requested_cents) }} total{% endif %}
+              {% elif event.event_type == 'DISPATCH' %}
+                Sent to {{ event.snapshot.approval_groups | length }} reviewer group{% if event.snapshot.approval_groups | length != 1 %}s{% endif %}
+              {% elif event.event_type == 'NEEDS_INFO_REQUESTED' %}
+                {{ event.snapshot.message }}
+              {% elif event.event_type == 'NEEDS_INFO_RESPONDED' %}
+                {{ event.snapshot.response }}
+              {% elif event.event_type == 'CHECKIN' and event.snapshot.forced %}
+                Lock force-released (was held by {{ event.snapshot.previous_holder }})
+              {% endif %}
+            {% elif event.is_line_event and event.old_value and event.new_value %}
+              <span class="muted">{{ event.old_value }}</span> &rarr; <strong>{{ event.new_value }}</strong>
+            {% elif event.old_value or event.new_value %}
+              {% if event.old_value and event.new_value %}
+                <span class="muted">{{ event.old_value }}</span> &rarr; <strong>{{ event.new_value }}</strong>
+              {% elif event.new_value %}
+                <strong>{{ event.new_value }}</strong>
+              {% else %}
+                <span class="muted">{{ event.old_value }}</span>
+              {% endif %}
+            {% endif %}
+            {% if event.reason and event.event_type not in ('LINE_CREATED',) %}
+              <div class="small muted" style="margin-top: 4px;">{{ event.reason }}</div>
+            {% endif %}
+          </td>
+          <td class="muted small">{{ event.created_by_user_id|user_display }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <div class="muted" style="text-align: center; padding: 16px;">
+    No audit events recorded yet.
+  </div>
+{% endif %}
+
+{% if view_count > 0 %}
+<script nonce="{{ csp_nonce }}">
+(function() {
+  var viewToggle = document.getElementById('show-view-events');
+  if (viewToggle) {
+    viewToggle.addEventListener('change', function() {
+      var viewRows = document.querySelectorAll('.audit-view-event');
+      var display = this.checked ? '' : 'none';
+      viewRows.forEach(function(row) {
+        row.style.display = display;
+      });
+    });
+  }
+})();
+</script>
+{% endif %}
+{%- endmacro %}
