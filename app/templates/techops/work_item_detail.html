@@ -1,0 +1,281 @@
+{# templates/techops/work_item_detail.html #}
+{% extends "layout/base.html" %}
+{% from "macros/status_pill.html" import render_status_pill %}
+{% from "macros/checkout_banner.html" import render_checkout_banner %}
+{% from "macros/comments.html" import render_comments %}
+{% from "macros/audit_log.html" import render_audit_log with context %}
+
+{% block title %}{{ work_item.public_id }} - TechOps Request{% endblock %}
+
+{% block content %}
+
+  {% set status = work_item.status | upper %}
+
+  {# Breadcrumb #}
+  <nav class="muted small" style="margin-bottom: 12px;">
+    <a href="{{ url_for('home.index') }}">Home</a>
+    <span style="margin: 0 6px;">&rsaquo;</span>
+    <a href="{{ url_for('work.department_home', event=ctx.event_cycle.code, dept=ctx.department.code) }}">{{ ctx.department.name }}</a>
+    <span style="margin: 0 6px;">&rsaquo;</span>
+    <a href="{{ url_for('work.techops_portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">TechOps</a>
+    <span style="margin: 0 6px;">&rsaquo;</span>
+    <span>{{ work_item.public_id }}</span>
+  </nav>
+
+  {# Header #}
+  <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap: wrap; margin-bottom: 16px;">
+    <div>
+      <h1 style="margin:0;">
+        {{ work_item.public_id }}
+        {{ render_status_pill(status, label=friendly_status(status) if friendly_status else status, extra_style="margin-left: 8px; font-weight: normal;") }}
+      </h1>
+      <div class="muted" style="margin-top:4px; line-height:1.5;">
+        TechOps Request &middot;
+        {{ ctx.department.name }} &middot;
+        {{ ctx.event_cycle.name }}
+      </div>
+      <div class="muted" style="margin-top:4px;">
+        Created {{ work_item.created_at.strftime('%Y-%m-%d %H:%M') }}
+        {% if work_item.created_by_user_id %}
+          by {{ work_item.created_by_user_id|user_display }}
+        {% endif %}
+        {% if work_item.submitted_at %}
+          &middot; Submitted {{ work_item.submitted_at.strftime('%Y-%m-%d %H:%M') }}
+          {% if work_item.submitted_by_user_id %}
+            by {{ work_item.submitted_by_user_id|user_display }}
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+
+    <div style="text-align:right;">
+      <div class="muted small">Lines</div>
+      <div style="font-size: 24px; font-weight:700;">{{ lines|length }}</div>
+    </div>
+  </div>
+
+  {{ render_checkout_banner(work_item, perms) }}
+
+  {# Top action bar — three groups separated by a vertical divider:
+     1. Requester actions (Edit / Submit), only on DRAFT.
+     2. Reviewer actions (Start/Finish Reviewing, Review Queue), only
+        once submitted. checkin shows "Force Release" instead of "Finish
+        Reviewing" when an admin is releasing someone else's lock.
+     3. Navigation back to the portfolio.
+     Buttons that don't apply to TechOps (Assign Reviewers, Admin Final
+     Queue) are intentionally omitted — TechOps has uses_dispatch=False
+     and has_admin_final=False, so those workflows don't exist. #}
+  <div class="btn-row mb-16">
+    {% if perms.is_draft and perms.can_edit %}
+      <a class="btn btn-primary" href="{{ url_for('work.techops_request_edit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
+        Edit Draft
+      </a>
+    {% endif %}
+
+    {% if perms.can_submit %}
+      <form method="post" action="{{ url_for('work.techops_request_submit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary" data-confirm="Submit this request for TechOps review?">
+          Submit for TechOps Review
+        </button>
+      </form>
+    {% endif %}
+
+    {# Quick Review surfaces for anyone who can review (admin, current
+       checkout-holder, or anyone eligible to take checkout). It's a
+       read-only view for the latter group; AJAX action buttons only
+       fire when the user has the lock. #}
+    {% if not perms.is_draft and (perms.is_worktype_admin or perms.can_checkout or perms.is_checked_out_by_current_user) %}
+      <a class="btn btn-primary" href="{{ url_for('work.quick_review', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, work_type_slug='techops') }}">
+        Quick Review
+      </a>
+    {% endif %}
+
+    {# Reviewer actions: Start/Finish Reviewing on the request itself
+       (rather than per-line). can_checkout / can_checkin are already
+       worktype-agnostic so they work for TechOps unchanged. #}
+    {% if perms.can_checkout %}
+      <form method="post" action="{{ url_for('work.work_item_checkout', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, work_type_slug='techops') }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="return_to" value="{{ request.url }}">
+        <button type="submit" class="btn btn-primary">
+          Start Reviewing
+        </button>
+      </form>
+    {% endif %}
+
+    {% if perms.can_checkin %}
+      <form method="post" action="{{ url_for('work.work_item_checkin', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, work_type_slug='techops') }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="return_to" value="{{ request.url }}">
+        <button type="submit" class="btn" data-confirm="Finish your review session?">
+          {% if perms.is_checked_out_by_current_user %}
+            Finish Reviewing
+          {% else %}
+            Force Release
+          {% endif %}
+        </button>
+      </form>
+    {% endif %}
+
+    {# Review Queue link for reviewers (admins always; non-admins only
+       while they hold checkout — matches BUDGET's gating). #}
+    {% if not perms.is_draft and (perms.is_worktype_admin or perms.is_checked_out_by_current_user) %}
+      <a class="btn" href="{{ url_for('approvals.dashboard_home') }}">
+        Review Queue
+      </a>
+    {% endif %}
+
+    <span style="border-left: 1px solid #a7f3d0; height: 24px; margin: 0 4px;"></span>
+    <a class="btn" href="{{ url_for('work.techops_portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">
+      &larr; Back to TechOps Portfolio
+    </a>
+  </div>
+
+  {# Primary contact + per-request fields #}
+  {% if request_detail %}
+    <section class="card" style="margin-bottom: 16px;">
+      <div class="muted small" style="text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">
+        Primary Contact
+      </div>
+      <div>
+        <strong>{{ request_detail.primary_contact_name }}</strong>
+        &middot;
+        <a href="mailto:{{ request_detail.primary_contact_email }}">{{ request_detail.primary_contact_email }}</a>
+      </div>
+    </section>
+  {% endif %}
+
+  {# No-services banner — replaces the lines table when the requester
+     declared their department needs nothing. #}
+  {% if request_detail and request_detail.no_services_needed %}
+    <section class="card" style="margin-bottom: 16px; background: #f0fdf4; border-left: 4px solid #059669;">
+      <div style="font-weight: 600; margin-bottom: 4px;">
+        No TechOps services needed
+      </div>
+      <div class="muted small">
+        {{ ctx.department.name }} reported that they do not need any TechOps
+        services for {{ ctx.event_cycle.name }}. TechOps will follow up to
+        verify before this is finalized.
+      </div>
+    </section>
+  {% else %}
+    {# Lines table — TechOps service requests #}
+    <section class="card" style="margin-bottom: 16px;">
+      <div class="muted small" style="text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 12px;">
+        Requested Services
+      </div>
+
+      {# Per-line Review button shows when the item is in an actionable
+         state. The line_review handler does its own permission check, so
+         the button is visible to anyone viewing the page; it's a no-op
+         for users who can't actually decide. #}
+      {% set show_line_actions = status in ("SUBMITTED", "NEEDS_INFO") %}
+      {% if lines %}
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 50px;">#</th>
+              <th style="width: 180px;">Service</th>
+              <th>Details</th>
+              <th style="width: 140px;">Status</th>
+              <th style="width: 140px;">Reviewer</th>
+              {% if show_line_actions %}
+                <th style="width: 80px;"></th>
+              {% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for line in lines %}
+              {% set detail = line.techops_detail %}
+              {% set st = detail.service_type if detail else None %}
+              <tr id="line-{{ line.line_number }}">
+                <td>{{ line.line_number }}</td>
+                <td>
+                  {% if st %}
+                    <strong>{{ st.name }}</strong>
+                    {% if st.code == "PHONE" and detail.config and detail.config.get("external_callable") %}
+                      <div class="muted small">External-callable</div>
+                    {% endif %}
+                  {% else %}
+                    <span class="muted">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if detail %}
+                    {% if st and st.instance_noun %}
+                      {# Per-instance line: show location + usage with
+                         service-appropriate labels (RADIO_CHANNEL repurposes
+                         the location column for the channel name). #}
+                      {% if st.code == "RADIO_CHANNEL" %}
+                        <div><strong>Channel:</strong> {{ detail.location or '-' }}</div>
+                        <div><strong>Use:</strong> {{ detail.usage or '-' }}</div>
+                      {% else %}
+                        <div><strong>Location:</strong> {{ detail.location or '-' }}</div>
+                        <div><strong>Usage:</strong> {{ detail.usage or '-' }}</div>
+                      {% endif %}
+                    {% elif detail.description %}
+                      {{ detail.description }}
+                    {% else %}
+                      <span class="muted">-</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="muted">-</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {{ render_status_pill(line.status) }}
+                </td>
+                <td class="muted small">
+                  {% if detail and detail.routed_approval_group %}
+                    {{ detail.routed_approval_group.name }}
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+                {% if show_line_actions %}
+                  <td>
+                    <a class="btn btn-muted" href="{{ url_for('approvals.line_review', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number, work_type_slug='techops') }}" style="padding: 4px 8px; font-size: 12px;">
+                      Review
+                    </a>
+                  </td>
+                {% endif %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="muted" style="text-align: center; padding: 16px;">
+          No services on this request yet.
+          {% if perms.is_draft and perms.can_edit %}
+            <a href="{{ url_for('work.techops_request_edit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">Edit the draft</a>
+            to add some.
+          {% endif %}
+        </div>
+      {% endif %}
+    </section>
+  {% endif %}
+
+  {# Additional notes #}
+  {% if request_detail and request_detail.additional_notes %}
+    <section class="card" style="margin-bottom: 16px;">
+      <div class="muted small" style="text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">
+        Additional Notes
+      </div>
+      <div style="white-space: pre-wrap;">{{ request_detail.additional_notes }}</div>
+    </section>
+  {% endif %}
+
+  {# Comments #}
+  <section class="card" style="margin-bottom: 16px;">
+    {{ render_comments(filtered_comments, work_item, ctx, perms, can_add_comment) }}
+  </section>
+
+  {# Audit log (admins only) #}
+  {% if can_view_audit %}
+    <section class="card" style="margin-bottom: 16px;">
+      {{ render_audit_log(audit_events, csp_nonce) }}
+    </section>
+  {% endif %}
+
+{% endblock %}

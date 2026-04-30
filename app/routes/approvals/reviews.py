@@ -23,10 +23,14 @@ from app.models import (
     COMMENT_VISIBILITY_PUBLIC,
     COMMENT_VISIBILITY_ADMIN,
 )
+from app.line_details import (
+    get_line_amount_cents,
+    get_line_detail,
+    get_line_routing_approval_group,
+)
 from app.routes import get_user_ctx
 from app.routes.work.helpers import (
     get_portfolio_context,
-    require_budget_work_type,
     require_work_item_view,
     build_work_item_perms,
     format_currency,
@@ -59,10 +63,14 @@ def get_work_item_and_line(event: str, dept: str, public_id: str, line_num: int,
     """
     Get work item and line, validating they exist and belong together.
 
+    Polymorphic across worktypes — every line detail relationship is
+    eager-loaded so callers can use get_line_detail() without N+1, and
+    the worktype guard lives in the per-action handler (e.g. line_adjust
+    is BUDGET-only, line_review is polymorphic).
+
     Returns tuple of (work_item, line, ctx).
     """
     ctx = get_portfolio_context(event, dept, work_type_slug)
-    require_budget_work_type(ctx)
 
     work_item = WorkItem.query.filter_by(
         public_id=public_id,
@@ -75,12 +83,14 @@ def get_work_item_and_line(event: str, dept: str, public_id: str, line_num: int,
     if not work_item:
         abort(404, f"Work item not found: {public_id}")
 
-    # Eager load budget_detail (with related lookups), comments, and audit events
     line = WorkLine.query.filter_by(
         work_item_id=work_item.id,
         line_number=line_num,
     ).options(
         joinedload(WorkLine.budget_detail),
+        joinedload(WorkLine.contract_detail),
+        joinedload(WorkLine.supply_detail),
+        joinedload(WorkLine.techops_detail),
         selectinload(WorkLine.comments),
         selectinload(WorkLine.audit_events),
     ).first()
@@ -108,9 +118,11 @@ def line_review(event: str, dept: str, public_id: str, line_num: int, work_type_
     perms = require_work_item_view(work_item, ctx)
 
     # Check if user can access this specific line (approval group filtering)
-    # Check view permission for non-admins
+    # Polymorphic: get_line_routing_approval_group dispatches by detail type,
+    # so this works for BUDGET / TECHOPS / future worktypes alike.
     if not user_ctx.is_super_admin:
-        routed_group_id = line.budget_detail.routed_approval_group_id if line.budget_detail else None
+        routed_group = get_line_routing_approval_group(line)
+        routed_group_id = routed_group.id if routed_group else None
         is_in_routed_group = routed_group_id and routed_group_id in user_ctx.approval_group_ids
         is_requester = can_respond_to_work_item(work_item, ctx, user_ctx)
 
@@ -133,9 +145,11 @@ def line_review(event: str, dept: str, public_id: str, line_num: int, work_type_
         can_respond_to_work_item(work_item, ctx, user_ctx)
     )
 
-    # Get line details
-    detail = line.budget_detail
-    line_total = detail.unit_price_cents * int(detail.quantity) if detail else 0
+    # Polymorphic line detail + total. For non-monetary worktypes
+    # (TECHOPS) get_line_amount_cents returns 0, which the templates
+    # that don't render an amount column simply ignore.
+    detail = get_line_detail(line)
+    line_total = get_line_amount_cents(line)
 
     # Get comments for this line (filter admin-only for non-admins)
     comments = line.comments
@@ -145,15 +159,21 @@ def line_review(event: str, dept: str, public_id: str, line_num: int, work_type_
     # Get audit events for this line
     audit_events = line.audit_events
 
-    # For admins, also get admin final review info
+    # Admin Final review tab is BUDGET-only — non-BUDGET worktypes have
+    # has_admin_final=False, so don't bother loading those review rows.
     admin_review = None
     ag_review = None
-    if user_ctx.is_super_admin:
+    if user_ctx.is_super_admin and work_type_slug == "budget":
         admin_review = get_admin_final_review(line)
         ag_review = get_approval_group_review(line)
 
+    # Pick the per-worktype template. Each work_type/ directory owns its
+    # own line_review.html (BUDGET has the multi-stage admin-final UI,
+    # TECHOPS has a simpler service-shaped form, etc.).
+    template_name = f"{work_type_slug}/line_review.html"
+
     return render_template(
-        "budget/line_review.html",
+        template_name,
         ctx=ctx,
         perms=perms,
         user_ctx=user_ctx,
@@ -171,7 +191,7 @@ def line_review(event: str, dept: str, public_id: str, line_num: int, work_type_
         is_checked_out=is_checked_out(work_item),
         format_currency=format_currency,
         friendly_status=friendly_status,
-        # Admin extras
+        # Admin extras (None for non-BUDGET worktypes)
         admin_review=admin_review,
         ag_review=ag_review,
     )
@@ -318,7 +338,8 @@ def _handle_review_action(event: str, dept: str, public_id: str, line_num: int, 
         event=event,
         dept=dept,
         public_id=public_id,
-        line_num=line_num
+        line_num=line_num,
+        work_type_slug=work_type_slug,
     ))
 
 
@@ -344,7 +365,8 @@ def line_respond(event: str, dept: str, public_id: str, line_num: int, work_type
             event=event,
             dept=dept,
             public_id=public_id,
-            line_num=line_num
+            line_num=line_num,
+            work_type_slug=work_type_slug,
         ))
 
     # Validate that line needs requester action
@@ -355,7 +377,8 @@ def line_respond(event: str, dept: str, public_id: str, line_num: int, work_type
             event=event,
             dept=dept,
             public_id=public_id,
-            line_num=line_num
+            line_num=line_num,
+            work_type_slug=work_type_slug,
         ))
 
     # Get response text
@@ -367,7 +390,8 @@ def line_respond(event: str, dept: str, public_id: str, line_num: int, work_type
             event=event,
             dept=dept,
             public_id=public_id,
-            line_num=line_num
+            line_num=line_num,
+            work_type_slug=work_type_slug,
         ))
 
     # Apply the response
@@ -419,7 +443,8 @@ def line_respond(event: str, dept: str, public_id: str, line_num: int, work_type
         event=event,
         dept=dept,
         public_id=public_id,
-        line_num=line_num
+        line_num=line_num,
+        work_type_slug=work_type_slug,
     ))
 
 
@@ -428,11 +453,35 @@ def line_respond(event: str, dept: str, public_id: str, line_num: int, work_type
 def line_adjust(event: str, dept: str, public_id: str, line_num: int, work_type_slug: str = "budget"):
     """
     Requester adjusts line details and responds to NEEDS_ADJUSTMENT.
+
+    BUDGET-only — the form fields it edits (quantity, unit_price,
+    description) are budget_detail-shaped. Other worktypes that need a
+    similar requester-edits-line flow get their own per-worktype
+    handler; for now they should use NEEDS_INFO + line_respond instead.
     """
     from decimal import Decimal, InvalidOperation
 
     user_ctx = get_user_ctx()
     work_item, line, ctx = get_work_item_and_line(event, dept, public_id, line_num, work_type_slug)
+
+    # Hard guard: this handler manipulates budget_detail directly. The
+    # TechOps line_review template hides the NEEDS_ADJUSTMENT button so
+    # this path shouldn't be reachable, but if a reviewer somehow
+    # triggers it anyway, fail clearly rather than corrupting the line.
+    if not line.budget_detail:
+        flash(
+            "Adjustment is not supported for this work type. "
+            "Use 'Need Info' for a text-only response instead.",
+            "error",
+        )
+        return redirect(url_for(
+            "approvals.line_review",
+            event=event,
+            dept=dept,
+            public_id=public_id,
+            line_num=line_num,
+            work_type_slug=work_type_slug,
+        ))
 
     # Get review
     review = get_review_for_line(line)
@@ -443,7 +492,8 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int, work_type_
             event=event,
             dept=dept,
             public_id=public_id,
-            line_num=line_num
+            line_num=line_num,
+            work_type_slug=work_type_slug,
         ))
 
     # Validate that line is in NEEDS_ADJUSTMENT status
@@ -454,7 +504,8 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int, work_type_
             event=event,
             dept=dept,
             public_id=public_id,
-            line_num=line_num
+            line_num=line_num,
+            work_type_slug=work_type_slug,
         ))
 
     # Validate user can respond
@@ -465,7 +516,8 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int, work_type_
             event=event,
             dept=dept,
             public_id=public_id,
-            line_num=line_num
+            line_num=line_num,
+            work_type_slug=work_type_slug,
         ))
 
     # Get form data
@@ -477,7 +529,8 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int, work_type_
             event=event,
             dept=dept,
             public_id=public_id,
-            line_num=line_num
+            line_num=line_num,
+            work_type_slug=work_type_slug,
         ))
 
     # Parse and validate line detail changes
@@ -489,7 +542,8 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int, work_type_
             event=event,
             dept=dept,
             public_id=public_id,
-            line_num=line_num
+            line_num=line_num,
+            work_type_slug=work_type_slug,
         ))
 
     # Track what changed for the comment
@@ -514,7 +568,8 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int, work_type_
                     event=event,
                     dept=dept,
                     public_id=public_id,
-                    line_num=line_num
+                    line_num=line_num,
+                    work_type_slug=work_type_slug,
                 ))
             if new_qty != detail.quantity:
                 changes.append(f"Quantity: {detail.quantity} → {new_qty}")
@@ -527,7 +582,8 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int, work_type_
                 event=event,
                 dept=dept,
                 public_id=public_id,
-                line_num=line_num
+                line_num=line_num,
+                work_type_slug=work_type_slug,
             ))
 
     # Unit price
@@ -548,7 +604,8 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int, work_type_
                 event=event,
                 dept=dept,
                 public_id=public_id,
-                line_num=line_num
+                line_num=line_num,
+                work_type_slug=work_type_slug,
             ))
 
     # Description
@@ -617,7 +674,8 @@ def line_adjust(event: str, dept: str, public_id: str, line_num: int, work_type_
         event=event,
         dept=dept,
         public_id=public_id,
-        line_num=line_num
+        line_num=line_num,
+        work_type_slug=work_type_slug,
     ))
 
 
@@ -636,13 +694,13 @@ def line_comment(event: str, dept: str, public_id: str, line_num: int, work_type
     if not is_reviewer_for_line(line, user_ctx):
         flash("You do not have permission to comment on this line.", "error")
         return redirect(url_for("approvals.line_review", event=event, dept=dept,
-                                public_id=public_id, line_num=line_num))
+                                public_id=public_id, line_num=line_num, work_type_slug=work_type_slug))
 
     comment_text = (request.form.get("comment") or "").strip()
     if not comment_text:
         flash("Comment text is required.", "error")
         return redirect(url_for("approvals.line_review", event=event, dept=dept,
-                                public_id=public_id, line_num=line_num))
+                                public_id=public_id, line_num=line_num, work_type_slug=work_type_slug))
 
     visibility = get_comment_visibility(request.form, user_ctx.is_super_admin)
     comment = WorkLineComment(
@@ -656,4 +714,4 @@ def line_comment(event: str, dept: str, public_id: str, line_num: int, work_type
 
     flash("Comment added.", "success")
     return redirect(url_for("approvals.line_review", event=event, dept=dept,
-                            public_id=public_id, line_num=line_num))
+                            public_id=public_id, line_num=line_num, work_type_slug=work_type_slug))

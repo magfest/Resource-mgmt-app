@@ -1,5 +1,6 @@
 {# templates/budget/line_review.html #}
 {% extends "layout/base.html" %}
+{% from "macros/status_pill.html" import render_status_pill %}
 
 {% block title %}Line {{ line.line_number }} Review - {{ work_item.public_id }}{% endblock %}
 
@@ -9,31 +10,21 @@
   {% set status_label = friendly_status(status) if friendly_status else status %}
   {% set ag_status = review.status | upper if review else 'PENDING' %}
   {% set review_stage = line.current_review_stage | upper if line.current_review_stage else '' %}
-  {% set status_pill_class =
-    "pill-approved" if status == "APPROVED"
-    else "pill-needs" if status in ["NEEDS_INFO", "NEEDS_ADJUSTMENT"]
-    else "tag-kicked" if status == "REJECTED"
-    else "pill-draft" %}
 
   {# Header #}
   <div style="display:flex; justify-content:space-between; gap:16px; align-items:flex-start; flex-wrap: wrap; margin-bottom: 16px;">
     <div>
       <h1 style="margin:0;">
         Line {{ line.line_number }}
-        {% if status == "APPROVED" %}
-          {% if review_stage == "ADMIN_FINAL" %}
-            <span class="pill {{ status_pill_class }}" style="margin-left: 8px; font-weight: normal;">APPROVED</span>
-          {% else %}
-            <span class="pill" style="margin-left: 8px; font-weight: normal; background: #dbeafe; color: #1e40af;">REVIEWER RECOMMENDED</span>
-          {% endif %}
-        {% elif status == "REJECTED" %}
-          {% if review_stage == "ADMIN_FINAL" %}
-            <span class="pill {{ status_pill_class }}" style="margin-left: 8px; font-weight: normal;">REJECTED</span>
-          {% else %}
-            <span class="pill" style="margin-left: 8px; font-weight: normal; background: #fee2e2; color: #991b1b;">REVIEWER REJECTED</span>
-          {% endif %}
+        {# Two-stage labels: terminal decisions render via the shared
+           macro for vivid colors; AG-stage decisions keep their custom
+           blue/red so reviewers see "this is just a recommendation". #}
+        {% if status == "APPROVED" and review_stage != "ADMIN_FINAL" %}
+          <span class="pill" style="margin-left: 8px; font-weight: normal; background: #dbeafe; color: #1e40af;">REVIEWER RECOMMENDED</span>
+        {% elif status == "REJECTED" and review_stage != "ADMIN_FINAL" %}
+          <span class="pill" style="margin-left: 8px; font-weight: normal; background: #fee2e2; color: #991b1b;">REVIEWER REJECTED</span>
         {% else %}
-          <span class="pill {{ status_pill_class }}" style="margin-left: 8px; font-weight: normal;">{{ status }}</span>
+          {{ render_status_pill(status, label=status, extra_style="margin-left: 8px; font-weight: normal;") }}
         {% endif %}
       </h1>
       <div class="muted" style="margin-top:4px; line-height:1.5;">

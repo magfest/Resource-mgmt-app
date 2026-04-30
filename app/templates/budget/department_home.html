@@ -69,7 +69,11 @@
         {% endif %}
       </div>
 
-      {% if card.totals %}
+      {# Monetary block only renders for worktypes that track $ amounts.
+         TECHOPS has no per-line cost so the $0 / $0 display was confusing
+         and meaningless. Future non-monetary worktypes (e.g. AV) should
+         be added here, or this block should consult a config flag. #}
+      {% if card.totals and card.url_slug != 'techops' %}
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
           <div>
             <div class="muted small">Requested</div>
@@ -106,7 +110,14 @@
       {% endif %}
 
       <div style="display: flex; gap: 8px;">
-        {# Build the correct URL based on work type slug #}
+        {# Build the correct URL based on work type slug. Each worktype
+           with a real UI has a literal-segment portfolio route; the
+           else-branch leaves card_url unset so we render a "Coming
+           soon" placeholder instead of a deceptive button that
+           silently navigates back to the current page. New worktypes
+           must add an explicit branch here before they can be
+           activated end-to-end. #}
+        {% set card_url = none %}
         {% set url_slug = card.url_slug %}
         {% if url_slug == 'budget' %}
           {# Skip portfolio page and go straight to create confirmation if no primary exists #}
@@ -115,21 +126,27 @@
           {% else %}
             {% set card_url = url_for('work.portfolio_landing', event=event_cycle.code, dept=department.code, work_type_slug=url_slug) %}
           {% endif %}
+        {% elif url_slug == 'techops' %}
+          {# TechOps doesn't have a primary/supplemental distinction —
+             the portfolio landing handles both create and list. #}
+          {% set card_url = url_for('work.techops_portfolio_landing', event=event_cycle.code, dept=department.code) %}
         {% elif url_slug == 'contracts' %}
           {% set card_url = url_for('work.contracts_placeholder', event=event_cycle.code, dept=department.code) %}
         {% elif url_slug == 'supply' %}
           {% set card_url = url_for('work.supply_placeholder', event=event_cycle.code, dept=department.code) %}
-        {% else %}
-          {% set card_url = url_for('work.department_home', event=event_cycle.code, dept=department.code) %}
         {% endif %}
 
-        <a class="btn btn-primary" href="{{ card_url }}">
-          {% if card.can_edit and not card.primary_item %}
-            Start {{ card.singular_name }}
-          {% else %}
-            Open {{ card.singular_name }}
-          {% endif %}
-        </a>
+        {% if card_url %}
+          <a class="btn btn-primary" href="{{ card_url }}">
+            {% if card.can_edit and not card.primary_item %}
+              Start {{ card.singular_name }}
+            {% else %}
+              Open {{ card.singular_name }}
+            {% endif %}
+          </a>
+        {% else %}
+          <span class="muted small" style="font-style: italic;">Coming soon</span>
+        {% endif %}
       </div>
 
       <div class="muted small" style="margin-top: 12px;">

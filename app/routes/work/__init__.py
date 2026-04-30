@@ -14,3 +14,4 @@ from . import division
 from . import portfolio
 from . import work_items
 from . import lines
+from . import techops

@@ -6,19 +6,33 @@
 
 {# All rows in a single approval group's queue belong to the same worktype
    (approval groups are scoped to a worktype after E3). Pull the code from
-   the first item to drive per-worktype column rendering. #}
+   the first item to drive per-worktype column rendering.
+
+   - BUDGET shows Expense Account + Description + Amount.
+   - TECHOPS shows Service + Details (location/usage or description); no
+     Amount column because TechOps lines have no monetary cost.
+   - Other worktypes (CONTRACT, SUPPLY) fall through to a generic shape. #}
 {% set work_type_code = items[0].work_item.portfolio.work_type.code if items else "BUDGET" %}
+{% set is_budget = work_type_code == "BUDGET" %}
+{% set is_techops = work_type_code == "TECHOPS" %}
 
 <table>
   <thead>
     <tr>
       <th style="width: 110px;">Request</th>
       <th style="width: 80px;">Line #</th>
-      {% if work_type_code == "BUDGET" %}
+      {% if is_budget %}
         <th>Expense Account</th>
+        <th>Description</th>
+      {% elif is_techops %}
+        <th style="width: 180px;">Service</th>
+        <th>Details</th>
+      {% else %}
+        <th>Description</th>
       {% endif %}
-      <th>Description</th>
-      <th style="width: 100px;" class="right">Amount</th>
+      {% if is_budget %}
+        <th style="width: 100px;" class="right">Amount</th>
+      {% endif %}
       {% if show_status %}
         <th style="width: 110px;">Status</th>
       {% endif %}
@@ -49,7 +63,7 @@
           <div class="muted small">{{ portfolio.department.name if portfolio else '-' }}</div>
         </td>
         <td>{{ line.line_number }}</td>
-        {% if work_type_code == "BUDGET" %}
+        {% if is_budget %}
           <td>
             {% if detail and detail.expense_account %}
               <strong>{{ detail.expense_account.name }}</strong>
@@ -60,15 +74,56 @@
               <span class="muted">-</span>
             {% endif %}
           </td>
+          <td>
+            {% if detail and detail.description %}
+              {{ detail.description[:80] }}{% if detail.description|length > 80 %}...{% endif %}
+            {% else %}
+              <span class="muted">-</span>
+            {% endif %}
+          </td>
+        {% elif is_techops %}
+          {% set st = detail.service_type if detail else None %}
+          <td>
+            {% if st %}
+              <strong>{{ st.name }}</strong>
+              {% if st.code == "PHONE" and detail.config and detail.config.get("external_callable") %}
+                <div class="muted small">External-callable</div>
+              {% endif %}
+            {% else %}
+              <span class="muted">-</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if detail and st and st.instance_noun %}
+              {# Per-instance line: show location + usage with service-
+                 appropriate labels (RADIO_CHANNEL repurposes location for
+                 channel name). Truncate usage to keep the table readable;
+                 reviewers click through for full text. #}
+              {% if st.code == "RADIO_CHANNEL" %}
+                <div><strong>Channel:</strong> {{ detail.location or '-' }}</div>
+                <div class="muted small">{{ (detail.usage or '-')[:80] }}{% if detail.usage and detail.usage|length > 80 %}...{% endif %}</div>
+              {% else %}
+                <div><strong>{{ detail.location or '-' }}</strong></div>
+                <div class="muted small">{{ (detail.usage or '-')[:80] }}{% if detail.usage and detail.usage|length > 80 %}...{% endif %}</div>
+              {% endif %}
+            {% elif detail and detail.description %}
+              {{ detail.description[:80] }}{% if detail.description|length > 80 %}...{% endif %}
+            {% else %}
+              <span class="muted">-</span>
+            {% endif %}
+          </td>
+        {% else %}
+          <td>
+            {% if detail and detail.description %}
+              {{ detail.description[:80] }}{% if detail.description|length > 80 %}...{% endif %}
+            {% else %}
+              <span class="muted">-</span>
+            {% endif %}
+          </td>
         {% endif %}
-        <td>
-          {% if detail and detail.description %}
-            {{ detail.description[:80] }}{% if detail.description|length > 80 %}...{% endif %}
-          {% else %}
-            <span class="muted">-</span>
-          {% endif %}
-        </td>
-        <td class="right num">{{ format_currency(item.line_total_cents) }}</td>
+        {% if is_budget %}
+          <td class="right num">{{ format_currency(item.line_total_cents) }}</td>
+        {% endif %}
         {% if show_status %}
           <td>
             {% set status = review.status | upper %}

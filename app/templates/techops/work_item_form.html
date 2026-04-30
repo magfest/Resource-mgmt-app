@@ -1,0 +1,490 @@
+{# templates/techops/work_item_form.html #}
+{% extends "layout/base.html" %}
+
+{# Editing an existing draft when work_item is set; creating a new
+   request otherwise. existing_lines_by_code is {service_code: [row, ...]}:
+   single-line services have a single-element list with {description},
+   per-instance services have one entry per existing line with
+   {location, usage, config}. #}
+{% set is_edit = work_item is not none %}
+{% set form_action = url_for('work.techops_request_update', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) if is_edit else url_for('work.techops_request_create', event=ctx.event_cycle.code, dept=ctx.department.code) %}
+
+{% block title %}{% if is_edit %}Edit {{ work_item.public_id }}{% else %}New TechOps Request{% endif %} - {{ ctx.department.name }}{% endblock %}
+
+{% block content %}
+
+  {# Breadcrumb #}
+  <nav class="muted small" style="margin-bottom: 12px;">
+    <a href="{{ url_for('home.index') }}">Home</a>
+    <span style="margin: 0 6px;">&rsaquo;</span>
+    <a href="{{ url_for('work.department_home', event=ctx.event_cycle.code, dept=ctx.department.code) }}">{{ ctx.department.name }}</a>
+    <span style="margin: 0 6px;">&rsaquo;</span>
+    <a href="{{ url_for('work.techops_portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">TechOps</a>
+    <span style="margin: 0 6px;">&rsaquo;</span>
+    {% if is_edit %}
+      <a href="{{ url_for('work.techops_work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">{{ work_item.public_id }}</a>
+      <span style="margin: 0 6px;">&rsaquo;</span>
+      <span>Edit</span>
+    {% else %}
+      <span>New Request</span>
+    {% endif %}
+  </nav>
+
+  {# Header #}
+  <div style="margin-bottom: 16px;">
+    <h1 style="margin: 0;">
+      {% if is_edit %}Edit Draft &middot; {{ work_item.public_id }}{% else %}New TechOps Request{% endif %}
+    </h1>
+    <div class="muted" style="margin-top: 4px;">
+      Tell TechOps what network, phone, radio, or other services your department
+      needs for this event. Skip sections you don't need.
+    </div>
+  </div>
+
+  <form method="post" action="{{ form_action }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {# ─────────────────────────────────────────────────────── #}
+    {# Section 1: Primary Contact                              #}
+    {# ─────────────────────────────────────────────────────── #}
+    <section class="card" style="margin-bottom: 16px;">
+      <div class="muted small" style="text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">
+        1 &middot; Primary Contact
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label for="primary_contact_name" style="display: block; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
+          Name <span style="color: #b00;">*</span>
+        </label>
+        <input
+          type="text"
+          id="primary_contact_name"
+          name="primary_contact_name"
+          maxlength="256"
+          required
+          value="{{ default_contact_name }}"
+          style="width: 100%; max-width: 420px;">
+      </div>
+
+      <div style="margin-bottom: 8px;">
+        <label for="primary_contact_email" style="display: block; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
+          Email <span style="color: #b00;">*</span>
+        </label>
+        <input
+          type="email"
+          id="primary_contact_email"
+          name="primary_contact_email"
+          maxlength="256"
+          required
+          value="{{ default_contact_email }}"
+          style="width: 100%; max-width: 420px;">
+      </div>
+
+      <div class="muted small" style="margin-top: 8px;">
+        Defaults to your account info. Change this if a different team member should
+        answer questions about this specific request — for example, a department head
+        submitted it but a tech lead is the right point of contact for clarifications.
+      </div>
+    </section>
+
+    {# ─────────────────────────────────────────────────────── #}
+    {# Section 2: Services                                     #}
+    {# ─────────────────────────────────────────────────────── #}
+    <section class="card" style="margin-bottom: 16px;">
+      <div class="muted small" style="text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">
+        2 &middot; Services
+      </div>
+      <div class="muted small" style="margin-bottom: 16px;">
+        Check each service your department needs. For ethernet drops, phones,
+        and radio channels, add one entry per instance — each one has its own
+        location and use case so TechOps can plan and load it in.
+      </div>
+
+      {% for st in service_types %}
+        {% set existing_rows = existing_lines_by_code.get(st.code, []) %}
+        {% set is_per_instance = st.instance_noun is not none %}
+        <div class="techops-service-section"
+             data-service-section="{{ st.code }}"
+             {% if is_per_instance %}data-instance-mode="1" data-instance-noun="{{ st.instance_noun }}"{% endif %}
+             style="padding: 12px 0; border-bottom: 1px solid #eee;">
+          <label style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer; font-weight: 600;">
+            <input
+              type="checkbox"
+              name="service_{{ st.code }}_enabled"
+              value="1"
+              data-service-toggle
+              {% if existing_rows %}checked{% endif %}
+              style="margin-top: 3px;">
+            <span>{{ st.name }}</span>
+          </label>
+
+          {% if st.description %}
+            <div class="muted small" style="margin: 4px 0 8px 24px;">
+              {{ st.description }}
+            </div>
+          {% endif %}
+
+          <div class="techops-service-fields" style="margin-left: 24px; margin-top: 8px;">
+
+          {% if is_per_instance %}
+            {# Per-instance service (ETHERNET / PHONE / RADIO_CHANNEL).
+               Renders one row per existing instance (or one empty row when
+               creating a new request). The "Add another" button below
+               clones the hidden template element to extend the list. #}
+
+            {# Field labels overload by service type: RADIO_CHANNEL reuses
+               the location column for "Channel name", and the usage column
+               for "What's this channel for". ETHERNET and PHONE use them
+               literally. #}
+            {% if st.code == "RADIO_CHANNEL" %}
+              {% set field_a_label = "Channel name (preferred or assigned)" %}
+              {% set field_a_placeholder = "e.g. Tech-1, Logistics" %}
+              {% set field_b_label = "What is this channel for?" %}
+              {% set field_b_placeholder = "Who uses it, what kind of traffic, etc." %}
+            {% else %}
+              {% set field_a_label = "Location" %}
+              {% set field_a_placeholder = "Where this " ~ st.instance_noun ~ " needs to go" %}
+              {% set field_b_label = "Usage" %}
+              {% set field_b_placeholder = "What this " ~ st.instance_noun ~ " is for, who uses it, special needs" %}
+            {% endif %}
+
+            {% set rows_to_render = existing_rows if existing_rows else [{}] %}
+            {% set next_index = rows_to_render|length + 1 %}
+
+            <div class="techops-instances"
+                 data-instances-container
+                 data-service-code="{{ st.code }}"
+                 data-next-index="{{ next_index }}">
+              {% for inst in rows_to_render %}
+                {% set idx = loop.index %}
+                <div class="techops-instance-row" data-instance-row data-instance-idx="{{ idx }}">
+                  <div class="techops-instance-header">
+                    {{ st.instance_noun|capitalize }} {{ idx }}
+                  </div>
+                  <div style="margin-bottom: 8px;">
+                    <label style="display: block; font-size: 13px; margin-bottom: 4px;">
+                      {{ field_a_label }}
+                      <span class="muted small techops-required-marker" style="display: none;">(required)</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="service_{{ st.code }}_instance_{{ idx }}_location"
+                      data-service-input
+                      data-service-required
+                      placeholder="{{ field_a_placeholder }}"
+                      value="{{ inst.get('location', '') }}"
+                      style="width: 100%; max-width: 480px;">
+                  </div>
+                  <div style="margin-bottom: 8px;">
+                    <label style="display: block; font-size: 13px; margin-bottom: 4px;">
+                      {{ field_b_label }}
+                      <span class="muted small techops-required-marker" style="display: none;">(required)</span>
+                    </label>
+                    <textarea
+                      name="service_{{ st.code }}_instance_{{ idx }}_usage"
+                      rows="2"
+                      data-service-input
+                      data-service-required
+                      placeholder="{{ field_b_placeholder }}"
+                      style="width: 100%; max-width: 600px;">{{ inst.get('usage', '') }}</textarea>
+                  </div>
+                  {% if st.code == "PHONE" %}
+                    <div>
+                      <label style="display: flex; gap: 6px; align-items: center; font-size: 13px;">
+                        <input
+                          type="checkbox"
+                          name="service_PHONE_instance_{{ idx }}_external_callable"
+                          value="1"
+                          data-service-input
+                          {% if inst.get('config') and inst.get('config').get('external_callable') %}checked{% endif %}>
+                        This phone needs to be externally callable (not just internal)
+                      </label>
+                    </div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+
+            <button
+              type="button"
+              class="btn btn-muted techops-add-instance"
+              data-add-instance="{{ st.code }}"
+              data-service-input
+              style="margin-top: 4px;">
+              + Add another {{ st.instance_noun }}
+            </button>
+
+            {# Hidden template row used by the "Add another" JS. The
+               __IDX__ tokens are replaced with the next available index
+               at clone time. The element is inert until cloned thanks to
+               the HTML5 <template> element semantics. #}
+            <template data-instance-template="{{ st.code }}">
+              <div class="techops-instance-row" data-instance-row data-instance-idx="__IDX__">
+                <div class="techops-instance-header">
+                  {{ st.instance_noun|capitalize }} __IDX__
+                </div>
+                <div style="margin-bottom: 8px;">
+                  <label style="display: block; font-size: 13px; margin-bottom: 4px;">
+                    {{ field_a_label }}
+                    <span class="muted small techops-required-marker" style="display: none;">(required)</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="service_{{ st.code }}_instance___IDX___location"
+                    data-service-input
+                    data-service-required
+                    placeholder="{{ field_a_placeholder }}"
+                    style="width: 100%; max-width: 480px;">
+                </div>
+                <div style="margin-bottom: 8px;">
+                  <label style="display: block; font-size: 13px; margin-bottom: 4px;">
+                    {{ field_b_label }}
+                    <span class="muted small techops-required-marker" style="display: none;">(required)</span>
+                  </label>
+                  <textarea
+                    name="service_{{ st.code }}_instance___IDX___usage"
+                    rows="2"
+                    data-service-input
+                    data-service-required
+                    placeholder="{{ field_b_placeholder }}"
+                    style="width: 100%; max-width: 600px;"></textarea>
+                </div>
+                {% if st.code == "PHONE" %}
+                  <div>
+                    <label style="display: flex; gap: 6px; align-items: center; font-size: 13px;">
+                      <input
+                        type="checkbox"
+                        name="service_PHONE_instance___IDX___external_callable"
+                        value="1"
+                        data-service-input>
+                      This phone needs to be externally callable (not just internal)
+                    </label>
+                  </div>
+                {% endif %}
+              </div>
+            </template>
+
+          {% else %}
+            {# Single-line service (WIFI / OTHER). One description box. #}
+            {% set existing = existing_rows[0] if existing_rows else None %}
+            <label for="service_{{ st.code }}_description"
+                   style="display: block; font-size: 13px; margin-bottom: 4px;">
+              What do you need?
+              <span class="muted small techops-required-marker" style="display: none;">(required)</span>
+            </label>
+            <textarea
+              id="service_{{ st.code }}_description"
+              name="service_{{ st.code }}_description"
+              rows="3"
+              data-service-input
+              data-service-required
+              placeholder="Describe the use case, location, or what this is for."
+              style="width: 100%; max-width: 600px;">{{ existing.description if existing else '' }}</textarea>
+          {% endif %}
+
+          </div>
+        </div>
+      {% endfor %}
+
+      {# "No services needed" warning callout — visually distinct from the
+         service checkboxes above so it reads as a deliberate choice, not as
+         "yet another box to check." #}
+      <div style="margin-top: 24px; padding: 16px; background: #fef3c7; border-left: 4px solid #d97706; border-radius: 4px;">
+        <label style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer;">
+          <input
+            type="checkbox"
+            name="no_services_needed"
+            value="1"
+            id="techops-no-services"
+            {% if request_detail and request_detail.no_services_needed %}checked{% endif %}
+            style="margin-top: 4px;">
+          <span>
+            <strong>My department needs no TechOps services for this event.</strong>
+            <div class="muted small" style="margin-top: 6px;">
+              <strong>Uncommon.</strong> Most departments need at least basic WiFi or
+              radio coverage. Only check this if you've genuinely reviewed every
+              service above and confirmed your department needs none. TechOps
+              will follow up to verify.
+            </div>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    {# ─────────────────────────────────────────────────────── #}
+    {# Section 3: Additional Notes                             #}
+    {# ─────────────────────────────────────────────────────── #}
+    <section class="card" style="margin-bottom: 16px;">
+      <div class="muted small" style="text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">
+        3 &middot; Additional Notes (optional)
+      </div>
+      <div class="muted small" style="margin-bottom: 8px;">
+        Anything else the TechOps team should know? Concerns, questions,
+        why-can't-I-find-X, links to layout diagrams, etc.
+      </div>
+      <textarea
+        id="additional_notes"
+        name="additional_notes"
+        rows="4"
+        placeholder="Optional"
+        style="width: 100%;">{{ request_detail.additional_notes if request_detail and request_detail.additional_notes else '' }}</textarea>
+    </section>
+
+    {# Visual treatment: disabled service sections grey out + per-instance
+       row separators give visual structure to the repeating groups. #}
+    <style>
+      .techops-service-section.is-disabled .techops-service-fields {
+        opacity: 0.45;
+      }
+      .techops-service-section.is-disabled textarea,
+      .techops-service-section.is-disabled input[type="text"],
+      .techops-service-section.is-disabled input[type="number"],
+      .techops-service-section.is-disabled input[type="checkbox"]:not([data-service-toggle]),
+      .techops-service-section.is-disabled button[data-add-instance] {
+        background: #f3f4f6;
+        cursor: not-allowed;
+      }
+      .techops-instance-row {
+        padding: 12px 12px 4px 12px;
+        margin-bottom: 8px;
+        border-left: 3px solid #d1d5db;
+        background: #fafafa;
+        border-radius: 4px;
+      }
+      .techops-instance-header {
+        font-weight: 600;
+        font-size: 13px;
+        color: #374151;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+    </style>
+
+    {# Buttons #}
+    <div class="btn-row" style="margin-top: 16px;">
+      <button type="submit" name="action" value="save_draft" class="btn">
+        Save Draft
+      </button>
+      <button type="submit" name="action" value="submit" class="btn btn-primary">
+        Submit for TechOps Review
+      </button>
+      <a class="btn btn-muted" href="{% if is_edit %}{{ url_for('work.techops_work_item_detail', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}{% else %}{{ url_for('work.techops_portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}{% endif %}">
+        Cancel
+      </a>
+    </div>
+  </form>
+
+  {# Form behavior script.
+     - Disables all data-service-input fields when the section's
+       checkbox is unchecked (prevents typing into a service the user
+       isn't actually requesting).
+     - Toggles HTML5 'required' on every data-service-required field
+       within the section so the browser blocks submit when a checked
+       service has missing required fields.
+     - Mutually excludes the no-services-needed affirmation with any
+       checked service sections.
+     - Per-instance services: clones the hidden <template> on
+       "+ Add another" click, replacing __IDX__ with the next index.
+
+     Runs once on page load to apply correct state to pre-filled drafts. #}
+  <script nonce="{{ csp_nonce }}">
+  (function() {
+    var noServicesCheckbox = document.getElementById('techops-no-services');
+    var sections = document.querySelectorAll('[data-service-section]');
+
+    function applySectionState(section) {
+      var toggle = section.querySelector('[data-service-toggle]');
+      if (!toggle) return;
+      var enabled = toggle.checked;
+
+      section.classList.toggle('is-disabled', !enabled);
+
+      section.querySelectorAll('[data-service-input]').forEach(function(input) {
+        input.disabled = !enabled;
+      });
+
+      section.querySelectorAll('[data-service-required]').forEach(function(field) {
+        if (enabled) {
+          field.setAttribute('required', '');
+        } else {
+          field.removeAttribute('required');
+        }
+      });
+
+      section.querySelectorAll('.techops-required-marker').forEach(function(marker) {
+        marker.style.display = enabled ? '' : 'none';
+      });
+    }
+
+    function applyNoServicesState() {
+      if (!noServicesCheckbox) return;
+      var noServices = noServicesCheckbox.checked;
+      sections.forEach(function(section) {
+        var toggle = section.querySelector('[data-service-toggle]');
+        if (!toggle) return;
+        if (noServices) {
+          toggle.checked = false;
+          toggle.disabled = true;
+        } else {
+          toggle.disabled = false;
+        }
+        applySectionState(section);
+      });
+    }
+
+    function addInstanceRow(section) {
+      var code = section.getAttribute('data-service-section');
+      var container = section.querySelector('[data-instances-container]');
+      var template = section.querySelector('template[data-instance-template="' + code + '"]');
+      if (!container || !template) return;
+
+      var nextIdx = parseInt(container.getAttribute('data-next-index') || '1', 10);
+      // Stringify the template content with __IDX__ swapped for the new
+      // index. innerHTML round-trip is cheaper than walking the DOM and
+      // safe because the source is server-rendered, not user input.
+      var html = template.innerHTML.split('__IDX__').join(String(nextIdx));
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML = html.trim();
+      var newRow = wrapper.firstElementChild;
+      if (!newRow) return;
+
+      container.appendChild(newRow);
+      container.setAttribute('data-next-index', String(nextIdx + 1));
+
+      // Re-apply section state so the new row inherits enabled/required.
+      applySectionState(section);
+    }
+
+    sections.forEach(function(section) {
+      var toggle = section.querySelector('[data-service-toggle]');
+      if (toggle) {
+        toggle.addEventListener('change', function() {
+          applySectionState(section);
+          // If the user checks any service, uncheck the no-services
+          // affirmation so the two cannot coexist on submit.
+          if (toggle.checked && noServicesCheckbox && noServicesCheckbox.checked) {
+            noServicesCheckbox.checked = false;
+            applyNoServicesState();
+          }
+        });
+      }
+
+      var addBtn = section.querySelector('[data-add-instance]');
+      if (addBtn) {
+        addBtn.addEventListener('click', function() {
+          addInstanceRow(section);
+        });
+      }
+
+      applySectionState(section);
+    });
+
+    if (noServicesCheckbox) {
+      noServicesCheckbox.addEventListener('change', applyNoServicesState);
+      applyNoServicesState();
+    }
+  })();
+  </script>
+
+{% endblock %}

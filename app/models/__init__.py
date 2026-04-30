@@ -11,6 +11,7 @@ Module organization:
 - budget.py: SpendType, ExpenseAccount, BudgetLineDetail
 - contract.py: ContractType, ContractLineDetail
 - supply.py: SupplyCategory, SupplyItem, SupplyOrderLineDetail
+- techops.py: TechOpsServiceType, TechOpsLineDetail, TechOpsRequestDetail
 - telemetry.py: ActivityEvent, NotificationLog, SecurityAuditLog, ConfigAuditEvent
 """
 
@@ -163,6 +164,13 @@ from .supply import (
     SupplyOrderLineDetail,
 )
 
+# Re-export techops models
+from .techops import (
+    TechOpsServiceType,
+    TechOpsLineDetail,
+    TechOpsRequestDetail,
+)
+
 # Re-export telemetry models
 from .telemetry import (
     ActivityEvent,
@@ -305,6 +313,10 @@ __all__ = [
     "SupplyCategory",
     "SupplyItem",
     "SupplyOrderLineDetail",
+    # TechOps models
+    "TechOpsServiceType",
+    "TechOpsLineDetail",
+    "TechOpsRequestDetail",
     # Telemetry models
     "ActivityEvent",
     "NotificationLog",

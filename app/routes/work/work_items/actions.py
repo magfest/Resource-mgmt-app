@@ -14,7 +14,6 @@ from app.models import (
     WORK_ITEM_STATUS_SUBMITTED,
     WORK_ITEM_STATUS_NEEDS_INFO,
     COMMENT_VISIBILITY_PUBLIC,
-    AUDIT_EVENT_SUBMIT,
     AUDIT_EVENT_NEEDS_INFO_REQUESTED,
     AUDIT_EVENT_NEEDS_INFO_RESPONDED,
     AUDIT_EVENT_CHECKOUT,
@@ -29,6 +28,7 @@ from ..helpers import (
     checkout_work_item,
     checkin_work_item,
 )
+from ..helpers.lifecycle import submit_work_item
 from .common import get_work_item_by_public_id
 
 
@@ -87,24 +87,10 @@ def work_item_submit(event: str, dept: str, public_id: str, work_type_slug: str 
 
     user_ctx = get_user_ctx()
 
-    # Update work item status to AWAITING_DISPATCH
-    # Approval group assignment and WorkLineReview creation happens during dispatch
-    work_item.status = WORK_ITEM_STATUS_AWAITING_DISPATCH
-    work_item.submitted_at = datetime.utcnow()
-    work_item.submitted_by_user_id = user_ctx.user_id
-
-    # Create audit event for submission
-    totals = compute_work_item_totals(work_item)
-    audit_event = WorkItemAuditEvent(
-        work_item_id=work_item.id,
-        event_type=AUDIT_EVENT_SUBMIT,
-        created_by_user_id=user_ctx.user_id,
-        snapshot={
-            "line_count": len(work_item.lines),
-            "total_requested_cents": totals.get("requested", 0),
-        },
-    )
-    db.session.add(audit_event)
+    # Apply the submit transition. Branches on uses_dispatch:
+    # - True (BUDGET): status → AWAITING_DISPATCH; dispatch creates reviews later.
+    # - False (TECHOPS): routes lines and creates reviews inline; status → SUBMITTED.
+    submit_work_item(work_item, user_ctx)
 
     db.session.commit()
 
@@ -129,7 +115,8 @@ def work_item_submit(event: str, dept: str, public_id: str, work_type_slug: str 
         "work.work_item_detail",
         event=event,
         dept=dept,
-        public_id=public_id
+        public_id=public_id,
+        work_type_slug=work_type_slug,
     ))
 
 
@@ -154,7 +141,8 @@ def work_item_checkout(event: str, dept: str, public_id: str, work_type_slug: st
         "work.work_item_detail",
         event=event,
         dept=dept,
-        public_id=public_id
+        public_id=public_id,
+        work_type_slug=work_type_slug,
     )
 
     if not perms.can_checkout:
@@ -198,7 +186,8 @@ def work_item_checkin(event: str, dept: str, public_id: str, work_type_slug: str
         "work.work_item_detail",
         event=event,
         dept=dept,
-        public_id=public_id
+        public_id=public_id,
+        work_type_slug=work_type_slug,
     )
 
     if not perms.can_checkin:
@@ -300,7 +289,8 @@ def work_item_request_info(event: str, dept: str, public_id: str, work_type_slug
         "work.work_item_detail",
         event=event,
         dept=dept,
-        public_id=public_id
+        public_id=public_id,
+        work_type_slug=work_type_slug,
     ))
 
 
@@ -366,5 +356,6 @@ def work_item_respond_info(event: str, dept: str, public_id: str, work_type_slug
         "work.work_item_detail",
         event=event,
         dept=dept,
-        public_id=public_id
+        public_id=public_id,
+        work_type_slug=work_type_slug,
     ))

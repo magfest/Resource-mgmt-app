@@ -14,6 +14,7 @@ from app.models import (
     COMMENT_VISIBILITY_PUBLIC,
     AUDIT_EVENT_VIEW,
 )
+from app.line_details import get_line_amount_cents, get_line_detail
 from app.routes import get_user_ctx
 from .. import work_bp
 from ..helpers import (
@@ -225,10 +226,13 @@ def quick_review(event: str, dept: str, public_id: str, work_type_slug: str = "b
     summary = {"pending": 0, "approved": 0, "kicked_back": 0, "rejected": 0}
 
     for line in visible_lines:
-        detail = line.budget_detail
+        # Polymorphic detail access — BUDGET lines get budget_detail,
+        # TechOps lines get techops_detail, etc. Templates per worktype
+        # know how to render their own detail shape.
+        detail = get_line_detail(line)
         # Get approval group review from batch-loaded data
         review = reviews_by_line.get(line.id, {}).get('ag')
-        total_cents = detail.unit_price_cents * int(detail.quantity) if detail else 0
+        total_cents = get_line_amount_cents(line)
 
         # Update summary
         status = line.status.upper() if line.status else "PENDING"
@@ -248,8 +252,11 @@ def quick_review(event: str, dept: str, public_id: str, work_type_slug: str = "b
             "total_cents": total_cents,
         })
 
+    # Pick the per-worktype template (same pattern as line_review).
+    template_name = f"{work_type_slug}/quick_review.html"
+
     return render_template(
-        "budget/quick_review.html",
+        template_name,
         ctx=ctx,
         perms=perms,
         user_ctx=user_ctx,

@@ -31,6 +31,7 @@ from app.models import (
     PriorityLevel,
     SpendType,
     SupplyCategory,
+    TechOpsServiceType,
     WorkType,
     WorkTypeConfig,
     SPEND_TYPE_MODE_SINGLE_LOCKED,
@@ -49,44 +50,57 @@ from app.models import (
 
 
 def seed_approval_groups(work_types: dict[str, WorkType]) -> dict[str, ApprovalGroup]:
-    """Seed approval groups. Existing seeded groups all belong to BUDGET."""
+    """Seed approval groups for all worktypes.
+
+    Approval groups are scoped per-worktype (composite unique on
+    (work_type_id, code)). Returned dict is keyed by group code; seed
+    data uses distinct codes across worktypes to keep that flat lookup
+    unambiguous.
+    """
     print("Seeding approval groups...")
 
-    budget_wt = work_types.get("BUDGET")
-    if budget_wt is None:
-        raise RuntimeError("BUDGET work type must be seeded before approval groups")
+    groups_by_worktype = {
+        "BUDGET": [
+            ("LOGISTICS", "Logistics / Warehouse", "Items that should be reviewed by the logistics or warehouse teams", 10),
+            ("OFFICE", "Org Ops", "Items that need to be reviewed by the office or other organization leadership", 20),
+            ("GEN", "General", "General items that normally do not need custom reviews or approval", 30),
+            ("GUEST", "Guest / Booking", "Guest and booking related items", 40),
+            ("TECH", "FestOps - Tech", "Reviews technical equipment, rentals, and tech-related expenses", 50),
+            ("HOTEL", "Hotels Team", "Reviews hotel rooms, venue fees, and hotel-related expenses", 60),
+            ("OTHER_SPECIAL", "Other Specialty", "Reviews general expenses and admin items", 70),
+        ],
+        "TECHOPS": [
+            ("TECHOPS_NET", "TechOps Networking", "Reviews network and phone services (WiFi, ethernet, bandwidth, phone lines)", 10),
+            ("TECHOPS_GEN", "TechOps Generic", "Reviews dedicated radio channels, consultations, and any other TechOps requests", 20),
+        ],
+    }
 
-    groups_data = [
-        ("LOGISTICS", "Logistics / Warehouse", "Items that should be reviewed by the logistics or warehouse teams", 10),
-        ("OFFICE", "Org Ops", "Items that need to be reviewed by the office or other organization leadership", 20),
-        ("GEN", "General", "General items that normally do not need custom reviews or approval", 30),
-        ("GUEST", "Guest / Booking", "Guest and booking related items", 40),
-        ("TECH", "FestOps - Tech", "Reviews technical equipment, rentals, and tech-related expenses", 50),
-        ("HOTEL", "Hotels Team", "Reviews hotel rooms, venue fees, and hotel-related expenses", 60),
-        ("OTHER_SPECIAL", "Other Specialty", "Reviews general expenses and admin items", 70),
-    ]
+    groups: dict[str, ApprovalGroup] = {}
+    for wt_code, group_rows in groups_by_worktype.items():
+        wt = work_types.get(wt_code)
+        if wt is None:
+            raise RuntimeError(f"{wt_code} work type must be seeded before approval groups")
 
-    groups = {}
-    for code, name, description, sort_order in groups_data:
-        existing = (
-            db.session.query(ApprovalGroup)
-            .filter_by(code=code, work_type_id=budget_wt.id)
-            .first()
-        )
-        if existing:
-            groups[code] = existing
-            continue
+        for code, name, description, sort_order in group_rows:
+            existing = (
+                db.session.query(ApprovalGroup)
+                .filter_by(code=code, work_type_id=wt.id)
+                .first()
+            )
+            if existing:
+                groups[code] = existing
+                continue
 
-        group = ApprovalGroup(
-            work_type_id=budget_wt.id,
-            code=code,
-            name=name,
-            description=description,
-            is_active=True,
-            sort_order=sort_order,
-        )
-        db.session.add(group)
-        groups[code] = group
+            group = ApprovalGroup(
+                work_type_id=wt.id,
+                code=code,
+                name=name,
+                description=description,
+                is_active=True,
+                sort_order=sort_order,
+            )
+            db.session.add(group)
+            groups[code] = group
 
     db.session.flush()
     print(f"  Created {len(groups)} approval groups")
@@ -94,7 +108,12 @@ def seed_approval_groups(work_types: dict[str, WorkType]) -> dict[str, ApprovalG
 
 
 def seed_work_types() -> dict[str, WorkType]:
-    """Seed work types (BUDGET, CONTRACT, SUPPLY, TECHOPS, AV)."""
+    """Seed work types (BUDGET, CONTRACT, SUPPLY, TECHOPS, AV).
+
+    Idempotent: re-seeding refreshes name / sort_order / is_active on
+    existing rows so the seed stays the source of truth. New rows are
+    created with the listed values.
+    """
     print("Seeding work types...")
 
     # is_active=False for work types whose UI isn't built yet — keeps them
@@ -103,7 +122,7 @@ def seed_work_types() -> dict[str, WorkType]:
         ("BUDGET", "Budget Requests", 10, True),
         ("CONTRACT", "Contracts", 20, True),
         ("SUPPLY", "Supply Orders", 30, True),
-        ("TECHOPS", "TechOps Services", 40, False),
+        ("TECHOPS", "TechOps Services", 40, True),
         ("AV", "AV Requests", 50, False),
     ]
 
@@ -111,6 +130,9 @@ def seed_work_types() -> dict[str, WorkType]:
     for code, name, sort_order, is_active in work_types_data:
         existing = db.session.query(WorkType).filter_by(code=code).first()
         if existing:
+            existing.name = name
+            existing.sort_order = sort_order
+            existing.is_active = is_active
             work_types[code] = existing
             continue
 
@@ -124,7 +146,8 @@ def seed_work_types() -> dict[str, WorkType]:
         work_types[code] = wt
 
     db.session.flush()
-    print(f"  Created {len(work_types)} work types")
+    active_count = sum(1 for w in work_types.values() if w.is_active)
+    print(f"  Created/updated {len(work_types)} work types ({active_count} active)")
     return work_types
 
 
@@ -205,15 +228,15 @@ def seed_work_type_configs(work_types: dict[str, WorkType]) -> None:
             url_slug="techops",
             public_id_prefix="TEC",
             line_detail_type="techops",
-            routing_strategy=ROUTING_STRATEGY_DIRECT,
+            routing_strategy=ROUTING_STRATEGY_CATEGORY,
             supports_supplementary=False,
             supports_fixed_costs=False,
             uses_dispatch=False,
             has_admin_final=False,
             item_singular="TechOps Request",
             item_plural="TechOps Requests",
-            line_singular="Item",
-            line_plural="Items",
+            line_singular="Service",
+            line_plural="Services",
         )
         db.session.add(config)
         configs_created += 1
@@ -311,6 +334,121 @@ def seed_supply_categories(approval_groups: dict[str, ApprovalGroup]) -> dict[st
     db.session.flush()
     print(f"  Created {len(categories)} supply categories")
     return categories
+
+
+def seed_techops_service_types(approval_groups: dict[str, ApprovalGroup]) -> dict[str, TechOpsServiceType]:
+    """Seed TechOps service types.
+
+    Each row carries the default approval group used by category routing
+    at submit time. instance_noun controls form rendering: NULL → single
+    description box for the whole service; non-NULL → repeating-group
+    section where each instance (drop, phone line, channel) is its own
+    WorkLine with location + usage.
+
+    BANDWIDTH was deactivated when its concerns were merged into WIFI
+    and ETHERNET descriptions; the row stays for rollback / historical
+    line preservation.
+    """
+    print("Seeding TechOps service types...")
+
+    # (code, name, description, approval_group_code, sort_order,
+    #  instance_noun, is_active)
+    service_types_data = [
+        (
+            "WIFI",
+            "WiFi access/coverage",
+            (
+                "WiFi coverage for staff or attendees in a specific area "
+                "or for a use case. Call out heavy bandwidth needs "
+                "(streaming, large transfers, attendees on network) in "
+                "the description."
+            ),
+            "TECHOPS_NET", 10, None, True,
+        ),
+        (
+            "ETHERNET",
+            "Hardwired ethernet",
+            (
+                "Wired network drop at a specific location for a specific "
+                "use. Call out heavy bandwidth needs (streaming, large "
+                "transfers) in the per-drop usage notes."
+            ),
+            "TECHOPS_NET", 20, "drop", True,
+        ),
+        (
+            # Deactivated: bandwidth concerns moved into WIFI / ETHERNET
+            # descriptions. Row kept for rollback only.
+            "BANDWIDTH",
+            "Special bandwidth usage",
+            "Streaming, large file transfers, attendees-on-network, or other heavy bandwidth needs",
+            "TECHOPS_NET", 30, None, False,
+        ),
+        (
+            "PHONE",
+            "Hardwired phone line",
+            "Dedicated phone line at a location, internal-only or external-callable",
+            "TECHOPS_NET", 40, "phone line", True,
+        ),
+        (
+            "RADIO_CHANNEL",
+            "Dedicated radio channel",
+            "Reserved channel on the event radio system",
+            "TECHOPS_GEN", 50, "channel", True,
+        ),
+        (
+            "OTHER",
+            "Other / consultation",
+            "Anything not covered above, including general consultation requests",
+            "TECHOPS_GEN", 60, None, True,
+        ),
+    ]
+
+    service_types = {}
+    for (
+        code, name, description, approval_group_code, sort_order,
+        instance_noun, is_active,
+    ) in service_types_data:
+        existing = db.session.query(TechOpsServiceType).filter_by(code=code).first()
+        if existing:
+            # Refresh fields on existing rows so re-seeding picks up
+            # config changes without a manual update.
+            existing.name = name
+            existing.description = description
+            existing.sort_order = sort_order
+            existing.instance_noun = instance_noun
+            existing.is_active = is_active
+            # quantity_label is unused for per-instance services now;
+            # explicitly clear it so the seed's intent is the source of truth.
+            if instance_noun is not None:
+                existing.quantity_label = None
+            service_types[code] = existing
+            continue
+
+        approval_group = approval_groups.get(approval_group_code)
+        if approval_group is None:
+            raise RuntimeError(
+                f"Approval group {approval_group_code} must be seeded before TechOps service type {code}"
+            )
+
+        st = TechOpsServiceType(
+            code=code,
+            name=name,
+            description=description,
+            default_approval_group_id=approval_group.id,
+            is_active=is_active,
+            sort_order=sort_order,
+            instance_noun=instance_noun,
+            # quantity_label intentionally left None — per-instance services
+            # don't use it, single-line services don't surface a qty field.
+            quantity_label=None,
+        )
+        db.session.add(st)
+        service_types[code] = st
+
+    db.session.flush()
+    active_count = sum(1 for s in service_types.values() if s.is_active)
+    print(f"  Created/updated {len(service_types)} TechOps service types ({active_count} active)")
+    return service_types
 
 
 def seed_spend_types() -> dict[str, SpendType]:
@@ -805,6 +943,7 @@ def run_all_seeds():
     seed_work_type_configs(work_types)
     seed_contract_types(approval_groups)
     seed_supply_categories(approval_groups)
+    seed_techops_service_types(approval_groups)
     spend_types = seed_spend_types()
     seed_reference_data()
     divisions = seed_divisions()
