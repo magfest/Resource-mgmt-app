@@ -8,3 +8,4 @@ coming-soon fallback for not-yet-built worktypes.
 """
 from . import portfolio
 from . import create
+from . import view
