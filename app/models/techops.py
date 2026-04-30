@@ -31,6 +31,13 @@ class TechOpsServiceType(db.Model):
     is_active = db.Column(db.Boolean, nullable=False, default=True)
     sort_order = db.Column(db.Integer, nullable=True, default=None)
 
+    # When set, the New Request form renders a quantity input under this
+    # service with this label as its caption (e.g. "Number of drops"). When
+    # NULL the quantity field is hidden — meaningful for services where qty
+    # has no requester-side semantics (WiFi coverage, bandwidth, generic
+    # consultation).
+    quantity_label = db.Column(db.String(64), nullable=True)
+
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     created_by_user_id = db.Column(db.String(64), nullable=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

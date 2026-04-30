@@ -329,22 +329,30 @@ def seed_supply_categories(approval_groups: dict[str, ApprovalGroup]) -> dict[st
 
 def seed_techops_service_types(approval_groups: dict[str, ApprovalGroup]) -> dict[str, TechOpsServiceType]:
     """Seed TechOps service types. Each row carries the default approval group
-    used by category routing at submit time."""
+    used by category routing at submit time, plus an optional quantity_label
+    that controls whether the New Request form shows a labeled qty input
+    for this service."""
     print("Seeding TechOps service types...")
 
+    # (code, name, description, approval_group_code, sort_order, quantity_label)
+    # quantity_label is None for services where qty has no requester semantics.
     service_types_data = [
-        ("WIFI", "WiFi access/coverage", "WiFi for staff or attendees in a specific area or for a use case", "TECHOPS_NET", 10),
-        ("ETHERNET", "Hardwired ethernet", "Wired network drop at a specific location for a specific use", "TECHOPS_NET", 20),
-        ("BANDWIDTH", "Special bandwidth usage", "Streaming, large file transfers, attendees-on-network, or other heavy bandwidth needs", "TECHOPS_NET", 30),
-        ("PHONE", "Hardwired phone line", "Dedicated phone line at a location, internal-only or external-callable", "TECHOPS_NET", 40),
-        ("RADIO_CHANNEL", "Dedicated radio channel", "Reserved channel on the event radio system", "TECHOPS_GEN", 50),
-        ("OTHER", "Other / consultation", "Anything not covered above, including general consultation requests", "TECHOPS_GEN", 60),
+        ("WIFI", "WiFi access/coverage", "WiFi for staff or attendees in a specific area or for a use case", "TECHOPS_NET", 10, None),
+        ("ETHERNET", "Hardwired ethernet", "Wired network drop at a specific location for a specific use", "TECHOPS_NET", 20, "Number of drops"),
+        ("BANDWIDTH", "Special bandwidth usage", "Streaming, large file transfers, attendees-on-network, or other heavy bandwidth needs", "TECHOPS_NET", 30, None),
+        ("PHONE", "Hardwired phone line", "Dedicated phone line at a location, internal-only or external-callable", "TECHOPS_NET", 40, "Number of phone lines"),
+        ("RADIO_CHANNEL", "Dedicated radio channel", "Reserved channel on the event radio system", "TECHOPS_GEN", 50, "Number of channels"),
+        ("OTHER", "Other / consultation", "Anything not covered above, including general consultation requests", "TECHOPS_GEN", 60, None),
     ]
 
     service_types = {}
-    for code, name, description, approval_group_code, sort_order in service_types_data:
+    for code, name, description, approval_group_code, sort_order, quantity_label in service_types_data:
         existing = db.session.query(TechOpsServiceType).filter_by(code=code).first()
         if existing:
+            # Refresh quantity_label on existing rows so re-seeding picks up
+            # label changes without forcing a manual update.
+            if existing.quantity_label != quantity_label:
+                existing.quantity_label = quantity_label
             service_types[code] = existing
             continue
 
@@ -361,6 +369,7 @@ def seed_techops_service_types(approval_groups: dict[str, ApprovalGroup]) -> dic
             default_approval_group_id=approval_group.id,
             is_active=True,
             sort_order=sort_order,
+            quantity_label=quantity_label,
         )
         db.session.add(st)
         service_types[code] = st

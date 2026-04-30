@@ -92,18 +92,17 @@
     </section>
   {% endif %}
 
-  {# Affirmation banner — replaces the lines table when the requester
-     declared no services needed. #}
+  {# No-services banner — replaces the lines table when the requester
+     declared their department needs nothing. #}
   {% if request_detail and request_detail.no_services_needed %}
     <section class="card" style="margin-bottom: 16px; background: #f0fdf4; border-left: 4px solid #059669;">
       <div style="font-weight: 600; margin-bottom: 4px;">
-        Affirmation: no TechOps services needed
+        No TechOps services needed
       </div>
       <div class="muted small">
-        {{ ctx.department.name }} reviewed all available TechOps services and
-        affirmed that no services are needed for {{ ctx.event_cycle.name }}.
-        TechOps will still verify this — they may reach out if the affirmation
-        looks like an oversight.
+        {{ ctx.department.name }} reported that they do not need any TechOps
+        services for {{ ctx.event_cycle.name }}. TechOps will follow up to
+        verify before this is finalized.
       </div>
     </section>
   {% else %}

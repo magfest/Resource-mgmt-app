@@ -20,8 +20,8 @@
   <div style="margin-bottom: 16px;">
     <h1 style="margin: 0;">New TechOps Request</h1>
     <div class="muted" style="margin-top: 4px;">
-      Single page. Required fields marked. Skip sections you don't need —
-      check the affirmation at the bottom if your department needs no TechOps services.
+      Tell TechOps what network, phone, radio, or other services your department
+      needs for this event. Skip sections you don't need.
     </div>
   </div>
 
@@ -112,19 +112,21 @@
               placeholder="Describe the use case, location, or what this is for."
               style="width: 100%; max-width: 600px;"></textarea>
 
-            <div style="margin-top: 8px;">
-              <label for="service_{{ st.code }}_quantity"
-                     style="display: inline-block; font-size: 13px; margin-right: 8px;">
-                Quantity (optional):
-              </label>
-              <input
-                type="number"
-                id="service_{{ st.code }}_quantity"
-                name="service_{{ st.code }}_quantity"
-                min="1"
-                placeholder="-"
-                style="width: 80px;">
-            </div>
+            {% if st.quantity_label %}
+              <div style="margin-top: 8px;">
+                <label for="service_{{ st.code }}_quantity"
+                       style="display: inline-block; font-size: 13px; margin-right: 8px;">
+                  {{ st.quantity_label }}:
+                </label>
+                <input
+                  type="number"
+                  id="service_{{ st.code }}_quantity"
+                  name="service_{{ st.code }}_quantity"
+                  min="1"
+                  placeholder="-"
+                  style="width: 80px;">
+              </div>
+            {% endif %}
 
             {% if st.code == "PHONE" %}
               <div style="margin-top: 8px;">
@@ -141,23 +143,23 @@
         </div>
       {% endfor %}
 
-      {# "Or" affirmation — sits at the bottom of the services section #}
-      <div style="padding: 16px 0 4px 0;">
-        <div class="muted small" style="text-align: center; margin-bottom: 12px;">
-          — or —
-        </div>
+      {# "No services needed" warning callout — visually distinct from the
+         service checkboxes above so it reads as a deliberate choice, not as
+         "yet another box to check." #}
+      <div style="margin-top: 24px; padding: 16px; background: #fef3c7; border-left: 4px solid #d97706; border-radius: 4px;">
         <label style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer;">
           <input
             type="checkbox"
             name="no_services_needed"
             value="1"
-            style="margin-top: 3px;">
+            style="margin-top: 4px;">
           <span>
-            I have reviewed all sections above and my department needs no TechOps
-            services for this event.
-            <div class="muted small" style="margin-top: 4px;">
-              TechOps will still review this affirmation — they'll reach out if it
-              looks like your department might actually need something.
+            <strong>My department needs no TechOps services for this event.</strong>
+            <div class="muted small" style="margin-top: 6px;">
+              <strong>Uncommon.</strong> Most departments need at least basic WiFi or
+              radio coverage. Only check this if you've genuinely reviewed every
+              service above and confirmed your department needs none. TechOps
+              will follow up to verify.
             </div>
           </span>
         </label>
