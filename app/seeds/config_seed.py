@@ -328,31 +328,90 @@ def seed_supply_categories(approval_groups: dict[str, ApprovalGroup]) -> dict[st
 
 
 def seed_techops_service_types(approval_groups: dict[str, ApprovalGroup]) -> dict[str, TechOpsServiceType]:
-    """Seed TechOps service types. Each row carries the default approval group
-    used by category routing at submit time, plus an optional quantity_label
-    that controls whether the New Request form shows a labeled qty input
-    for this service."""
+    """Seed TechOps service types.
+
+    Each row carries the default approval group used by category routing
+    at submit time. instance_noun controls form rendering: NULL → single
+    description box for the whole service; non-NULL → repeating-group
+    section where each instance (drop, phone line, channel) is its own
+    WorkLine with location + usage.
+
+    BANDWIDTH was deactivated when its concerns were merged into WIFI
+    and ETHERNET descriptions; the row stays for rollback / historical
+    line preservation.
+    """
     print("Seeding TechOps service types...")
 
-    # (code, name, description, approval_group_code, sort_order, quantity_label)
-    # quantity_label is None for services where qty has no requester semantics.
+    # (code, name, description, approval_group_code, sort_order,
+    #  instance_noun, is_active)
     service_types_data = [
-        ("WIFI", "WiFi access/coverage", "WiFi for staff or attendees in a specific area or for a use case", "TECHOPS_NET", 10, None),
-        ("ETHERNET", "Hardwired ethernet", "Wired network drop at a specific location for a specific use", "TECHOPS_NET", 20, "Number of drops"),
-        ("BANDWIDTH", "Special bandwidth usage", "Streaming, large file transfers, attendees-on-network, or other heavy bandwidth needs", "TECHOPS_NET", 30, None),
-        ("PHONE", "Hardwired phone line", "Dedicated phone line at a location, internal-only or external-callable", "TECHOPS_NET", 40, "Number of phone lines"),
-        ("RADIO_CHANNEL", "Dedicated radio channel", "Reserved channel on the event radio system", "TECHOPS_GEN", 50, "Number of channels"),
-        ("OTHER", "Other / consultation", "Anything not covered above, including general consultation requests", "TECHOPS_GEN", 60, None),
+        (
+            "WIFI",
+            "WiFi access/coverage",
+            (
+                "WiFi coverage for staff or attendees in a specific area "
+                "or for a use case. Call out heavy bandwidth needs "
+                "(streaming, large transfers, attendees on network) in "
+                "the description."
+            ),
+            "TECHOPS_NET", 10, None, True,
+        ),
+        (
+            "ETHERNET",
+            "Hardwired ethernet",
+            (
+                "Wired network drop at a specific location for a specific "
+                "use. Call out heavy bandwidth needs (streaming, large "
+                "transfers) in the per-drop usage notes."
+            ),
+            "TECHOPS_NET", 20, "drop", True,
+        ),
+        (
+            # Deactivated: bandwidth concerns moved into WIFI / ETHERNET
+            # descriptions. Row kept for rollback only.
+            "BANDWIDTH",
+            "Special bandwidth usage",
+            "Streaming, large file transfers, attendees-on-network, or other heavy bandwidth needs",
+            "TECHOPS_NET", 30, None, False,
+        ),
+        (
+            "PHONE",
+            "Hardwired phone line",
+            "Dedicated phone line at a location, internal-only or external-callable",
+            "TECHOPS_NET", 40, "phone line", True,
+        ),
+        (
+            "RADIO_CHANNEL",
+            "Dedicated radio channel",
+            "Reserved channel on the event radio system",
+            "TECHOPS_GEN", 50, "channel", True,
+        ),
+        (
+            "OTHER",
+            "Other / consultation",
+            "Anything not covered above, including general consultation requests",
+            "TECHOPS_GEN", 60, None, True,
+        ),
     ]
 
     service_types = {}
-    for code, name, description, approval_group_code, sort_order, quantity_label in service_types_data:
+    for (
+        code, name, description, approval_group_code, sort_order,
+        instance_noun, is_active,
+    ) in service_types_data:
         existing = db.session.query(TechOpsServiceType).filter_by(code=code).first()
         if existing:
-            # Refresh quantity_label on existing rows so re-seeding picks up
-            # label changes without forcing a manual update.
-            if existing.quantity_label != quantity_label:
-                existing.quantity_label = quantity_label
+            # Refresh fields on existing rows so re-seeding picks up
+            # config changes without a manual update.
+            existing.name = name
+            existing.description = description
+            existing.sort_order = sort_order
+            existing.instance_noun = instance_noun
+            existing.is_active = is_active
+            # quantity_label is unused for per-instance services now;
+            # explicitly clear it so the seed's intent is the source of truth.
+            if instance_noun is not None:
+                existing.quantity_label = None
             service_types[code] = existing
             continue
 
@@ -367,15 +426,19 @@ def seed_techops_service_types(approval_groups: dict[str, ApprovalGroup]) -> dic
             name=name,
             description=description,
             default_approval_group_id=approval_group.id,
-            is_active=True,
+            is_active=is_active,
             sort_order=sort_order,
-            quantity_label=quantity_label,
+            instance_noun=instance_noun,
+            # quantity_label intentionally left None — per-instance services
+            # don't use it, single-line services don't surface a qty field.
+            quantity_label=None,
         )
         db.session.add(st)
         service_types[code] = st
 
     db.session.flush()
-    print(f"  Created {len(service_types)} TechOps service types")
+    active_count = sum(1 for s in service_types.values() if s.is_active)
+    print(f"  Created/updated {len(service_types)} TechOps service types ({active_count} active)")
     return service_types
 
 

@@ -65,7 +65,7 @@
     {% endif %}
 
     {% if perms.can_submit %}
-      <form method="post" action="{{ url_for('work.work_item_submit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, work_type_slug='techops') }}" style="display: inline;">
+      <form method="post" action="{{ url_for('work.techops_request_submit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}" style="display: inline;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-primary" data-confirm="Submit this request for TechOps review?">
           Submit for TechOps Review
@@ -118,8 +118,7 @@
             <tr>
               <th style="width: 50px;">#</th>
               <th style="width: 180px;">Service</th>
-              <th>Description</th>
-              <th style="width: 80px;">Qty</th>
+              <th>Details</th>
               <th style="width: 140px;">Status</th>
               <th style="width: 140px;">Reviewer</th>
             </tr>
@@ -127,12 +126,13 @@
           <tbody>
             {% for line in lines %}
               {% set detail = line.techops_detail %}
+              {% set st = detail.service_type if detail else None %}
               <tr id="line-{{ line.line_number }}">
                 <td>{{ line.line_number }}</td>
                 <td>
-                  {% if detail and detail.service_type %}
-                    <strong>{{ detail.service_type.name }}</strong>
-                    {% if detail.service_type.code == "PHONE" and detail.config and detail.config.get("external_callable") %}
+                  {% if st %}
+                    <strong>{{ st.name }}</strong>
+                    {% if st.code == "PHONE" and detail.config and detail.config.get("external_callable") %}
                       <div class="muted small">External-callable</div>
                     {% endif %}
                   {% else %}
@@ -140,15 +140,23 @@
                   {% endif %}
                 </td>
                 <td>
-                  {% if detail and detail.description %}
-                    {{ detail.description }}
-                  {% else %}
-                    <span class="muted">-</span>
-                  {% endif %}
-                </td>
-                <td>
-                  {% if detail and detail.quantity %}
-                    {{ detail.quantity }}
+                  {% if detail %}
+                    {% if st and st.instance_noun %}
+                      {# Per-instance line: show location + usage with
+                         service-appropriate labels (RADIO_CHANNEL repurposes
+                         the location column for the channel name). #}
+                      {% if st.code == "RADIO_CHANNEL" %}
+                        <div><strong>Channel:</strong> {{ detail.location or '-' }}</div>
+                        <div><strong>Use:</strong> {{ detail.usage or '-' }}</div>
+                      {% else %}
+                        <div><strong>Location:</strong> {{ detail.location or '-' }}</div>
+                        <div><strong>Usage:</strong> {{ detail.usage or '-' }}</div>
+                      {% endif %}
+                    {% elif detail.description %}
+                      {{ detail.description }}
+                    {% else %}
+                      <span class="muted">-</span>
+                    {% endif %}
                   {% else %}
                     <span class="muted">-</span>
                   {% endif %}

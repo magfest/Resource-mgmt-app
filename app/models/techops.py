@@ -36,7 +36,19 @@ class TechOpsServiceType(db.Model):
     # NULL the quantity field is hidden — meaningful for services where qty
     # has no requester-side semantics (WiFi coverage, bandwidth, generic
     # consultation).
+    #
+    # Note: as of the per-instance refactor, quantity_label is unused for
+    # services that now have instance_noun set (ETHERNET/PHONE/RADIO_CHANNEL).
+    # Kept on the schema for historical rows; safe to drop in a later cleanup.
     quantity_label = db.Column(db.String(64), nullable=True)
+
+    # When set, this service is "per-instance": each WorkLine represents one
+    # distinct instance (one ethernet drop, one phone, one radio channel)
+    # with its own location + usage. The form renders a repeating-group
+    # section with "+ Add another <instance_noun>" instead of a single
+    # description box. When NULL the service is "single-line" (one
+    # description per request, e.g. WiFi coverage).
+    instance_noun = db.Column(db.String(32), nullable=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     created_by_user_id = db.Column(db.String(64), nullable=True)
@@ -63,9 +75,20 @@ class TechOpsLineDetail(db.Model):
         index=True,
     )
 
+    # Used by single-line services (WIFI, OTHER) — one combined text field.
     description = db.Column(db.Text, nullable=True)
 
+    # Used by per-instance services (ETHERNET, PHONE, RADIO_CHANNEL).
+    # `location` holds physical location for ETHERNET/PHONE, or the channel
+    # name (preferred or assigned) for RADIO_CHANNEL — overloaded by service
+    # type at the form-label layer. `usage` holds the per-instance use case.
+    location = db.Column(db.Text, nullable=True)
+    usage = db.Column(db.Text, nullable=True)
+
     # Null = boolean/yes-no semantics (most TechOps services are inherently 1)
+    # As of the per-instance refactor, per-instance services use one row per
+    # instance instead of bundling via quantity. Kept on schema for any
+    # legacy rows; safe to drop in a later cleanup.
     quantity = db.Column(db.Integer, nullable=True)
 
     # Service-specific extras (e.g. {"external_callable": true} for PHONE)
