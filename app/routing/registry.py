@@ -15,7 +15,7 @@ from app.models import (
 from app.routing import RoutingStrategy
 from app.routing.budget import ExpenseAccountRoutingStrategy
 from app.routing.contracts import ContractTypeRoutingStrategy
-from app.routing.supply_orders import CategoryRoutingStrategy
+from app.routing.category import CategoryRoutingStrategy
 
 if TYPE_CHECKING:
     from app.models import ApprovalGroup, WorkLine, WorkTypeConfig
