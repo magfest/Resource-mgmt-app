@@ -3,7 +3,8 @@ Home page route - adapts based on user role.
 """
 from __future__ import annotations
 
-from datetime import date
+import datetime
+from datetime import date, timezone
 from flask import Blueprint, redirect, url_for, session, request
 
 from app import db
@@ -102,7 +103,7 @@ def health_check():
     try:
         # Verify database connectivity
         db.session.execute(db.text("SELECT 1"))
-        return jsonify({"status": "healthy", "database": "connected"}), 200
+        return jsonify({"status": "healthy", "database": "connected", "server-time": datetime.datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z %z")}), 200
     except Exception as e:
         return jsonify({"status": "unhealthy", "error": str(e)}), 503
 
