@@ -1,0 +1,46 @@
+{# templates/macros/checkout_banner.html #}
+{# Renders the checkout-state callout for a work item.
+
+   Three states, gated on perms:
+     - perms.is_checked_out_by_current_user → yellow "You have this checked out"
+     - perms.is_worktype_admin (someone else holds it) → yellow "Under Review by Another Reviewer"
+     - otherwise (someone else holds it, viewer is not admin) → blue "Under Active Review"
+
+   Renders nothing when perms.is_checked_out is False.
+
+   Usage:
+     {% from "macros/checkout_banner.html" import render_checkout_banner %}
+     {{ render_checkout_banner(work_item, perms) }}
+#}
+
+{% macro render_checkout_banner(work_item, perms) -%}
+{%- if perms.is_checked_out -%}
+  {%- if perms.is_checked_out_by_current_user %}
+    <div class="callout" style="margin-bottom: 16px; background: #fff3cd; border-left: 4px solid #ffc107;">
+      <strong>You have this item checked out</strong>
+      <div class="muted" style="margin-top:4px;">
+        {% if work_item.checked_out_expires_at %}
+          Lock expires {{ work_item.checked_out_expires_at.strftime('%Y-%m-%d %H:%M') }}
+        {% endif %}
+      </div>
+    </div>
+  {%- elif perms.is_worktype_admin %}
+    <div class="callout" style="margin-bottom: 16px; background: #fff3cd; border-left: 4px solid #ffc107;">
+      <strong>Under Review by Another Reviewer</strong>
+      <div class="muted" style="margin-top:4px;">
+        Checked out by <strong>{{ work_item.checked_out_by_user_id|user_display }}</strong>
+        {% if work_item.checked_out_expires_at %}
+          &middot; Expires {{ work_item.checked_out_expires_at.strftime('%Y-%m-%d %H:%M') }}
+        {% endif %}
+      </div>
+    </div>
+  {%- else %}
+    <div class="callout" style="margin-bottom: 16px; background: #e7f3fe; border-left: 4px solid #2196f3;">
+      <strong>Under Active Review</strong>
+      <div class="muted" style="margin-top:4px;">
+        This request is currently being reviewed by an approver.
+      </div>
+    </div>
+  {%- endif %}
+{%- endif %}
+{%- endmacro %}
