@@ -15,10 +15,16 @@ if TYPE_CHECKING:
         BudgetLineDetail,
         ContractLineDetail,
         SupplyOrderLineDetail,
+        TechOpsLineDetail,
         WorkLine,
     )
 
-LineDetail = Union["BudgetLineDetail", "ContractLineDetail", "SupplyOrderLineDetail"]
+LineDetail = Union[
+    "BudgetLineDetail",
+    "ContractLineDetail",
+    "SupplyOrderLineDetail",
+    "TechOpsLineDetail",
+]
 
 
 def get_line_detail(line: "WorkLine") -> Optional[LineDetail]:
@@ -29,9 +35,14 @@ def get_line_detail(line: "WorkLine") -> Optional[LineDetail]:
         line: The work line to get details for
 
     Returns:
-        The line detail (budget, contract, or supply), or None if not found
+        The line detail (budget, contract, supply, or techops), or None if not found
     """
-    return line.budget_detail or line.contract_detail or line.supply_detail
+    return (
+        line.budget_detail
+        or line.contract_detail
+        or line.supply_detail
+        or line.techops_detail
+    )
 
 
 def get_line_amount_cents(line: "WorkLine") -> int:
@@ -118,7 +129,7 @@ def get_line_type_name(line: "WorkLine") -> str:
         line: The work line
 
     Returns:
-        "budget", "contract", "supply", or "unknown"
+        "budget", "contract", "supply", "techops", or "unknown"
     """
     if line.budget_detail:
         return "budget"
@@ -126,4 +137,28 @@ def get_line_type_name(line: "WorkLine") -> str:
         return "contract"
     if line.supply_detail:
         return "supply"
+    if line.techops_detail:
+        return "techops"
     return "unknown"
+
+
+def set_line_routing_approval_group(line: "WorkLine", group_id: Optional[int]) -> bool:
+    """
+    Set the snapshot routed_approval_group_id on the line's detail row,
+    dispatching on detail type. Used at submit/dispatch time to record the
+    routing decision so it's stable even if catalog routing changes later.
+
+    Args:
+        line: The work line whose detail should be updated
+        group_id: The approval group id to snapshot (or None to clear)
+
+    Returns:
+        True if the snapshot was set, False if the line has no recognized detail.
+    """
+    detail = get_line_detail(line)
+    if detail is None:
+        return False
+    if not hasattr(detail, "routed_approval_group_id"):
+        return False
+    detail.routed_approval_group_id = group_id
+    return True

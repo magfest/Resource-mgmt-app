@@ -590,6 +590,11 @@ def apply_review_decision(
         user_ctx,
     )
 
+    # 6. Auto-finalize for non-admin-final worktypes once every approval-group
+    # review has a terminal decision. No-op for admin-final worktypes (BUDGET).
+    from app.routes.work.helpers.lifecycle import try_auto_finalize
+    try_auto_finalize(work_item, user_ctx)
+
     return True, None
 
 
