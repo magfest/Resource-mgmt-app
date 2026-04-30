@@ -297,6 +297,7 @@ def test_budget_does_not_auto_finalize_even_when_all_reviews_decided(budget_setu
         stage=REVIEW_STAGE_APPROVAL_GROUP,
         approval_group_id=group.id,
         status=REVIEW_STATUS_APPROVED,
+        created_by_user_id=user_ctx.user_id,
     )
     db.session.add(review)
     db.session.commit()

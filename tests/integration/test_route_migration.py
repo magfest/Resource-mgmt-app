@@ -109,8 +109,10 @@ class TestBudgetUrlsStillResolve:
 class TestNonBudgetSlugBehavior:
     """Non-budget slugs reach the right handlers with the right behavior."""
 
-    def test_techops_portfolio_renders_coming_soon(self, app, client, seed_workflow_data):
-        """Non-budget portfolio_landing renders coming-soon (no 404, no crash)."""
+    def test_techops_portfolio_renders(self, app, client, seed_workflow_data):
+        """TechOps portfolio_landing renders the real per-department TechOps
+        page now that the worktype has a built UI (T6 activation). The
+        previous "Coming Soon" assertion was for a transitional state."""
         _seed_techops(seed_workflow_data)
         cycle = seed_workflow_data["cycle"]
         dept = seed_workflow_data["department"]
@@ -118,8 +120,7 @@ class TestNonBudgetSlugBehavior:
 
         response = client.get(f"/{cycle.code}/{dept.code}/techops")
         assert response.status_code == 200
-        assert b"TechOps" in response.data
-        assert b"Coming Soon" in response.data
+        assert b"TechOps Services" in response.data
 
     def test_techops_line_create_returns_404(self, app, client, seed_workflow_data):
         """Budget-specific subroutes 404 for non-budget work types via the guard."""

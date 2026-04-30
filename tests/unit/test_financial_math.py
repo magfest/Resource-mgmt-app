@@ -72,6 +72,7 @@ class TestGetLineAmountCents:
             budget_detail=None,
             contract_detail=None,
             supply_detail=None,
+            techops_detail=None,
         )
         assert get_line_amount_cents(line) == 0
 

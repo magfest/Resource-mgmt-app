@@ -65,10 +65,12 @@ class TestPortfolioContextSlug:
         assert ctx.work_type_slug == "budget"
 
 
-class TestSeedConfigInactiveWorkTypes:
-    """The seed creates TECHOPS and AV as is_active=False with their slugs."""
+class TestSeedConfigWorkTypeActivation:
+    """The seed creates TECHOPS active (T6 activation) and AV still inactive
+    (UI not yet built). Both have their slugs configured regardless of
+    activation state so URL routing resolves cleanly."""
 
-    def test_techops_and_av_seeded_inactive(self, app):
+    def test_techops_seeded_active_and_av_seeded_inactive(self, app):
         from app.seeds.config_seed import seed_work_types, seed_work_type_configs
 
         work_types = seed_work_types()
@@ -76,7 +78,7 @@ class TestSeedConfigInactiveWorkTypes:
         db.session.commit()
 
         techops = WorkType.query.filter_by(code="TECHOPS").one()
-        assert techops.is_active is False
+        assert techops.is_active is True
         assert techops.config.url_slug == "techops"
         assert techops.config.public_id_prefix == "TEC"
 
