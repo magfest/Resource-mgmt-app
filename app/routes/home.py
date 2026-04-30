@@ -18,11 +18,12 @@ from app.models import (
     UserRole,
     WorkItem,
     WorkLine,
+    WorkLineReview,
     WorkPortfolio,
     WorkType,
     WorkTypeConfig,
-    BudgetLineDetail,
-    ExpenseAccount,
+    REVIEW_STAGE_APPROVAL_GROUP,
+    REVIEW_STATUS_PENDING,
     WORK_ITEM_STATUS_AWAITING_DISPATCH,
 )
 from app.routes.work.helpers import (
@@ -394,13 +395,18 @@ def index():
 
     # Get stats for approvers
     if approval_groups:
-        # Count lines pending review in user's approval groups
+        # Count pending approval-group reviews routed to user's groups (worktype-agnostic).
+        # Reads the routing snapshot on WorkLineReview, not the live expense-account
+        # mapping — keeps the count consistent with the actual approvals queue.
         pending_for_approver = (
-            db.session.query(WorkLine)
-            .join(BudgetLineDetail, BudgetLineDetail.work_line_id == WorkLine.id)
-            .join(ExpenseAccount, ExpenseAccount.id == BudgetLineDetail.expense_account_id)
-            .filter(ExpenseAccount.approval_group_id.in_(user_ctx.approval_group_ids))
-            .filter(WorkLine.status == "PENDING")
+            db.session.query(WorkLineReview)
+            .join(WorkLine, WorkLine.id == WorkLineReview.work_line_id)
+            .join(WorkItem, WorkItem.id == WorkLine.work_item_id)
+            .filter(WorkLineReview.stage == REVIEW_STAGE_APPROVAL_GROUP)
+            .filter(WorkLineReview.status == REVIEW_STATUS_PENDING)
+            .filter(WorkLineReview.approval_group_id.in_(user_ctx.approval_group_ids))
+            .filter(WorkItem.is_archived == False)
+            .filter(WorkItem.status == "SUBMITTED")
             .count()
         )
         context["pending_for_approver"] = pending_for_approver
