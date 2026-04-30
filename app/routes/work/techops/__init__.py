@@ -11,3 +11,4 @@ from . import create
 from . import edit
 from . import submit
 from . import view
+from . import admin

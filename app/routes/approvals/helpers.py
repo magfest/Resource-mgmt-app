@@ -638,6 +638,8 @@ def build_approval_queues(
                 .selectinload(WorkLine.contract_detail),
             contains_eager(WorkLineReview.work_line)
                 .selectinload(WorkLine.supply_detail),
+            contains_eager(WorkLineReview.work_line)
+                .selectinload(WorkLine.techops_detail),
         )
         .filter(WorkLineReview.stage == REVIEW_STAGE_APPROVAL_GROUP)
         .filter(WorkLineReview.approval_group_id == group_id)
@@ -677,6 +679,7 @@ def build_approval_queues(
             selectinload(WorkItem.lines).joinedload(WorkLine.budget_detail),
             selectinload(WorkItem.lines).joinedload(WorkLine.contract_detail),
             selectinload(WorkItem.lines).joinedload(WorkLine.supply_detail),
+            selectinload(WorkItem.lines).joinedload(WorkLine.techops_detail),
             joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.event_cycle),
             joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.department),
         ).all()
@@ -754,6 +757,7 @@ def build_approval_queues(
             selectinload(WorkItem.lines).joinedload(WorkLine.budget_detail),
             selectinload(WorkItem.lines).joinedload(WorkLine.contract_detail),
             selectinload(WorkItem.lines).joinedload(WorkLine.supply_detail),
+            selectinload(WorkItem.lines).joinedload(WorkLine.techops_detail),
             joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.event_cycle),
             joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.department),
         ).all()

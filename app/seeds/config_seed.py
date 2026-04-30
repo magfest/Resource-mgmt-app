@@ -108,7 +108,12 @@ def seed_approval_groups(work_types: dict[str, WorkType]) -> dict[str, ApprovalG
 
 
 def seed_work_types() -> dict[str, WorkType]:
-    """Seed work types (BUDGET, CONTRACT, SUPPLY, TECHOPS, AV)."""
+    """Seed work types (BUDGET, CONTRACT, SUPPLY, TECHOPS, AV).
+
+    Idempotent: re-seeding refreshes name / sort_order / is_active on
+    existing rows so the seed stays the source of truth. New rows are
+    created with the listed values.
+    """
     print("Seeding work types...")
 
     # is_active=False for work types whose UI isn't built yet — keeps them
@@ -117,7 +122,7 @@ def seed_work_types() -> dict[str, WorkType]:
         ("BUDGET", "Budget Requests", 10, True),
         ("CONTRACT", "Contracts", 20, True),
         ("SUPPLY", "Supply Orders", 30, True),
-        ("TECHOPS", "TechOps Services", 40, False),
+        ("TECHOPS", "TechOps Services", 40, True),
         ("AV", "AV Requests", 50, False),
     ]
 
@@ -125,6 +130,9 @@ def seed_work_types() -> dict[str, WorkType]:
     for code, name, sort_order, is_active in work_types_data:
         existing = db.session.query(WorkType).filter_by(code=code).first()
         if existing:
+            existing.name = name
+            existing.sort_order = sort_order
+            existing.is_active = is_active
             work_types[code] = existing
             continue
 
@@ -138,7 +146,8 @@ def seed_work_types() -> dict[str, WorkType]:
         work_types[code] = wt
 
     db.session.flush()
-    print(f"  Created {len(work_types)} work types")
+    active_count = sum(1 for w in work_types.values() if w.is_active)
+    print(f"  Created/updated {len(work_types)} work types ({active_count} active)")
     return work_types
 
 

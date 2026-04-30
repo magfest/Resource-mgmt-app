@@ -115,7 +115,8 @@ def work_item_submit(event: str, dept: str, public_id: str, work_type_slug: str 
         "work.work_item_detail",
         event=event,
         dept=dept,
-        public_id=public_id
+        public_id=public_id,
+        work_type_slug=work_type_slug,
     ))
 
 
@@ -140,7 +141,8 @@ def work_item_checkout(event: str, dept: str, public_id: str, work_type_slug: st
         "work.work_item_detail",
         event=event,
         dept=dept,
-        public_id=public_id
+        public_id=public_id,
+        work_type_slug=work_type_slug,
     )
 
     if not perms.can_checkout:
@@ -184,7 +186,8 @@ def work_item_checkin(event: str, dept: str, public_id: str, work_type_slug: str
         "work.work_item_detail",
         event=event,
         dept=dept,
-        public_id=public_id
+        public_id=public_id,
+        work_type_slug=work_type_slug,
     )
 
     if not perms.can_checkin:
@@ -286,7 +289,8 @@ def work_item_request_info(event: str, dept: str, public_id: str, work_type_slug
         "work.work_item_detail",
         event=event,
         dept=dept,
-        public_id=public_id
+        public_id=public_id,
+        work_type_slug=work_type_slug,
     ))
 
 
@@ -352,5 +356,6 @@ def work_item_respond_info(event: str, dept: str, public_id: str, work_type_slug
         "work.work_item_detail",
         event=event,
         dept=dept,
-        public_id=public_id
+        public_id=public_id,
+        work_type_slug=work_type_slug,
     ))

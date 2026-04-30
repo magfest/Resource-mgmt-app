@@ -24,7 +24,7 @@ from app.models import (
     WORK_LINE_STATUS_REJECTED,
 )
 from app.routes import get_user_ctx
-from app.routes.work.helpers import format_currency, friendly_status
+from app.routes.work.helpers import format_currency, friendly_status, get_budget_work_type
 from . import admin_final_bp
 from .helpers import (
     require_admin,
@@ -339,10 +339,18 @@ def budget_admin_home():
 @admin_final_bp.get("/admin/requests/")
 def all_requests():
     """
-    View all budget requests with search, filter, and pagination.
+    View all BUDGET requests with search, filter, and pagination.
+
+    Filtered to the BUDGET worktype only — this view existed before the
+    multi-worktype refactor and was implicitly "all requests" because
+    BUDGET was the only worktype. Now that TECHOPS is active (and AV is
+    on the way), we have to scope explicitly. TechOps gets its own
+    parallel view at work.techops_all_requests.
     """
     user_ctx = get_user_ctx()
     require_budget_admin(user_ctx)
+
+    budget_wt = get_budget_work_type()
 
     # Get filter/search params
     search_query = request.args.get("q", "").strip()
@@ -361,6 +369,8 @@ def all_requests():
         Department, WorkPortfolio.department_id == Department.id
     ).join(
         EventCycle, WorkPortfolio.event_cycle_id == EventCycle.id
+    ).filter(
+        WorkPortfolio.work_type_id == budget_wt.id
     ).options(
         joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.department),
         joinedload(WorkItem.portfolio).joinedload(WorkPortfolio.event_cycle),

@@ -56,7 +56,15 @@
 
   {{ render_checkout_banner(work_item, perms) }}
 
-  {# Action buttons #}
+  {# Top action bar — three groups separated by a vertical divider:
+     1. Requester actions (Edit / Submit), only on DRAFT.
+     2. Reviewer actions (Start/Finish Reviewing, Review Queue), only
+        once submitted. checkin shows "Force Release" instead of "Finish
+        Reviewing" when an admin is releasing someone else's lock.
+     3. Navigation back to the portfolio.
+     Buttons that don't apply to TechOps (Assign Reviewers, Admin Final
+     Queue) are intentionally omitted — TechOps has uses_dispatch=False
+     and has_admin_final=False, so those workflows don't exist. #}
   <div class="btn-row mb-16">
     {% if perms.is_draft and perms.can_edit %}
       <a class="btn btn-primary" href="{{ url_for('work.techops_request_edit', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id) }}">
@@ -73,6 +81,52 @@
       </form>
     {% endif %}
 
+    {# Quick Review surfaces for anyone who can review (admin, current
+       checkout-holder, or anyone eligible to take checkout). It's a
+       read-only view for the latter group; AJAX action buttons only
+       fire when the user has the lock. #}
+    {% if not perms.is_draft and (perms.is_worktype_admin or perms.can_checkout or perms.is_checked_out_by_current_user) %}
+      <a class="btn btn-primary" href="{{ url_for('work.quick_review', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, work_type_slug='techops') }}">
+        Quick Review
+      </a>
+    {% endif %}
+
+    {# Reviewer actions: Start/Finish Reviewing on the request itself
+       (rather than per-line). can_checkout / can_checkin are already
+       worktype-agnostic so they work for TechOps unchanged. #}
+    {% if perms.can_checkout %}
+      <form method="post" action="{{ url_for('work.work_item_checkout', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, work_type_slug='techops') }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="return_to" value="{{ request.url }}">
+        <button type="submit" class="btn btn-primary">
+          Start Reviewing
+        </button>
+      </form>
+    {% endif %}
+
+    {% if perms.can_checkin %}
+      <form method="post" action="{{ url_for('work.work_item_checkin', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, work_type_slug='techops') }}" style="display: inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="return_to" value="{{ request.url }}">
+        <button type="submit" class="btn" data-confirm="Finish your review session?">
+          {% if perms.is_checked_out_by_current_user %}
+            Finish Reviewing
+          {% else %}
+            Force Release
+          {% endif %}
+        </button>
+      </form>
+    {% endif %}
+
+    {# Review Queue link for reviewers (admins always; non-admins only
+       while they hold checkout — matches BUDGET's gating). #}
+    {% if not perms.is_draft and (perms.is_worktype_admin or perms.is_checked_out_by_current_user) %}
+      <a class="btn" href="{{ url_for('approvals.dashboard_home') }}">
+        Review Queue
+      </a>
+    {% endif %}
+
+    <span style="border-left: 1px solid #a7f3d0; height: 24px; margin: 0 4px;"></span>
     <a class="btn" href="{{ url_for('work.techops_portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">
       &larr; Back to TechOps Portfolio
     </a>
@@ -112,6 +166,11 @@
         Requested Services
       </div>
 
+      {# Per-line Review button shows when the item is in an actionable
+         state. The line_review handler does its own permission check, so
+         the button is visible to anyone viewing the page; it's a no-op
+         for users who can't actually decide. #}
+      {% set show_line_actions = status in ("SUBMITTED", "NEEDS_INFO") %}
       {% if lines %}
         <table>
           <thead>
@@ -121,6 +180,9 @@
               <th>Details</th>
               <th style="width: 140px;">Status</th>
               <th style="width: 140px;">Reviewer</th>
+              {% if show_line_actions %}
+                <th style="width: 80px;"></th>
+              {% endif %}
             </tr>
           </thead>
           <tbody>
@@ -171,6 +233,13 @@
                     -
                   {% endif %}
                 </td>
+                {% if show_line_actions %}
+                  <td>
+                    <a class="btn btn-muted" href="{{ url_for('approvals.line_review', event=ctx.event_cycle.code, dept=ctx.department.code, public_id=work_item.public_id, line_num=line.line_number, work_type_slug='techops') }}" style="padding: 4px 8px; font-size: 12px;">
+                      Review
+                    </a>
+                  </td>
+                {% endif %}
               </tr>
             {% endfor %}
           </tbody>

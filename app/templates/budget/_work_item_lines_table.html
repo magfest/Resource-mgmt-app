@@ -1,5 +1,6 @@
 {# templates/budget/_work_item_lines_table.html #}
 {# Partial: Budget lines table for work_item_detail.html #}
+{% from "macros/status_pill.html" import render_status_pill %}
 
 <h3 style="margin:0 0 12px 0;">Budget Lines</h3>
 
@@ -82,28 +83,27 @@
             </td>
           {% endif %}
           <td>
+            {# Two-stage review labels: terminal decisions (ADMIN_FINAL)
+               render via the shared macro for a consistent vivid color
+               system; AG-stage recommendations keep their stage-specific
+               blue/red so reviewers can tell at a glance "this is just a
+               recommendation, not the final word." #}
             {% set line_status = line.status | upper %}
             {% set review_stage = line.current_review_stage | upper if line.current_review_stage else '' %}
-            {% set line_pill_class =
-              "pill-approved" if line_status == "APPROVED"
-              else "pill-needs" if line_status in ["NEEDS_INFO", "NEEDS_ADJUSTMENT"]
-              else "tag-kicked" if line_status == "REJECTED"
-              else "" %}
-            {# Show different text based on review stage #}
             {% if line_status == "APPROVED" %}
               {% if review_stage == "ADMIN_FINAL" %}
-                <span class="pill {{ line_pill_class }}">APPROVED</span>
+                {{ render_status_pill(line_status, label="APPROVED") }}
               {% else %}
                 <span class="pill" style="background: #dbeafe; color: #1e40af;">RECOMMENDED</span>
               {% endif %}
             {% elif line_status == "REJECTED" %}
               {% if review_stage == "ADMIN_FINAL" %}
-                <span class="pill {{ line_pill_class }}">REJECTED</span>
+                {{ render_status_pill(line_status, label="REJECTED") }}
               {% else %}
                 <span class="pill" style="background: #fee2e2; color: #991b1b;">REVIEWER REJECTED</span>
               {% endif %}
             {% else %}
-              <span class="pill {{ line_pill_class }}">{{ line_status }}</span>
+              {{ render_status_pill(line_status) }}
             {% endif %}
           </td>
           {% if status == "SUBMITTED" or status == "UNDER_REVIEW" or status == "NEEDS_INFO" %}
