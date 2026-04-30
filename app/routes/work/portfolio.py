@@ -50,11 +50,6 @@ _COMING_SOON_DETAILS = {
         "contact_team": "FestOps",
         "contact_email": "festops@magfest.org",
     },
-    "TECHOPS": {
-        "description": "Radio assignments, networking, and technical operations support",
-        "contact_team": "TechOps",
-        "contact_email": "techops@magfest.org",
-    },
     "AV": {
         "description": "Audio/visual equipment and AV staffing requests",
         "contact_team": "the AV Team",
