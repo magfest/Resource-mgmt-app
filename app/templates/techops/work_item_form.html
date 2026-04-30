@@ -1,0 +1,200 @@
+{# templates/techops/work_item_form.html #}
+{% extends "layout/base.html" %}
+
+{% block title %}New TechOps Request - {{ ctx.department.name }}{% endblock %}
+
+{% block content %}
+
+  {# Breadcrumb #}
+  <nav class="muted small" style="margin-bottom: 12px;">
+    <a href="{{ url_for('home.index') }}">Home</a>
+    <span style="margin: 0 6px;">&rsaquo;</span>
+    <a href="{{ url_for('work.department_home', event=ctx.event_cycle.code, dept=ctx.department.code) }}">{{ ctx.department.name }}</a>
+    <span style="margin: 0 6px;">&rsaquo;</span>
+    <a href="{{ url_for('work.techops_portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">TechOps</a>
+    <span style="margin: 0 6px;">&rsaquo;</span>
+    <span>New Request</span>
+  </nav>
+
+  {# Header #}
+  <div style="margin-bottom: 16px;">
+    <h1 style="margin: 0;">New TechOps Request</h1>
+    <div class="muted" style="margin-top: 4px;">
+      Single page. Required fields marked. Skip sections you don't need —
+      check the affirmation at the bottom if your department needs no TechOps services.
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('work.techops_request_create', event=ctx.event_cycle.code, dept=ctx.department.code) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {# ─────────────────────────────────────────────────────── #}
+    {# Section 1: Primary Contact                              #}
+    {# ─────────────────────────────────────────────────────── #}
+    <section class="card" style="margin-bottom: 16px;">
+      <div class="muted small" style="text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">
+        1 &middot; Primary Contact
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label for="primary_contact_name" style="display: block; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
+          Name <span style="color: #b00;">*</span>
+        </label>
+        <input
+          type="text"
+          id="primary_contact_name"
+          name="primary_contact_name"
+          maxlength="256"
+          required
+          value="{{ default_contact_name }}"
+          style="width: 100%; max-width: 420px;">
+      </div>
+
+      <div style="margin-bottom: 8px;">
+        <label for="primary_contact_email" style="display: block; font-weight: 600; font-size: 13px; margin-bottom: 4px;">
+          Email <span style="color: #b00;">*</span>
+        </label>
+        <input
+          type="email"
+          id="primary_contact_email"
+          name="primary_contact_email"
+          maxlength="256"
+          required
+          value="{{ default_contact_email }}"
+          style="width: 100%; max-width: 420px;">
+      </div>
+
+      <div class="muted small" style="margin-top: 8px;">
+        Defaults to your account info. Change this if a different team member should
+        answer questions about this specific request — for example, a department head
+        submitted it but a tech lead is the right point of contact for clarifications.
+      </div>
+    </section>
+
+    {# ─────────────────────────────────────────────────────── #}
+    {# Section 2: Services                                     #}
+    {# ─────────────────────────────────────────────────────── #}
+    <section class="card" style="margin-bottom: 16px;">
+      <div class="muted small" style="text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">
+        2 &middot; Services
+      </div>
+      <div class="muted small" style="margin-bottom: 16px;">
+        Check each service your department needs. Fill in a description so the
+        TechOps team knows what you're trying to accomplish.
+      </div>
+
+      {% for st in service_types %}
+        <div style="padding: 12px 0; border-bottom: 1px solid #eee;">
+          <label style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer; font-weight: 600;">
+            <input
+              type="checkbox"
+              name="service_{{ st.code }}_enabled"
+              value="1"
+              style="margin-top: 3px;">
+            <span>{{ st.name }}</span>
+          </label>
+
+          {% if st.description %}
+            <div class="muted small" style="margin: 4px 0 8px 24px;">
+              {{ st.description }}
+            </div>
+          {% endif %}
+
+          <div style="margin-left: 24px; margin-top: 8px;">
+            <label for="service_{{ st.code }}_description"
+                   style="display: block; font-size: 13px; margin-bottom: 4px;">
+              What do you need?
+            </label>
+            <textarea
+              id="service_{{ st.code }}_description"
+              name="service_{{ st.code }}_description"
+              rows="2"
+              placeholder="Describe the use case, location, or what this is for."
+              style="width: 100%; max-width: 600px;"></textarea>
+
+            <div style="margin-top: 8px;">
+              <label for="service_{{ st.code }}_quantity"
+                     style="display: inline-block; font-size: 13px; margin-right: 8px;">
+                Quantity (optional):
+              </label>
+              <input
+                type="number"
+                id="service_{{ st.code }}_quantity"
+                name="service_{{ st.code }}_quantity"
+                min="1"
+                placeholder="-"
+                style="width: 80px;">
+            </div>
+
+            {% if st.code == "PHONE" %}
+              <div style="margin-top: 8px;">
+                <label style="display: flex; gap: 6px; align-items: center; font-size: 13px;">
+                  <input
+                    type="checkbox"
+                    name="service_PHONE_external_callable"
+                    value="1">
+                  Phone needs to be externally callable (not just internal)
+                </label>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+
+      {# "Or" affirmation — sits at the bottom of the services section #}
+      <div style="padding: 16px 0 4px 0;">
+        <div class="muted small" style="text-align: center; margin-bottom: 12px;">
+          — or —
+        </div>
+        <label style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer;">
+          <input
+            type="checkbox"
+            name="no_services_needed"
+            value="1"
+            style="margin-top: 3px;">
+          <span>
+            I have reviewed all sections above and my department needs no TechOps
+            services for this event.
+            <div class="muted small" style="margin-top: 4px;">
+              TechOps will still review this affirmation — they'll reach out if it
+              looks like your department might actually need something.
+            </div>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    {# ─────────────────────────────────────────────────────── #}
+    {# Section 3: Additional Notes                             #}
+    {# ─────────────────────────────────────────────────────── #}
+    <section class="card" style="margin-bottom: 16px;">
+      <div class="muted small" style="text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px;">
+        3 &middot; Additional Notes (optional)
+      </div>
+      <div class="muted small" style="margin-bottom: 8px;">
+        Anything else the TechOps team should know? Concerns, questions,
+        why-can't-I-find-X, links to layout diagrams, etc.
+      </div>
+      <textarea
+        id="additional_notes"
+        name="additional_notes"
+        rows="4"
+        placeholder="Optional"
+        style="width: 100%;"></textarea>
+    </section>
+
+    {# Buttons #}
+    <div class="btn-row" style="margin-top: 16px;">
+      <button type="submit" name="action" value="save_draft" class="btn">
+        Save Draft
+      </button>
+      <button type="submit" name="action" value="submit" class="btn btn-primary">
+        Submit for TechOps Review
+      </button>
+      <a class="btn btn-muted" href="{{ url_for('work.techops_portfolio_landing', event=ctx.event_cycle.code, dept=ctx.department.code) }}">
+        Cancel
+      </a>
+    </div>
+  </form>
+
+{% endblock %}
