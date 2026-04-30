@@ -95,6 +95,12 @@ class TechOpsRequestDetail(db.Model):
     primary_contact_name = db.Column(db.String(256), nullable=False)
     primary_contact_email = db.Column(db.String(256), nullable=False)
 
+    # True when the requester affirmed their department needs no TechOps services
+    # this event. Submit synthesizes a TECHOPS_GEN-routed OTHER line so the
+    # affirmation goes through normal review (admins verify the department
+    # actually thought it through).
+    no_services_needed = db.Column(db.Boolean, nullable=False, default=False)
+
     additional_notes = db.Column(db.Text, nullable=True)
 
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
